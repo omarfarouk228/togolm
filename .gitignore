@@ -18,6 +18,7 @@ corpus/datasets/*.json
 corpus/datasets/*.csv
 !corpus/datasets/.gitkeep
 .scrapy/
+corpus/.crawls/
 
 # Data & models
 *.parquet

@@ -102,16 +102,17 @@ uv sync
 ### 4 — Scrape a source
 
 ```bash
-# Run from the project root
+# Run from the corpus/ directory (where scrapy.cfg lives)
+cd corpus
 uv run scrapy crawl service_public \
-  -o corpus/datasets/service_public.jsonl \
-  -s JOBDIR=corpus/.crawls/service_public \
-  --logfile corpus/.crawls/service_public.log
+  -o datasets/service_public.jsonl \
+  -s JOBDIR=.crawls/service_public \
+  --logfile .crawls/service_public.log
 ```
 
 Available spiders: `journal_officiel`, `presidence`, `assemblee_nationale`,
 `inseed`, `gouv_ministry`, `service_public`, `icilome`, `togofirst`,
-`togoinfos`, `republicoftogo`, `togopress`, `mef`
+`republicoftogo`, `savoirnews`, `letogolais`, `otr`
 
 ### 5 — Ingest into PostgreSQL
 
@@ -186,8 +187,8 @@ The fine-tuning pipeline targets Mistral 7B Instruct v0.3 with QLoRA.
 ```bash
 # 1. Generate Q&A pairs from the corpus (requires GEMINI_API_KEY)
 uv run python -m finetuning.dataset.generator \
-  --output finetuning/datasets/qa_raw.jsonl \
-  --max-docs 500
+  --out finetuning/datasets/qa_raw.jsonl \
+  --limit 500
 
 # 2. Format to Alpaca / ShareGPT
 uv run python -m finetuning.dataset.formatter \
@@ -213,14 +214,24 @@ uv run python -m finetuning.dataset.formatter \
 | education.gouv.tg | Education | ✅ Ingested |
 | agriculture.gouv.tg | Agriculture | ✅ Ingested |
 | commerce.gouv.tg | Economy | ✅ Ingested |
+| environnement.gouv.tg | Agriculture | ✅ Ingested |
+| justice.gouv.tg | Legal | ✅ Ingested |
 | securite.gouv.tg | Politics | ✅ Ingested |
-| service-public.gouv.tg | Administrative | ✅ Scraped |
-| icilome.com | Press | ✅ Scraped |
-| togofirst.com | Press / Economy | 🔜 Spider ready |
-| togoinfos.com | Press | 🔜 Spider ready |
-| republicoftogo.com | Press | 🔜 Spider ready |
-| togopress.info | Press | 🔜 Spider ready |
-| mef.gouv.tg | Economy | 🔜 Spider ready |
+| energie.gouv.tg | Economy | ✅ Ingested |
+| tourisme.gouv.tg | Economy | ✅ Ingested |
+| presidenceduconseil.gouv.tg | Politics | ✅ Ingested |
+| urbanisme.gouv.tg | Economy | ✅ Ingested |
+| service-public.gouv.tg | Administrative | ✅ Ingested |
+| otr.tg | Legal / Fiscal | ✅ Ingested |
+| icilome.com | Press | ✅ Ingested |
+| savoirnews.net | Press | ✅ Ingested |
+| republicoftogo.com | Press | ✅ Ingested |
+| togofirst.com | Press / Economy | 🔜 Crawling |
+| letogolais.com | Press | 🔜 Crawling |
+| sante.gouv.tg | Health | ⏭ React SPA — no sitemap |
+| travail.gouv.tg | Legal | ⏭ No site deployed |
+| infrastructure.gouv.tg | Economy | ⏭ SSL error |
+| plan.gouv.tg | Economy | ⏭ Unreachable |
 
 ---
 

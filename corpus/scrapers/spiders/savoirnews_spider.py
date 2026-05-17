@@ -1,7 +1,8 @@
 """
-Spider for togopress.info — Togolese press review and media monitoring site.
+Spider for savoirnews.net — Togo news and information portal.
 
-Aggregates press reviews and original articles about Togo from various Togolese media.
+Covers politics, economy, society, diplomacy, sport, and culture in Togo.
+WordPress-based site with category pages and date-based article URLs.
 """
 
 import re
@@ -11,27 +12,28 @@ import scrapy
 
 from scrapers.spiders.base_spider import BaseTogoSpider
 
-# WordPress date URLs (/2024/05/slug/) or simple slugs (/article-slug/)
-WP_DATE_URL_RE = re.compile(r"/\d{4}/\d{2}/.+")
-SLUG_RE = re.compile(r"/[a-z][a-z0-9\-]{14,}/?$")
+# savoirnews uses simple slugs: /article-slug/ (no date prefix in path)
+ARTICLE_SLUG_RE = re.compile(r"^/[a-z][a-z0-9\-]{14,}/?$")
 
 CATEGORY_URLS = [
-    "https://www.togopress.info/category/politique/",
-    "https://www.togopress.info/category/economie/",
-    "https://www.togopress.info/category/societe/",
-    "https://www.togopress.info/category/revue-de-presse/",
-    "https://www.togopress.info/",
+    "https://www.savoirnews.net/category/politique/",
+    "https://www.savoirnews.net/category/economie/",
+    "https://www.savoirnews.net/category/societe/",
+    "https://www.savoirnews.net/category/diplomatie/",
+    "https://www.savoirnews.net/category/sport/",
+    "https://www.savoirnews.net/category/culture/",
+    "https://www.savoirnews.net/",
 ]
 
 EXCLUDED_PATHS = [
     "/tag/", "/author/", "/page/", "/feed/", "/wp-admin/", "/wp-content/",
-    "/category/", "/contact", "/about",
+    "/category/", "/contact", "/about", "/wp-login",
 ]
 
 
-class TogopressSpider(BaseTogoSpider):
-    name = "togopress"
-    source = "togopress.info"
+class SavoirnewsSpider(BaseTogoSpider):
+    name = "savoirnews"
+    source = "savoirnews.net"
     category = "press"
     language = "fr"
 
@@ -62,7 +64,7 @@ class TogopressSpider(BaseTogoSpider):
         raw_content = self.html_to_text(body_html) if body_html else ""
 
         if not raw_content or len(raw_content.split()) < 30:
-            paragraphs = response.css("article p::text").getall()
+            paragraphs = response.css("article p::text, .post p::text").getall()
             raw_content = " ".join(p.strip() for p in paragraphs if p.strip())
 
         if not raw_content or len(raw_content.split()) < 30:
@@ -86,19 +88,21 @@ class TogopressSpider(BaseTogoSpider):
         )
 
     def _is_article_url(self, url: str) -> bool:
-        if "togopress.info" not in url:
+        if "savoirnews.net" not in url:
             return False
         if any(e in url for e in EXCLUDED_PATHS):
             return False
-        path = url.split("togopress.info")[-1].split("?")[0]
-        return bool(WP_DATE_URL_RE.search(path)) or bool(SLUG_RE.search(path))
+        path = url.split("savoirnews.net")[-1].split("?")[0]
+        return bool(ARTICLE_SLUG_RE.match(path.rstrip("/") + "/"))
 
     def _infer_subcategory(self, url: str) -> str:
         mapping = {
             "politique": "politics",
             "economie": "economy",
             "societe": "society",
-            "revue-de-presse": "revue-de-presse",
+            "diplomatie": "diplomacy",
+            "sport": "sport",
+            "culture": "culture",
         }
         for key, sub in mapping.items():
             if key in url.lower():

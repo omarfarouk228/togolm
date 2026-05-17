@@ -20,6 +20,7 @@ import scrapy
 from scrapers.spiders.base_spider import BaseTogoSpider
 
 SITES = [
+    # ── Economy / Finance ────────────────────────────────────────────────────
     {
         "domain": "finances.gouv.tg",
         "source": "finances.gouv.tg",
@@ -31,6 +32,17 @@ SITES = [
         ],
     },
     {
+        "domain": "commerce.gouv.tg",
+        "source": "commerce.gouv.tg",
+        "category": "economy",
+        "sitemaps": [
+            "https://commerce.gouv.tg/wp-sitemap-posts-post-1.xml",
+            "https://commerce.gouv.tg/post-sitemap.xml",
+            "https://commerce.gouv.tg/documentation-sitemap.xml",
+        ],
+    },
+    # ── Education ────────────────────────────────────────────────────────────
+    {
         "domain": "education.gouv.tg",
         "source": "education.gouv.tg",
         "category": "education",
@@ -39,22 +51,45 @@ SITES = [
             "https://education.gouv.tg/documentation-sitemap.xml",
         ],
     },
+    # ── Agriculture / Environment ────────────────────────────────────────────
     {
         "domain": "agriculture.gouv.tg",
         "source": "agriculture.gouv.tg",
         "category": "agriculture",
         "sitemaps": [
+            "https://agriculture.gouv.tg/wp-sitemap-posts-post-1.xml",
             "https://agriculture.gouv.tg/post-sitemap.xml",
             "https://agriculture.gouv.tg/documentation-sitemap.xml",
         ],
     },
     {
-        "domain": "commerce.gouv.tg",
-        "source": "commerce.gouv.tg",
-        "category": "economy",
+        "domain": "environnement.gouv.tg",
+        "source": "environnement.gouv.tg",
+        "category": "agriculture",
         "sitemaps": [
-            "https://commerce.gouv.tg/post-sitemap.xml",
-            "https://commerce.gouv.tg/documentation-sitemap.xml",
+            "https://environnement.gouv.tg/wp-sitemap-posts-post-1.xml",
+            "https://environnement.gouv.tg/post-sitemap.xml",
+        ],
+    },
+    # ── Health ───────────────────────────────────────────────────────────────
+    {
+        "domain": "sante.gouv.tg",
+        "source": "sante.gouv.tg",
+        "category": "health",
+        "sitemaps": [
+            "https://sante.gouv.tg/wp-sitemap-posts-post-1.xml",
+            "https://sante.gouv.tg/post-sitemap.xml",
+            "https://sante.gouv.tg/documentation-sitemap.xml",
+        ],
+    },
+    # ── Justice / Security ───────────────────────────────────────────────────
+    {
+        "domain": "justice.gouv.tg",
+        "source": "justice.gouv.tg",
+        "category": "legal",
+        "sitemaps": [
+            "https://justice.gouv.tg/wp-sitemap-posts-post-1.xml",
+            "https://justice.gouv.tg/post-sitemap.xml",
         ],
     },
     {
@@ -62,8 +97,57 @@ SITES = [
         "source": "securite.gouv.tg",
         "category": "politics",
         "sitemaps": [
+            "https://securite.gouv.tg/wp-sitemap-posts-post-1.xml",
             "https://securite.gouv.tg/post-sitemap.xml",
             "https://securite.gouv.tg/documentation-sitemap.xml",
+        ],
+    },
+    # ── Labour / Social ──────────────────────────────────────────────────────
+    # travail.gouv.tg: returns Apache directory listing — no site deployed
+    # ── Infrastructure / Energy ──────────────────────────────────────────────
+    # infrastructure.gouv.tg: SSL error (HTTP 526) — skip
+    # mines.gouv.tg: same site as energie.gouv.tg — skip (duplicate)
+    # plan.gouv.tg: TCP timeout — skip
+    {
+        "domain": "energie.gouv.tg",
+        "source": "energie.gouv.tg",
+        "category": "economy",
+        "sitemaps": [
+            "https://energie.gouv.tg/wp-sitemap-posts-post-1.xml",
+            "https://energie.gouv.tg/post-sitemap.xml",
+        ],
+    },
+    # ── Digital ──────────────────────────────────────────────────────────────
+    # numerique.gouv.tg: sitemap returns no URLs — skip
+    # sante.gouv.tg: React SPA, no WordPress sitemap — skip
+    # ── Tourism ──────────────────────────────────────────────────────────────
+    {
+        "domain": "tourisme.gouv.tg",
+        "source": "tourisme.gouv.tg",
+        "category": "economy",
+        "sitemaps": [
+            "https://tourisme.gouv.tg/wp-sitemap-posts-post-1.xml",
+            "https://tourisme.gouv.tg/post-sitemap.xml",
+        ],
+    },
+    # ── Presidency of the Council ─────────────────────────────────────────────
+    {
+        "domain": "presidenceduconseil.gouv.tg",
+        "source": "presidenceduconseil.gouv.tg",
+        "category": "politics",
+        "sitemaps": [
+            "https://presidenceduconseil.gouv.tg/post-sitemap.xml",
+            "https://presidenceduconseil.gouv.tg/wp-sitemap-posts-post-1.xml",
+        ],
+    },
+    # ── Urban Development ─────────────────────────────────────────────────────
+    {
+        "domain": "urbanisme.gouv.tg",
+        "source": "urbanisme.gouv.tg",
+        "category": "economy",
+        "sitemaps": [
+            "https://urbanisme.gouv.tg/wp-sitemap-posts-post-1.xml",
+            "https://urbanisme.gouv.tg/wp-sitemap-posts-documentation-1.xml",
         ],
     },
 ]
@@ -87,10 +171,12 @@ class GouvMinistrySpider(BaseTogoSpider):
     # Sitemap URLs are the entry points
     start_urls = []
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args, sites=None, **kwargs):
         super().__init__(*args, **kwargs)
-        # Collect all sitemap URLs from all configured sites
-        for site in SITES:
+        # Optional comma-separated domain filter, e.g. -a sites=mines.gouv.tg,sante.gouv.tg
+        site_filter = set(sites.split(",")) if sites else None
+        active_sites = [s for s in SITES if site_filter is None or s["domain"] in site_filter]
+        for site in active_sites:
             for sitemap_url in site["sitemaps"]:
                 self.start_urls.append(sitemap_url)
 

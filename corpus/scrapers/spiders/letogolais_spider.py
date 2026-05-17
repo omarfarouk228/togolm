@@ -1,7 +1,9 @@
 """
-Spider for togopress.info — Togolese press review and media monitoring site.
+Spider for letogolais.com — Independent Togolese news and analysis.
 
-Aggregates press reviews and original articles about Togo from various Togolese media.
+WordPress site. Article URLs: /{article-slug}/
+Covers: politics, human rights, civil society, opposition news.
+Independent voice with analysis rarely found on government-aligned media.
 """
 
 import re
@@ -11,31 +13,38 @@ import scrapy
 
 from scrapers.spiders.base_spider import BaseTogoSpider
 
-# WordPress date URLs (/2024/05/slug/) or simple slugs (/article-slug/)
-WP_DATE_URL_RE = re.compile(r"/\d{4}/\d{2}/.+")
-SLUG_RE = re.compile(r"/[a-z][a-z0-9\-]{14,}/?$")
+# WordPress simple slug: /slug/ (no date in path)
+SLUG_RE = re.compile(r"^/[a-z][a-z0-9\-]{14,}/?$")
 
 CATEGORY_URLS = [
-    "https://www.togopress.info/category/politique/",
-    "https://www.togopress.info/category/economie/",
-    "https://www.togopress.info/category/societe/",
-    "https://www.togopress.info/category/revue-de-presse/",
-    "https://www.togopress.info/",
+    "https://www.letogolais.com/",
+    "https://www.letogolais.com/category/politique/",
+    "https://www.letogolais.com/category/societe/",
+    "https://www.letogolais.com/category/droits/",
+    "https://www.letogolais.com/category/economie/",
+    "https://www.letogolais.com/category/international/",
 ]
 
 EXCLUDED_PATHS = [
     "/tag/", "/author/", "/page/", "/feed/", "/wp-admin/", "/wp-content/",
-    "/category/", "/contact", "/about",
+    "/wp-json/", "/category/", "/lettre-dinformations/", "/publicite/",
+    "/soutenez/", "/contact", "/about", "/elementor-",
+    "mailto:", "javascript:", "#",
 ]
 
 
-class TogopressSpider(BaseTogoSpider):
-    name = "togopress"
-    source = "togopress.info"
+class LetogolaisSpider(BaseTogoSpider):
+    name = "letogolais"
+    source = "letogolais.com"
     category = "press"
     language = "fr"
 
     start_urls = CATEGORY_URLS
+
+    custom_settings = {
+        "DOWNLOAD_DELAY": 2,
+        "CONCURRENT_REQUESTS_PER_DOMAIN": 1,
+    }
 
     def parse(self, response):
         for href in response.css("a::attr(href)").getall():
@@ -50,19 +59,20 @@ class TogopressSpider(BaseTogoSpider):
     def parse_article(self, response):
         title = (
             response.css("h1.entry-title::text").get("") or
-            response.css("h1::text").get("")
+            response.css("h1::text").get("") or
+            response.css("h1 *::text").get("")
         ).strip()
 
         if not title or len(title) < 5:
             return
 
         body_html = response.css(
-            ".entry-content, .post-content, article .content"
+            ".entry-content, .post-content, article .content, .tdb-block-inner"
         ).get("")
         raw_content = self.html_to_text(body_html) if body_html else ""
 
         if not raw_content or len(raw_content.split()) < 30:
-            paragraphs = response.css("article p::text").getall()
+            paragraphs = response.css("article p::text, .entry-content p::text").getall()
             raw_content = " ".join(p.strip() for p in paragraphs if p.strip())
 
         if not raw_content or len(raw_content.split()) < 30:
@@ -86,19 +96,21 @@ class TogopressSpider(BaseTogoSpider):
         )
 
     def _is_article_url(self, url: str) -> bool:
-        if "togopress.info" not in url:
+        if "letogolais.com" not in url:
             return False
         if any(e in url for e in EXCLUDED_PATHS):
             return False
-        path = url.split("togopress.info")[-1].split("?")[0]
-        return bool(WP_DATE_URL_RE.search(path)) or bool(SLUG_RE.search(path))
+        path = url.split("letogolais.com")[-1].split("?")[0]
+        return bool(SLUG_RE.match(path.rstrip("/") + "/"))
 
     def _infer_subcategory(self, url: str) -> str:
         mapping = {
             "politique": "politics",
-            "economie": "economy",
             "societe": "society",
-            "revue-de-presse": "revue-de-presse",
+            "droits": "human-rights",
+            "economie": "economy",
+            "international": "international",
+            "culture": "culture",
         }
         for key, sub in mapping.items():
             if key in url.lower():

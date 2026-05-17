@@ -1,32 +1,36 @@
 """
-Spider for republicoftogo.com — Official Togolese news and government information portal.
+Spider for republicoftogo.com — Togolese news and analysis magazine.
 
-Covers official government announcements, diplomacy, economy, and national news.
+eZ Publish CMS site. Article URLs follow:
+  /toutes-les-rubriques/{category}/{article-slug}
+
+Articles are discovered from the homepage (section pages are JS-rendered).
+Content lives in .ezxmltext-field divs inside article.view-type-full.
 """
 
-import re
 from urllib.parse import urljoin
 
 import scrapy
 
 from scrapers.spiders.base_spider import BaseTogoSpider
 
-# Article URLs typically contain a date segment or a long slug
-ARTICLE_URL_RE = re.compile(r"/\d{4}/\d{2}/.+|/[a-z\-]{20,}/?$")
-
-SECTION_URLS = [
-    "https://www.republicoftogo.com/Toutes-les-rubriques/Politique",
-    "https://www.republicoftogo.com/Toutes-les-rubriques/Eco-Business",
-    "https://www.republicoftogo.com/Toutes-les-rubriques/Societe",
-    "https://www.republicoftogo.com/Toutes-les-rubriques/Diplomatie",
-    "https://www.republicoftogo.com/Toutes-les-rubriques/Sports",
-    "https://www.republicoftogo.com/Toutes-les-rubriques/Tech-and-telecom",
+ENTRY_URLS = [
     "https://www.republicoftogo.com/",
+    "https://www.republicoftogo.com/toutes-les-rubriques/politique",
+    "https://www.republicoftogo.com/toutes-les-rubriques/eco-finance",
+    "https://www.republicoftogo.com/toutes-les-rubriques/societe",
+    "https://www.republicoftogo.com/toutes-les-rubriques/diplomatie",
+    "https://www.republicoftogo.com/toutes-les-rubriques/culture",
+    "https://www.republicoftogo.com/toutes-les-rubriques/sante",
+    "https://www.republicoftogo.com/toutes-les-rubriques/environnement",
+    "https://www.republicoftogo.com/toutes-les-rubriques/education",
+    "https://www.republicoftogo.com/toutes-les-rubriques/justice",
+    "https://www.republicoftogo.com/toutes-les-rubriques/sport",
 ]
 
 EXCLUDED_PATHS = [
-    "/Connexion", "/Inscription", "/Recherche", "/Contact",
-    "/Toutes-les-rubriques/",
+    "/connexion", "/inscription", "/recherche", "/contact",
+    "/content/search", "/bundles/", "/tendances/",
     "#", "mailto:", "javascript:",
 ]
 
@@ -37,7 +41,7 @@ class RepublicoftogoSpider(BaseTogoSpider):
     category = "press"
     language = "fr"
 
-    start_urls = SECTION_URLS
+    start_urls = ENTRY_URLS
 
     custom_settings = {
         "DOWNLOAD_DELAY": 2,
@@ -49,34 +53,40 @@ class RepublicoftogoSpider(BaseTogoSpider):
             url = urljoin(response.url, href)
             if self._is_article_url(url):
                 yield scrapy.Request(url, callback=self.parse_article, priority=10)
-            elif self._is_listing_url(url):
-                yield scrapy.Request(url, callback=self.parse, priority=5)
 
     def parse_article(self, response):
+        # eZ Publish: <h1 class="full-page-title"><span class="ezstring-field">Title</span></h1>
         title = (
-            response.css("h1::text").get("") or
-            response.css(".article-title::text").get("") or
-            response.css(".titre::text").get("")
+            response.css("h1 .ezstring-field::text").get("") or
+            response.css("h1 *::text").get("") or
+            response.css("h1::text").get("")
         ).strip()
 
         if not title or len(title) < 5:
             return
 
-        body_html = response.css(
-            ".article-body, .article-content, .contenu, .corps-article, article"
-        ).get("")
+        # Main article body: article.view-type-full contains the actual article;
+        # article.view-type-standard elements are related-article previews.
+        body_html = response.css("article.view-type-full .ezxmltext-field").get("")
+        if not body_html:
+            body_html = response.css("article.view-type-full").get("")
         raw_content = self.html_to_text(body_html) if body_html else ""
 
         if not raw_content or len(raw_content.split()) < 30:
-            paragraphs = response.css("article p::text, .content p::text").getall()
+            # Fallback: gather all paragraphs from the full article
+            paragraphs = response.css(
+                "article.view-type-full p::text, "
+                ".full-page-intro p::text, "
+                ".ezxmltext-field p::text"
+            ).getall()
             raw_content = " ".join(p.strip() for p in paragraphs if p.strip())
 
         if not raw_content or len(raw_content.split()) < 30:
             return
 
         published_at = (
+            response.css(".publish-date::text").get("") or
             response.css("time::attr(datetime)").get("") or
-            response.css(".date::text").get("") or
             response.css("meta[property='article:published_time']::attr(content)").get("") or
             ""
         )
@@ -92,33 +102,41 @@ class RepublicoftogoSpider(BaseTogoSpider):
             metadata={"word_count": len(raw_content.split())},
         )
 
+        # Follow related article links found within the article page
+        for href in response.css("a::attr(href)").getall():
+            url = urljoin(response.url, href)
+            if self._is_article_url(url):
+                yield scrapy.Request(url, callback=self.parse_article, priority=5)
+
     def _is_article_url(self, url: str) -> bool:
         if "republicoftogo.com" not in url:
             return False
-        if any(e in url for e in EXCLUDED_PATHS):
+        if any(e in url.lower() for e in EXCLUDED_PATHS):
             return False
-        path = url.split("republicoftogo.com")[-1]
-        # Articles have at least 3 path segments (section/subsection/slug)
+        path = url.split("republicoftogo.com")[-1].lower()
+        # Articles: /toutes-les-rubriques/{category}/{slug} — exactly 3 segments
         segments = [s for s in path.split("/") if s]
-        return len(segments) >= 3 and len(path) > 40
-
-    def _is_listing_url(self, url: str) -> bool:
-        if "republicoftogo.com" not in url:
-            return False
-        if any(e in url for e in EXCLUDED_PATHS):
-            return False
-        return "/Toutes-les-rubriques/" not in url and "republicoftogo.com" in url
+        return (
+            len(segments) == 3
+            and segments[0] == "toutes-les-rubriques"
+            and len(segments[2]) > 5
+        )
 
     def _infer_subcategory(self, url: str) -> str:
         mapping = {
-            "Politique": "politics",
-            "Eco-Business": "economy",
-            "Societe": "society",
-            "Diplomatie": "diplomacy",
-            "Sports": "sport",
-            "Tech": "tech",
+            "politique": "politics",
+            "eco-finance": "economy",
+            "societe": "society",
+            "diplomatie": "diplomacy",
+            "sport": "sport",
+            "culture": "culture",
+            "sante": "health",
+            "environnement": "environment",
+            "education": "education",
+            "justice": "justice",
         }
+        url_lower = url.lower()
         for key, sub in mapping.items():
-            if key.lower() in url.lower():
+            if f"/{key}/" in url_lower or url_lower.endswith(f"/{key}"):
                 return sub
         return "news"
