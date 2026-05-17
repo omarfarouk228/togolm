@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect } from "react";
 import { queryRAG, type QuerySource } from "@/lib/api";
-import { Send, Loader2, ExternalLink, Bot, User } from "lucide-react";
+import { Send, ExternalLink, Bot, User } from "lucide-react";
 
 interface Message {
   role: "user" | "assistant";
@@ -12,21 +12,40 @@ interface Message {
 }
 
 const SUGGESTED = [
-  "Quelles sont les procédures pour créer une entreprise au Togo ?",
-  "Quels sont les droits des travailleurs selon le code du travail togolais ?",
-  "Comment fonctionne le système éducatif au Togo ?",
-  "Quel est le budget de l'État togolais ?",
+  { emoji: "⚖️", text: "Quelles sont les procédures pour créer une entreprise au Togo ?" },
+  { emoji: "👷", text: "Quels sont les droits des travailleurs selon le code du travail togolais ?" },
+  { emoji: "🎓", text: "Comment fonctionne le système éducatif au Togo ?" },
+  { emoji: "💰", text: "Quel est le budget de l'État togolais ?" },
 ];
+
+function TypingIndicator() {
+  return (
+    <div className="flex gap-3">
+      <div
+        className="w-7 h-7 rounded-full flex-shrink-0 flex items-center justify-center"
+        style={{ background: "var(--togo-green)" }}
+      >
+        <Bot className="w-4 h-4 text-white" />
+      </div>
+      <div className="bg-white border border-slate-200 rounded-2xl rounded-bl-md px-4 py-3.5 flex items-center gap-1.5 shadow-sm">
+        <span className="typing-dot w-1.5 h-1.5 rounded-full bg-slate-400" />
+        <span className="typing-dot w-1.5 h-1.5 rounded-full bg-slate-400" />
+        <span className="typing-dot w-1.5 h-1.5 rounded-full bg-slate-400" />
+      </div>
+    </div>
+  );
+}
 
 export default function ChatPage() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages]);
+  }, [messages, loading]);
 
   async function send(question: string) {
     if (!question.trim() || loading) return;
@@ -52,35 +71,42 @@ export default function ChatPage() {
       ]);
     } finally {
       setLoading(false);
+      setTimeout(() => inputRef.current?.focus(), 50);
     }
   }
 
   return (
     <div className="max-w-3xl mx-auto px-4 py-8 flex flex-col" style={{ minHeight: "calc(100vh - 112px)" }}>
-      <h1 className="text-2xl font-bold mb-6">Ask TogoLM</h1>
 
       {/* Empty state */}
       {messages.length === 0 && (
-        <div className="flex-1 flex flex-col items-center justify-center gap-6 text-center">
-          <div
-            className="w-12 h-12 rounded-full flex items-center justify-center"
-            style={{ background: "var(--togo-green)" }}
-          >
-            <Bot className="w-6 h-6 text-white" />
-          </div>
-          <div>
-            <p className="text-gray-500 text-sm mb-4">Ask anything about Togo — laws, economy, education, news.</p>
-            <div className="grid gap-2">
-              {SUGGESTED.map((q) => (
-                <button
-                  key={q}
-                  onClick={() => send(q)}
-                  className="text-left text-sm px-4 py-2.5 rounded-lg border border-gray-200 bg-white hover:bg-gray-50 transition-colors text-gray-700"
-                >
-                  {q}
-                </button>
-              ))}
+        <div className="flex-1 flex flex-col items-center justify-center gap-8 animate-fade-in-up">
+          <div className="text-center">
+            <div
+              className="w-14 h-14 rounded-2xl flex items-center justify-center mx-auto mb-5 glow-green"
+              style={{ background: "var(--togo-green)" }}
+            >
+              <Bot className="w-7 h-7 text-white" />
             </div>
+            <h1 className="text-2xl font-bold text-slate-900 mb-2">Ask TogoLM</h1>
+            <p className="text-slate-500 text-sm max-w-sm mx-auto leading-relaxed">
+              Ask anything about Togo — laws, economy, education, government. Answers are grounded in official Togolese documents.
+            </p>
+          </div>
+
+          <div className="grid sm:grid-cols-2 gap-3 w-full max-w-xl stagger">
+            {SUGGESTED.map(({ emoji, text }) => (
+              <button
+                key={text}
+                onClick={() => send(text)}
+                className="text-left p-4 rounded-2xl border border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50 transition-all card-hover group animate-fade-in-up"
+              >
+                <span className="text-xl mb-2 block">{emoji}</span>
+                <span className="text-sm text-slate-600 group-hover:text-slate-900 transition-colors leading-snug">
+                  {text}
+                </span>
+              </button>
+            ))}
           </div>
         </div>
       )}
@@ -89,77 +115,70 @@ export default function ChatPage() {
       {messages.length > 0 && (
         <div className="flex-1 space-y-6 mb-6">
           {messages.map((m, i) => (
-            <div key={i} className={`flex gap-3 ${m.role === "user" ? "justify-end" : ""}`}>
+            <div
+              key={i}
+              className={`flex gap-3 animate-fade-in-up ${m.role === "user" ? "justify-end" : ""}`}
+            >
               {m.role === "assistant" && (
                 <div
-                  className="w-7 h-7 rounded-full flex-shrink-0 flex items-center justify-center mt-0.5"
+                  className="w-7 h-7 rounded-full flex-shrink-0 flex items-center justify-center mt-1"
                   style={{ background: "var(--togo-green)" }}
                 >
                   <Bot className="w-4 h-4 text-white" />
                 </div>
               )}
-              <div className={`max-w-[85%] ${m.role === "user" ? "order-first" : ""}`}>
+
+              <div className={`max-w-[82%] ${m.role === "user" ? "order-first" : ""}`}>
                 <div
-                  className={`rounded-xl px-4 py-3 text-sm leading-relaxed ${
+                  className={`rounded-2xl px-4 py-3 text-sm leading-relaxed ${
                     m.role === "user"
-                      ? "text-white"
-                      : "bg-white border border-gray-200 text-gray-800"
+                      ? "text-white rounded-br-md"
+                      : "bg-white border border-slate-200 text-slate-800 rounded-bl-md shadow-sm"
                   }`}
                   style={m.role === "user" ? { background: "var(--togo-green)" } : {}}
                 >
                   {m.content}
                 </div>
 
-                {/* Sources */}
                 {m.sources && m.sources.length > 0 && (
-                  <div className="mt-2 space-y-1">
+                  <div className="mt-2 space-y-1 pl-1">
+                    <p className="text-xs text-slate-400 font-medium mb-1.5">Sources</p>
                     {m.sources.slice(0, 3).map((s, j) => (
-                      <div key={j} className="flex items-center gap-1.5 text-xs text-gray-400">
-                        <span className="text-gray-300">↳</span>
+                      <div key={j} className="flex items-center gap-1.5 text-xs text-slate-400">
+                        <span className="text-slate-300">↳</span>
                         {s.url ? (
                           <a
                             href={s.url}
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="hover:text-gray-600 transition-colors flex items-center gap-1"
+                            className="hover:text-slate-700 transition-colors flex items-center gap-1 truncate max-w-[220px]"
                           >
                             {s.title || s.url}
-                            <ExternalLink className="w-3 h-3" />
+                            <ExternalLink className="w-3 h-3 flex-shrink-0" />
                           </a>
                         ) : (
-                          <span>{s.title}</span>
+                          <span className="truncate max-w-[220px]">{s.title}</span>
                         )}
-                        <span className="text-gray-300">·</span>
-                        <span>{(s.score * 100).toFixed(0)}%</span>
+                        <span className="text-slate-300">·</span>
+                        <span className="flex-shrink-0 tabular-nums">{(s.score * 100).toFixed(0)}%</span>
                       </div>
                     ))}
                     {m.latency_ms && (
-                      <p className="text-xs text-gray-300 mt-1">{m.latency_ms}ms</p>
+                      <p className="text-xs text-slate-300 mt-1.5 tabular-nums">{m.latency_ms}ms</p>
                     )}
                   </div>
                 )}
               </div>
+
               {m.role === "user" && (
-                <div className="w-7 h-7 rounded-full bg-gray-200 flex-shrink-0 flex items-center justify-center mt-0.5">
-                  <User className="w-4 h-4 text-gray-500" />
+                <div className="w-7 h-7 rounded-full bg-slate-200 flex-shrink-0 flex items-center justify-center mt-1">
+                  <User className="w-4 h-4 text-slate-500" />
                 </div>
               )}
             </div>
           ))}
 
-          {loading && (
-            <div className="flex gap-3">
-              <div
-                className="w-7 h-7 rounded-full flex-shrink-0 flex items-center justify-center"
-                style={{ background: "var(--togo-green)" }}
-              >
-                <Bot className="w-4 h-4 text-white" />
-              </div>
-              <div className="bg-white border border-gray-200 rounded-xl px-4 py-3">
-                <Loader2 className="w-4 h-4 animate-spin text-gray-400" />
-              </div>
-            </div>
-          )}
+          {loading && <TypingIndicator />}
           <div ref={bottomRef} />
         </div>
       )}
@@ -170,15 +189,16 @@ export default function ChatPage() {
         className="flex gap-2 sticky bottom-4"
       >
         <input
+          ref={inputRef}
           value={input}
           onChange={(e) => setInput(e.target.value)}
           placeholder="Ask about Togolese laws, economy, education…"
-          className="flex-1 px-4 py-3 border border-gray-200 rounded-xl text-sm bg-white focus:outline-none focus:ring-2 focus:ring-green-600/30 focus:border-green-600 shadow-sm"
+          className="flex-1 px-4 py-3.5 border border-slate-200 rounded-2xl text-sm bg-white focus:outline-none focus:ring-2 focus:ring-green-800/25 focus:border-green-800/50 shadow-sm transition-all"
         />
         <button
           type="submit"
           disabled={loading || !input.trim()}
-          className="px-4 py-3 rounded-xl text-white disabled:opacity-50 transition-opacity hover:opacity-90 shadow-sm"
+          className="px-4 py-3.5 rounded-2xl text-white disabled:opacity-40 transition-opacity hover:opacity-90 shadow-sm"
           style={{ background: "var(--togo-green)" }}
         >
           <Send className="w-4 h-4" />
