@@ -1,0 +1,47 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.venv/
+venv/
+.env
+*.egg-info/
+dist/
+build/
+.ruff_cache/
+.mypy_cache/
+.pytest_cache/
+
+# Scrapy
+corpus/datasets/*.jsonl
+corpus/datasets/*.json
+corpus/datasets/*.csv
+!corpus/datasets/.gitkeep
+.scrapy/
+
+# Data & models
+*.parquet
+*.arrow
+*.bin
+*.safetensors
+finetuning/datasets/*.jsonl
+!finetuning/datasets/.gitkeep
+
+# IDE
+.vscode/
+.idea/
+*.swp
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Next.js
+vitrine/node_modules/
+vitrine/.next/
+vitrine/.env.local
+
+# Logs
+*.log
+logs/
+

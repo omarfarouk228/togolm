@@ -1,0 +1,71 @@
+[project]
+name = "togolm"
+version = "0.1.0"
+description = "First open-source AI infrastructure focused on Togo"
+readme = "README.md"
+license = { text = "MIT" }
+requires-python = ">=3.11"
+dependencies = [
+    # Scraping
+    "scrapy>=2.11",
+    "beautifulsoup4>=4.12",
+    "lxml>=5.1",
+    "httpx>=0.27",
+    # Database
+    "psycopg2-binary>=2.9",
+    "pgvector>=0.3",
+    "sqlalchemy>=2.0",
+    # API
+    "fastapi>=0.111",
+    "uvicorn[standard]>=0.30",
+    "pydantic>=2.7",
+    "python-dotenv>=1.0",
+    # AI
+    "google-generativeai>=0.8",
+    # Tasks
+    "celery>=5.4",
+    "redis>=5.0",
+    # Utils
+    "tqdm>=4.66",
+    "python-slugify>=8.0",
+    "pdfminer-six>=20260107",
+    "sentence-transformers>=5.5.0",
+    "google-genai>=2.3.0",
+    "pytest>=9.0.3",
+    "pytest-asyncio>=1.3.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+    "pytest-asyncio>=0.23",
+    "httpx>=0.27",
+    "ruff>=0.4",
+]
+# Install in a GPU environment (Colab, cloud VM) — not needed locally
+finetuning = [
+    "transformers>=4.44",
+    "peft>=0.12",
+    "trl>=0.10",
+    "bitsandbytes>=0.43",
+    "datasets>=2.21",
+    "accelerate>=0.34",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["corpus", "api", "finetuning"]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP"]
+
+[tool.pytest.ini_options]
+testpaths = ["api/tests"]
+pythonpath = ["."]
