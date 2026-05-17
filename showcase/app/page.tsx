@@ -17,7 +17,7 @@ export default async function Home() {
       <section className="relative overflow-hidden">
         <div className="absolute inset-0 bg-grid" />
         <div className="absolute inset-0 bg-gradient-to-b from-transparent via-transparent to-[#f8fafc]" />
-        <div className="relative max-w-5xl mx-auto px-4 py-24 text-center">
+        <div className="relative max-w-5xl mx-auto px-4 py-16 sm:py-24 text-center">
           <div className="flex justify-center gap-1.5 mb-8">
             <span className="w-1.5 h-14 rounded-full" style={{ background: "var(--togo-green)" }} />
             <span className="w-1.5 h-14 rounded-full" style={{ background: "var(--togo-yellow)" }} />
@@ -80,7 +80,7 @@ export default async function Home() {
             </div>
 
             {/* Feature highlights */}
-            <div className="grid md:grid-cols-3 gap-4 mb-12">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-12">
               {[
                 {
                   emoji: "🔍",
@@ -115,28 +115,30 @@ export default async function Home() {
                 <span className="text-sm font-semibold text-slate-700">Corpus Sources</span>
                 <span className="text-xs text-slate-400">{stats.sources.length} active sources</span>
               </div>
-              <table className="w-full text-sm">
-                <thead className="bg-slate-50 text-xs text-slate-400 uppercase tracking-wider">
-                  <tr>
-                    <th className="text-left px-6 py-3">Source</th>
-                    <th className="text-right px-6 py-3">Docs</th>
-                    <th className="text-right px-6 py-3">Chunks</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100">
-                  {stats.sources.map((s) => (
-                    <tr key={s.source} className="hover:bg-slate-50 transition-colors">
-                      <td className="px-6 py-3 font-mono text-xs text-slate-600">{s.source}</td>
-                      <td className="px-6 py-3 text-right tabular-nums text-slate-700 font-medium">
-                        {s.documents.toLocaleString()}
-                      </td>
-                      <td className="px-6 py-3 text-right tabular-nums text-slate-400">
-                        {s.chunks.toLocaleString()}
-                      </td>
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead className="bg-slate-50 text-xs text-slate-400 uppercase tracking-wider">
+                    <tr>
+                      <th className="text-left px-6 py-3">Source</th>
+                      <th className="text-right px-6 py-3">Docs</th>
+                      <th className="text-right px-6 py-3">Chunks</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {stats.sources.map((s) => (
+                      <tr key={s.source} className="hover:bg-slate-50 transition-colors">
+                        <td className="px-6 py-3 font-mono text-xs text-slate-600 whitespace-nowrap">{s.source}</td>
+                        <td className="px-6 py-3 text-right tabular-nums text-slate-700 font-medium whitespace-nowrap">
+                          {s.documents.toLocaleString()}
+                        </td>
+                        <td className="px-6 py-3 text-right tabular-nums text-slate-400 whitespace-nowrap">
+                          {s.chunks.toLocaleString()}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
               {stats.last_updated && (
                 <div className="px-6 py-3 border-t border-slate-100 text-xs text-slate-400">
                   Last updated: {new Date(stats.last_updated).toLocaleDateString("en-TG")}

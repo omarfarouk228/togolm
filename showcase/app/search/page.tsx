@@ -11,12 +11,12 @@ function SkeletonCard() {
         <div className="skeleton w-8 h-8 rounded-lg flex-shrink-0" />
         <div className="skeleton h-5 w-3/4 rounded" />
       </div>
-      <div className="pl-11 space-y-2">
+      <div className="sm:pl-11 space-y-2">
         <div className="skeleton h-3.5 w-full rounded" />
         <div className="skeleton h-3.5 w-5/6 rounded" />
         <div className="skeleton h-3.5 w-4/6 rounded" />
       </div>
-      <div className="flex gap-2 mt-4 pl-11">
+      <div className="flex gap-2 mt-4 sm:pl-11">
         <div className="skeleton h-5 w-24 rounded-md" />
         <div className="skeleton h-5 w-16 rounded-md" />
       </div>
@@ -130,9 +130,9 @@ export default function SearchPage() {
                 )}
               </div>
 
-              <p className="text-sm text-slate-500 leading-relaxed mb-4 pl-11">{r.excerpt}</p>
+              <p className="text-sm text-slate-500 leading-relaxed mb-4 sm:pl-11">{r.excerpt}</p>
 
-              <div className="flex items-center gap-3 text-xs text-slate-400 pl-11">
+              <div className="flex items-center gap-3 text-xs text-slate-400 sm:pl-11">
                 <span className="font-mono bg-slate-100 px-2 py-1 rounded-md text-slate-600">{r.source}</span>
                 <span className="flex items-center gap-1.5">
                   <span

@@ -127,7 +127,7 @@ def _generate_pairs(doc: dict, n: int, client, types) -> list[QAPair]:
                 model="gemini-2.5-flash",
                 contents=prompt,
                 config=types.GenerateContentConfig(
-                    max_output_tokens=2000,
+                    max_output_tokens=800,
                     temperature=0.7,
                 ),
             )
@@ -202,7 +202,7 @@ def generate(
                 f.write(json.dumps(asdict(pair), ensure_ascii=False) + "\n")
                 total_pairs += 1
 
-            time.sleep(1)  # Rate limit headroom
+            time.sleep(0.3)  # Rate limit headroom
 
     print(f"Done: {total_pairs} Q&A pairs written to {output}")
     return total_pairs

@@ -61,3 +61,51 @@ export async function queryRAG(question: string): Promise<QueryResponse> {
   if (!res.ok) throw new Error("Query failed");
   return res.json();
 }
+
+export type StreamEvent =
+  | { type: "chunk"; text: string }
+  | { type: "sources"; sources: QuerySource[]; latency_ms: number }
+  | { type: "error"; message: string };
+
+export async function* queryRAGStream(
+  question: string,
+  signal?: AbortSignal
+): AsyncGenerator<StreamEvent> {
+  const res = await fetch(`${API_BASE}/v1/query/stream`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ question }),
+    cache: "no-store",
+    signal,
+  });
+  if (!res.ok) throw new Error("Stream failed");
+
+  const reader = res.body!.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+
+      const blocks = buffer.split("\n\n");
+      buffer = blocks.pop() ?? "";
+
+      for (const block of blocks) {
+        const line = block.trim();
+        if (!line.startsWith("data: ")) continue;
+        const payload = line.slice(6).trim();
+        if (payload === "[DONE]") return;
+        try {
+          yield JSON.parse(payload) as StreamEvent;
+        } catch {
+          // malformed SSE line — skip
+        }
+      }
+    }
+  } finally {
+    reader.releaseLock();
+  }
+}

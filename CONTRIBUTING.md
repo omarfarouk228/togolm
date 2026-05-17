@@ -52,4 +52,4 @@ Be respectful, constructive, and welcoming.
 
 ---
 
-**Contact:** omar@kofcorporation.com | GitHub Issues
+**Contact:** komarf28@gmail.com | GitHub Issues

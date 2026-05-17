@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
-import { queryRAG, type QuerySource } from "@/lib/api";
+import { queryRAGStream, type QuerySource } from "@/lib/api";
 import { Send, ExternalLink, Bot, User } from "lucide-react";
 
 interface Message {
@@ -9,6 +9,7 @@ interface Message {
   content: string;
   sources?: QuerySource[];
   latency_ms?: number;
+  streaming?: boolean;
 }
 
 const SUGGESTED = [
@@ -17,6 +18,15 @@ const SUGGESTED = [
   { emoji: "🎓", text: "Comment fonctionne le système éducatif au Togo ?" },
   { emoji: "💰", text: "Quel est le budget de l'État togolais ?" },
 ];
+
+function StreamingCursor() {
+  return (
+    <span
+      className="inline-block w-0.5 h-3.5 ml-0.5 align-middle rounded-full animate-pulse"
+      style={{ background: "var(--togo-green)" }}
+    />
+  );
+}
 
 function TypingIndicator() {
   return (
@@ -42,6 +52,7 @@ export default function ChatPage() {
   const [loading, setLoading] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const abortRef = useRef<AbortController | null>(null);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -51,26 +62,71 @@ export default function ChatPage() {
     if (!question.trim() || loading) return;
     const q = question.trim();
     setInput("");
-    setMessages((prev) => [...prev, { role: "user", content: q }]);
+
+    setMessages((prev) => [
+      ...prev,
+      { role: "user", content: q },
+      { role: "assistant", content: "", streaming: true },
+    ]);
     setLoading(true);
+
+    const ctrl = new AbortController();
+    abortRef.current = ctrl;
+
     try {
-      const data = await queryRAG(q);
-      setMessages((prev) => [
-        ...prev,
-        {
-          role: "assistant",
-          content: data.answer,
-          sources: data.sources,
-          latency_ms: data.latency_ms,
-        },
-      ]);
-    } catch {
-      setMessages((prev) => [
-        ...prev,
-        { role: "assistant", content: "Error reaching the API. Is it running?" },
-      ]);
+      for await (const event of queryRAGStream(q, ctrl.signal)) {
+        if (event.type === "chunk") {
+          setMessages((prev) => {
+            const last = prev[prev.length - 1];
+            if (last?.role === "assistant") {
+              return [
+                ...prev.slice(0, -1),
+                { ...last, content: last.content + event.text },
+              ];
+            }
+            return prev;
+          });
+        } else if (event.type === "sources") {
+          setMessages((prev) => {
+            const last = prev[prev.length - 1];
+            if (last?.role === "assistant") {
+              return [
+                ...prev.slice(0, -1),
+                {
+                  ...last,
+                  sources: event.sources,
+                  latency_ms: event.latency_ms,
+                  streaming: false,
+                },
+              ];
+            }
+            return prev;
+          });
+        } else if (event.type === "error") {
+          throw new Error(event.message);
+        }
+      }
+    } catch (err: unknown) {
+      if (err instanceof Error && err.name === "AbortError") return;
+      setMessages((prev) => {
+        const last = prev[prev.length - 1];
+        if (last?.role === "assistant" && last.streaming) {
+          return [
+            ...prev.slice(0, -1),
+            { role: "assistant", content: "Erreur de connexion à l'API. Est-elle démarrée ?" },
+          ];
+        }
+        return prev;
+      });
     } finally {
       setLoading(false);
+      setMessages((prev) => {
+        const last = prev[prev.length - 1];
+        if (last?.role === "assistant" && last.streaming) {
+          return [...prev.slice(0, -1), { ...last, streaming: false }];
+        }
+        return prev;
+      });
       setTimeout(() => inputRef.current?.focus(), 50);
     }
   }
@@ -129,16 +185,26 @@ export default function ChatPage() {
               )}
 
               <div className={`max-w-[82%] ${m.role === "user" ? "order-first" : ""}`}>
-                <div
-                  className={`rounded-2xl px-4 py-3 text-sm leading-relaxed ${
-                    m.role === "user"
-                      ? "text-white rounded-br-md"
-                      : "bg-white border border-slate-200 text-slate-800 rounded-bl-md shadow-sm"
-                  }`}
-                  style={m.role === "user" ? { background: "var(--togo-green)" } : {}}
-                >
-                  {m.content}
-                </div>
+                {/* Show typing indicator only while waiting for the first token */}
+                {m.role === "assistant" && m.streaming && m.content === "" ? (
+                  <div className="bg-white border border-slate-200 rounded-2xl rounded-bl-md px-4 py-3.5 flex items-center gap-1.5 shadow-sm">
+                    <span className="typing-dot w-1.5 h-1.5 rounded-full bg-slate-400" />
+                    <span className="typing-dot w-1.5 h-1.5 rounded-full bg-slate-400" />
+                    <span className="typing-dot w-1.5 h-1.5 rounded-full bg-slate-400" />
+                  </div>
+                ) : (
+                  <div
+                    className={`rounded-2xl px-4 py-3 text-sm leading-relaxed ${
+                      m.role === "user"
+                        ? "text-white rounded-br-md"
+                        : "bg-white border border-slate-200 text-slate-800 rounded-bl-md shadow-sm"
+                    }`}
+                    style={m.role === "user" ? { background: "var(--togo-green)" } : {}}
+                  >
+                    {m.content}
+                    {m.streaming && m.content !== "" && <StreamingCursor />}
+                  </div>
+                )}
 
                 {m.sources && m.sources.length > 0 && (
                   <div className="mt-2 space-y-1 pl-1">
@@ -151,19 +217,19 @@ export default function ChatPage() {
                             href={s.url}
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="hover:text-slate-700 transition-colors flex items-center gap-1 truncate max-w-[220px]"
+                            className="hover:text-slate-700 transition-colors flex items-center gap-1 truncate max-w-[160px] sm:max-w-[220px]"
                           >
                             {s.title || s.url}
                             <ExternalLink className="w-3 h-3 flex-shrink-0" />
                           </a>
                         ) : (
-                          <span className="truncate max-w-[220px]">{s.title}</span>
+                          <span className="truncate max-w-[160px] sm:max-w-[220px]">{s.title}</span>
                         )}
                         <span className="text-slate-300">·</span>
                         <span className="flex-shrink-0 tabular-nums">{(s.score * 100).toFixed(0)}%</span>
                       </div>
                     ))}
-                    {m.latency_ms && (
+                    {m.latency_ms !== undefined && (
                       <p className="text-xs text-slate-300 mt-1.5 tabular-nums">{m.latency_ms}ms</p>
                     )}
                   </div>
@@ -178,7 +244,6 @@ export default function ChatPage() {
             </div>
           ))}
 
-          {loading && <TypingIndicator />}
           <div ref={bottomRef} />
         </div>
       )}

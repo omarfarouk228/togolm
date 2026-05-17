@@ -97,4 +97,4 @@ pipe = pipeline("text-generation", model="togolm/togolm-7b-instruct-v1")
 
 ---
 
-**Project lead:** Omar Farouk KOUGBADA · [KOF CORPORATION](https://kofcorporation.com) · Lomé, Togo
+**Project lead:** Omar Farouk KOUGBADA · GDE Flutter · Lomé, Togo

@@ -32,6 +32,7 @@ function Navbar() {
         {/* Nav links — hidden on mobile */}
         <nav className="hidden sm:flex gap-1 text-sm">
           {[
+            { href: "/corpus", label: "Corpus" },
             { href: "/search", label: "Search" },
             { href: "/chat",   label: "Ask AI" },
           ].map(({ href, label }) => (
