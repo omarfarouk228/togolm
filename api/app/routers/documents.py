@@ -265,18 +265,25 @@ def search_documents(
                 )
                 rows = cur.fetchall()
 
-            cur.execute(
-                f"""
-                SELECT COUNT(*) FROM documents
-                {sql_where}
-                  AND to_tsvector('french', coalesce(title,'') || ' ' || coalesce(clean_content,''))
-                      @@ to_tsquery('french', %s)
-                """,
-                params,
-            )
+            # COUNT uses only one tsquery placeholder + filter params
+            count_params: list = [tsquery]
+            if source:
+                count_params.append(source)
+            if category:
+                count_params.append(category)
             try:
+                cur.execute(
+                    f"""
+                    SELECT COUNT(*) FROM documents
+                    {sql_where}
+                      AND to_tsvector('french', coalesce(title,'') || ' ' || coalesce(clean_content,''))
+                          @@ to_tsquery('french', %s)
+                    """,
+                    count_params,
+                )
                 total = cur.fetchone()[0]
             except Exception:
+                conn.rollback()
                 total = len(rows)
     finally:
         conn.close()

@@ -45,3 +45,4 @@ vitrine/.env.local
 *.log
 logs/
 
+extras/

@@ -187,7 +187,10 @@ def build_answer(question: str, chunks: list[RetrievedChunk]) -> str:
         return "No relevant information found in the TogoLM corpus for this question."
 
     if os.getenv("GEMINI_API_KEY"):
-        return _generate_with_gemini(question, chunks)
+        try:
+            return _generate_with_gemini(question, chunks)
+        except Exception:
+            pass  # Fall through to extractive answer
 
     # Extractive fallback: return the top passage with attribution
     top = chunks[0]

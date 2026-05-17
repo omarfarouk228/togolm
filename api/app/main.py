@@ -2,16 +2,19 @@
 TogoLM Public API — v1
 
 Endpoints:
-  POST /v1/query     — RAG query over the Togolese corpus
-  POST /v1/embed     — Generate embeddings via TogoLM
-  GET  /v1/categories — List available corpus categories
-  GET  /v1/stats     — Public corpus statistics
+  POST /v1/query            — RAG query over the Togolese corpus
+  POST /v1/embed            — Generate embeddings via TogoLM
+  GET  /v1/categories       — List available corpus categories
+  GET  /v1/stats            — Public corpus statistics
+  GET  /v1/documents        — Paginated document list
+  GET  /v1/documents/{id}   — Single document with chunks
+  GET  /v1/search           — Full-text keyword search
 """
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from api.app.routers import corpus, query
+from api.app.routers import corpus, documents, query
 
 app = FastAPI(
     title="TogoLM API",
@@ -30,6 +33,7 @@ app.add_middleware(
 
 app.include_router(query.router, prefix="/v1")
 app.include_router(corpus.router, prefix="/v1")
+app.include_router(documents.router, prefix="/v1")
 
 
 @app.get("/", include_in_schema=False)
