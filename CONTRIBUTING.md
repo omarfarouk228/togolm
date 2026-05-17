@@ -26,7 +26,7 @@ Thank you for helping build the first open-source AI infrastructure for Togo.
 | `corpus` | Data addition or correction |
 | `api` | Endpoint or API logic |
 | `finetuning` | Training scripts or datasets |
-| `vitrine` | Next.js showcase interface |
+| `showcase` | Next.js showcase interface |
 | `bug` | Something is broken |
 | `enhancement` | Improvement to an existing feature |
 

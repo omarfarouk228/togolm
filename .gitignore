@@ -37,9 +37,9 @@ finetuning/datasets/*.jsonl
 Thumbs.db
 
 # Next.js
-vitrine/node_modules/
-vitrine/.next/
-vitrine/.env.local
+showcase/node_modules/
+showcase/.next/
+showcase/.env.local
 
 # Logs
 *.log

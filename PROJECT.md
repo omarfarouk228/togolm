@@ -16,7 +16,7 @@
 6. [Corpus de données](#6-corpus-de-données)
 7. [Fine-tuning](#7-fine-tuning)
 8. [Spécifications de l'API](#8-spécifications-de-lapi)
-9. [Interface vitrine](#9-interface-vitrine)
+9. [Interface showcase](#9-interface-showcase)
 10. [Modèle Open Source & Gouvernance](#10-modèle-open-source--gouvernance)
 11. [Roadmap & Planning](#11-roadmap--planning)
 12. [Ressources & Contraintes](#12-ressources--contraintes)
@@ -66,7 +66,7 @@ Il ne s'agit pas d'un chatbot grand public, ni d'une app citoyenne isolée. C'es
 - Déployer un pipeline RAG (Retrieval-Augmented Generation) fonctionnel
 - Lancer un premier **fine-tuning** sur un modèle open source (Mistral 7B ou LLaMA 3)
 - Exposer une API REST publique documentée
-- Déployer une interface vitrine démontrant les capacités du modèle
+- Déployer une interface showcase démontrant les capacités du modèle
 
 ### 2.2 Objectifs stratégiques
 
@@ -120,7 +120,7 @@ Il ne s'agit pas d'un chatbot grand public, ni d'une app citoyenne isolée. C'es
 - Base vectorielle (corpus embeddings)
 - Premier fine-tuning sur modèle open source
 - API RAG publique (endpoints de base)
-- Interface vitrine web
+- Interface showcase web
 - Documentation publique complète
 - Repository GitHub public avec contribution guidelines
 
@@ -198,7 +198,7 @@ Il ne s'agit pas d'un chatbot grand public, ni d'une app citoyenne isolée. C'es
 | Fine-tuning | Hugging Face Transformers · LoRA / QLoRA |
 | Modèle base | Mistral 7B Instruct ou LLaMA 3 8B |
 | API | FastAPI · Python |
-| Interface vitrine | Next.js|
+| Interface showcase | Next.js|
 | Hébergement | VPS (OVH / Hetzner) + GPU cloud (RunPod / Modal) |
 | CI/CD | GitHub Actions |
 
@@ -401,7 +401,7 @@ Statistiques publiques sur le corpus (nombre de documents, langues, dernière mi
 
 ---
 
-## 9. Interface vitrine
+## 9. Interface showcase
 
 ### 9.1 Objectif
 
@@ -455,7 +455,7 @@ togolm/
 │   ├── scripts/
 │   ├── configs/
 │   └── datasets/
-├── vitrine/
+├── showcase/
 │   └── (Next.js app)
 └── docs/
     ├── architecture.md
@@ -467,7 +467,7 @@ togolm/
 
 - Issues GitHub pour signaler des sources manquantes ou erreurs dans le corpus
 - Pull Requests pour contribuer des scrapers, corrections, améliorations
-- Labels clairs : `corpus`, `api`, `finetuning`, `vitrine`, `bug`, `enhancement`
+- Labels clairs : `corpus`, `api`, `finetuning`, `showcase`, `bug`, `enhancement`
 - Validation obligatoire par le maintainer pour les modifications du corpus
 
 ### 10.4 Gouvernance
@@ -508,7 +508,7 @@ togolm/
 
 ### Phase 2 — Lancement (Mois 3-4)
 
-- [ ] Interface vitrine déployée
+- [ ] Interface showcase déployée
 - [ ] Documentation complète
 - [ ] Publication modèle sur Hugging Face Hub
 - [ ] Annonce publique : LinkedIn, GitHub, communautés GDG

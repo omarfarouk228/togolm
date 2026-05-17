@@ -2,10 +2,13 @@
 Spider for Togolese government ministry sites sharing the same WordPress/Elementor stack.
 
 Currently covers:
-  - finances.gouv.tg  (finance ministry — budget laws, tax, fiscal reports)
-  - education.gouv.tg (education ministry — school policy, curriculum, recruitment)
+  - finances.gouv.tg    (finance — budget, tax, fiscal)
+  - education.gouv.tg   (education — policy, curriculum, recruitment)
+  - agriculture.gouv.tg (agriculture — food security, rural development)
+  - commerce.gouv.tg    (commerce — trade, industry, SMEs)
+  - securite.gouv.tg    (security — public safety, civil protection)
 
-Both sites expose XML sitemaps at /wp-sitemap.xml with post and documentation sub-sitemaps.
+All sites expose XML sitemaps at /wp-sitemap.xml with post and documentation sub-sitemaps.
 Content lives in plain <p> tags across the page (no wrapping <article> element).
 """
 
@@ -34,6 +37,33 @@ SITES = [
         "sitemaps": [
             "https://education.gouv.tg/post-sitemap.xml",
             "https://education.gouv.tg/documentation-sitemap.xml",
+        ],
+    },
+    {
+        "domain": "agriculture.gouv.tg",
+        "source": "agriculture.gouv.tg",
+        "category": "agriculture",
+        "sitemaps": [
+            "https://agriculture.gouv.tg/post-sitemap.xml",
+            "https://agriculture.gouv.tg/documentation-sitemap.xml",
+        ],
+    },
+    {
+        "domain": "commerce.gouv.tg",
+        "source": "commerce.gouv.tg",
+        "category": "economy",
+        "sitemaps": [
+            "https://commerce.gouv.tg/post-sitemap.xml",
+            "https://commerce.gouv.tg/documentation-sitemap.xml",
+        ],
+    },
+    {
+        "domain": "securite.gouv.tg",
+        "source": "securite.gouv.tg",
+        "category": "politics",
+        "sitemaps": [
+            "https://securite.gouv.tg/post-sitemap.xml",
+            "https://securite.gouv.tg/documentation-sitemap.xml",
         ],
     },
 ]
@@ -151,6 +181,12 @@ class GouvMinistrySpider(BaseTogoSpider):
             return "fiscal"
         if "/curriculum" in url_lower or "/programme" in url_lower:
             return "curriculum"
+        if "/agriculture" in url_lower or "/elevage" in url_lower or "/peche" in url_lower:
+            return "agriculture"
+        if "/commerce" in url_lower or "/industrie" in url_lower or "/pme" in url_lower:
+            return "commerce"
+        if "/securite" in url_lower or "/police" in url_lower or "/gendarmerie" in url_lower:
+            return "securite"
         return "actualite"
 
     def make_document(self, response, title, raw_content, **kwargs):

@@ -33,7 +33,7 @@ togolm/
 │   ├── scripts/          # Training scripts
 │   ├── configs/          # QLoRA configs
 │   └── datasets/         # Instruction pairs
-├── vitrine/              # Next.js showcase
+├── showcase/              # Next.js showcase
 ├── docs/                 # Architecture & API reference
 └── scripts/              # DB init, utilities
 ```
@@ -77,7 +77,7 @@ Full API reference → [docs/api-reference.md](docs/api-reference.md)
 
 We welcome contributions — corpus sources, scrapers, corrections, translations.
 
-→ [CONTRIBUTING.md](CONTRIBUTING.md) | Labels: `corpus`, `api`, `finetuning`, `vitrine`, `bug`, `enhancement`
+→ [CONTRIBUTING.md](CONTRIBUTING.md) | Labels: `corpus`, `api`, `finetuning`, `showcase`, `bug`, `enhancement`
 
 ## Model on Hugging Face
 
