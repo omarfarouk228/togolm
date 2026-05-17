@@ -21,14 +21,25 @@ class LocalEmbedder:
 
     def __init__(self, model_name: str = MODEL_NAME):
         self.model_name = model_name
-        # Lazy-load: model is not imported until first call
         self._model = None
+
+    def _best_device(self) -> str:
+        try:
+            import torch
+            if torch.backends.mps.is_available():
+                return "mps"
+            if torch.cuda.is_available():
+                return "cuda"
+        except ImportError:
+            pass
+        return "cpu"
 
     def _load(self):
         if self._model is None:
             from sentence_transformers import SentenceTransformer
-            print(f"Loading embedding model '{self.model_name}' (first run: ~420 MB download)...")
-            self._model = SentenceTransformer(self.model_name)
+            device = self._best_device()
+            print(f"Loading embedding model '{self.model_name}' on {device}...")
+            self._model = SentenceTransformer(self.model_name, device=device)
         return self._model
 
     def encode(self, texts: list[str]) -> list[list[float]]:

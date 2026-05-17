@@ -12,6 +12,21 @@ V1 uses simple API key authentication. Omit the header for public (rate-limited)
 
 ---
 
+## Endpoints overview
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `GET` | `/v1/stats` | Corpus statistics |
+| `GET` | `/v1/categories` | Available categories |
+| `GET` | `/v1/documents` | Paginated document list |
+| `GET` | `/v1/documents/{id}` | Document detail + chunks |
+| `GET` | `/v1/search?q=` | Full-text search |
+| `POST` | `/v1/query` | RAG query (full response) |
+| `POST` | `/v1/query/stream` | RAG query (SSE stream) |
+| `POST` | `/v1/embed` | Generate embedding vector |
+
+---
+
 ## POST /v1/query
 
 Query the Togolese corpus via RAG.
@@ -39,6 +54,49 @@ Query the Togolese corpus via RAG.
   ],
   "model": "togolm-7b-v1",
   "latency_ms": 340
+}
+```
+
+---
+
+---
+
+## POST /v1/query/stream
+
+Stream a RAG answer via Server-Sent Events (SSE). Identical request body to `/v1/query`.
+
+```bash
+curl -N -X POST http://localhost:8000/v1/query/stream \
+  -H "Content-Type: application/json" \
+  -d '{"question": "Comment créer une entreprise au Togo ?"}'
+```
+
+**SSE event stream:**
+
+```
+data: {"type": "chunk", "text": "Pour créer "}
+data: {"type": "chunk", "text": "une entreprise au Togo, "}
+data: {"type": "chunk", "text": "il faut d'abord..."}
+data: {"type": "sources", "sources": [...], "latency_ms": 1240}
+data: [DONE]
+```
+
+**Event types:**
+
+| Type | Fields | Description |
+|------|--------|-------------|
+| `chunk` | `text: str` | Next token(s) of the answer |
+| `sources` | `sources: list`, `latency_ms: int` | Retrieved sources (sent after generation) |
+| `error` | `message: str` | Error during retrieval or generation |
+
+**TypeScript client (using the built-in `queryRAGStream` in `showcase/lib/api.ts`):**
+
+```typescript
+import { queryRAGStream } from "@/lib/api";
+
+for await (const event of queryRAGStream("Comment créer une entreprise au Togo ?")) {
+  if (event.type === "chunk") process.stdout.write(event.text);
+  if (event.type === "sources") console.log("Sources:", event.sources);
 }
 ```
 

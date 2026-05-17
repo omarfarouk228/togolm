@@ -4,88 +4,245 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 [![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://python.org)
+[![Next.js](https://img.shields.io/badge/Next.js-16-black)](https://nextjs.org)
+[![PostgreSQL](https://img.shields.io/badge/PostgreSQL-pgvector-336791)](https://github.com/pgvector/pgvector)
 [![HuggingFace](https://img.shields.io/badge/🤗-togolm-yellow)](https://huggingface.co/togolm)
 
-TogoLM is an open-source AI knowledge layer for Togo — a reusable infrastructure that developers, startups, and institutions can build upon.
+TogoLM is an open-source AI knowledge layer for Togo — a complete pipeline from raw web scraping to a fine-tuned LLM and public REST API that developers, startups, and institutions can build upon.
 
 ---
 
-## What it is
+## What it does
 
-- **Corpus** — 50 000+ structured Togolese documents (laws, government data, press, education)
-- **RAG Engine** — Retrieval-Augmented Generation over the Togolese corpus
-- **Fine-tuned LLM** — Mistral 7B / LLaMA 3 8B adapted to the Togolese context
-- **Public API** — REST endpoints consumable by any developer or institution
-- **Showcase** — Next.js interface to explore and query the corpus
+| Layer | Description |
+|-------|-------------|
+| **Corpus** | 50 000+ structured Togolese documents — laws, government data, press, education |
+| **RAG Engine** | Retrieval-Augmented Generation over the Togolese corpus |
+| **Public API** | REST endpoints consumable by any developer or app |
+| **Fine-tuned LLM** | Mistral 7B adapted to the Togolese context (training in progress) |
+| **Showcase** | Next.js interface to explore and query the corpus |
+
+## Why
+
+Togolese public data is scattered across dozens of government portals and absent from the training sets of international LLMs. TogoLM provides a reusable, open infrastructure layer for Togo and francophone West Africa.
+
+---
 
 ## Repository structure
 
 ```
 togolm/
 ├── corpus/
-│   ├── scrapers/         # Scrapy spiders (data collection)
-│   ├── processors/       # Cleaning, chunking, embedding
-│   └── datasets/         # Raw & processed data (gitignored)
+│   ├── scrapers/
+│   │   └── spiders/          # Scrapy spiders — one per source
+│   ├── processors/
+│   │   ├── cleaner.py        # HTML → clean text
+│   │   ├── chunker.py        # Split into 400-word chunks
+│   │   ├── embedder.py       # Local (MiniLM) or Gemini embeddings
+│   │   └── ingestor.py       # JSONL → PostgreSQL + pgvector
+│   └── datasets/             # Scraped JSONL files (gitignored)
 ├── api/
-│   ├── app/              # FastAPI application
-│   └── tests/
+│   ├── app/
+│   │   ├── main.py           # FastAPI entry point
+│   │   ├── routers/          # corpus.py, documents.py, query.py
+│   │   └── services/rag.py   # Vector retrieval + Gemini generation
+│   └── tests/                # 11 pytest integration tests
 ├── finetuning/
-│   ├── scripts/          # Training scripts
-│   ├── configs/          # QLoRA configs
-│   └── datasets/         # Instruction pairs
-├── showcase/              # Next.js showcase
-├── docs/                 # Architecture & API reference
-└── scripts/              # DB init, utilities
+│   ├── dataset/
+│   │   ├── generator.py      # Q&A pair generation (Gemini)
+│   │   └── formatter.py      # Alpaca / ShareGPT format
+│   ├── train/
+│   │   ├── config.py         # QLoRA hyperparameters
+│   │   └── trainer.py        # SFTTrainer fine-tuning script
+│   └── notebooks/
+│       └── train_colab.ipynb # Google Colab training notebook
+├── showcase/                  # Next.js 16 + Tailwind v4 frontend
+│   ├── app/
+│   │   ├── page.tsx          # Homepage — stats + source table
+│   │   ├── corpus/page.tsx   # Browse corpus by source/category
+│   │   ├── search/page.tsx   # Full-text search UI
+│   │   └── chat/page.tsx     # Streaming RAG chat UI
+│   └── lib/api.ts            # Typed API client + SSE stream
+├── scripts/
+│   └── init.sql              # PostgreSQL schema (documents + chunks)
+├── .env.example
+└── pyproject.toml
 ```
 
-## Quick start (local dev)
+---
 
-**Prerequisites:** Docker, Python 3.11+, [uv](https://github.com/astral-sh/uv)
+## Quick start
+
+### Prerequisites
+
+- Python 3.11+, [uv](https://github.com/astral-sh/uv), Node.js 20+
+- PostgreSQL with [pgvector](https://github.com/pgvector/pgvector) extension
+
+### 1 — Clone and configure
 
 ```bash
-# 1. Clone
 git clone https://github.com/togolm/togolm.git
 cd togolm
-
-# 2. Start PostgreSQL + pgvector
 cp .env.example .env
-docker compose up -d
-
-# 3. Install dependencies
-uv sync
-
-# 4. Run first scraper
-cd corpus
-scrapy crawl service_public -o ../corpus/datasets/service_public.jsonl
+# Edit .env — set POSTGRES_USER, POSTGRES_PASSWORD, POSTGRES_DB
 ```
 
-## API
+### 2 — Initialize the database
 
 ```bash
-# Start the API
-uvicorn api.app.main:app --reload
+psql -U $POSTGRES_USER -d $POSTGRES_DB -f scripts/init.sql
+```
 
+### 3 — Install Python dependencies
+
+```bash
+uv sync
+```
+
+### 4 — Scrape a source
+
+```bash
+# Run from the project root
+uv run scrapy crawl service_public \
+  -o corpus/datasets/service_public.jsonl \
+  -s JOBDIR=corpus/.crawls/service_public \
+  --logfile corpus/.crawls/service_public.log
+```
+
+Available spiders: `journal_officiel`, `presidence`, `assemblee_nationale`,
+`inseed`, `gouv_ministry`, `service_public`, `icilome`, `togofirst`,
+`togoinfos`, `republicoftogo`, `togopress`, `mef`
+
+### 5 — Ingest into PostgreSQL
+
+```bash
+# Uses the local sentence-transformers model (no API key needed)
+uv run python -m corpus.processors.ingestor corpus/datasets/service_public.jsonl
+
+# Multiple files at once
+uv run python -m corpus.processors.ingestor corpus/datasets/*.jsonl
+```
+
+### 6 — Start the API
+
+```bash
+uv run uvicorn api.app.main:app --reload --port 8000
+```
+
+```bash
 # Query the corpus
 curl -X POST http://localhost:8000/v1/query \
   -H "Content-Type: application/json" \
-  -d '{"question": "How to register a company in Togo?", "category": "legal"}'
+  -d '{"question": "Comment créer une entreprise au Togo ?"}'
+
+# Stream the answer (SSE)
+curl -N -X POST http://localhost:8000/v1/query/stream \
+  -H "Content-Type: application/json" \
+  -d '{"question": "Quel est le budget de l'\''État togolais ?"}'
 ```
 
-Full API reference → [docs/api-reference.md](docs/api-reference.md)
+Full API reference → [`docs/api-reference.md`](docs/api-reference.md)
+
+### 7 — Start the showcase
+
+```bash
+cd showcase
+npm install
+npm run dev      # http://localhost:3000
+```
+
+---
+
+## API endpoints
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `GET` | `/v1/stats` | Corpus statistics (doc/chunk counts per source) |
+| `GET` | `/v1/categories` | Available corpus categories |
+| `GET` | `/v1/documents` | Paginated document list with source/category filters |
+| `GET` | `/v1/documents/{id}` | Document detail + chunks |
+| `GET` | `/v1/search?q=` | French full-text search (ts_rank + ILIKE fallback) |
+| `POST` | `/v1/query` | RAG query → full JSON response |
+| `POST` | `/v1/query/stream` | RAG query → SSE stream (chunk by chunk) |
+| `POST` | `/v1/embed` | Generate a 384-dim embedding vector |
+
+---
+
+## Embeddings
+
+| Backend | Model | Requires |
+|---------|-------|----------|
+| Local (default) | `paraphrase-multilingual-MiniLM-L12-v2` | Nothing (auto-downloaded ~120 MB) |
+| Gemini | `gemini-embedding-001` (384-dim) | `GEMINI_API_KEY` in `.env` |
+
+The embedder auto-selects based on the presence of a valid `GEMINI_API_KEY`.
+
+---
+
+## Fine-tuning
+
+The fine-tuning pipeline targets Mistral 7B Instruct v0.3 with QLoRA.
+
+```bash
+# 1. Generate Q&A pairs from the corpus (requires GEMINI_API_KEY)
+uv run python -m finetuning.dataset.generator \
+  --output finetuning/datasets/qa_raw.jsonl \
+  --max-docs 500
+
+# 2. Format to Alpaca / ShareGPT
+uv run python -m finetuning.dataset.formatter \
+  --input finetuning/datasets/qa_raw.jsonl \
+  --output finetuning/datasets/train.jsonl \
+  --format alpaca
+
+# 3. Fine-tune (Google Colab recommended)
+# Open: finetuning/notebooks/train_colab.ipynb
+```
+
+---
+
+## Corpus coverage (V1 target: 50 000 docs)
+
+| Source | Category | Status |
+|--------|----------|--------|
+| jo.gouv.tg | Legal | ✅ Ingested |
+| presidence.gouv.tg | Politics | ✅ Ingested |
+| assemblee-nationale.tg | Legal | ✅ Ingested |
+| inseed.tg | Economy / Statistics | ✅ Ingested |
+| finances.gouv.tg | Economy | ✅ Ingested |
+| education.gouv.tg | Education | ✅ Ingested |
+| agriculture.gouv.tg | Agriculture | ✅ Ingested |
+| commerce.gouv.tg | Economy | ✅ Ingested |
+| securite.gouv.tg | Politics | ✅ Ingested |
+| service-public.gouv.tg | Administrative | ✅ Scraped |
+| icilome.com | Press | ✅ Scraped |
+| togofirst.com | Press / Economy | 🔜 Spider ready |
+| togoinfos.com | Press | 🔜 Spider ready |
+| republicoftogo.com | Press | 🔜 Spider ready |
+| togopress.info | Press | 🔜 Spider ready |
+| mef.gouv.tg | Economy | 🔜 Spider ready |
+
+---
 
 ## Contributing
 
-We welcome contributions — corpus sources, scrapers, corrections, translations.
+We welcome contributions — new corpus sources, scrapers, API improvements, translations.
 
-→ [CONTRIBUTING.md](CONTRIBUTING.md) | Labels: `corpus`, `api`, `finetuning`, `showcase`, `bug`, `enhancement`
+→ [CONTRIBUTING.md](CONTRIBUTING.md)
+
+**Issue labels:** `corpus` · `api` · `finetuning` · `showcase` · `bug` · `enhancement`
+
+---
 
 ## Model on Hugging Face
 
 ```python
-# Coming soon
+# Coming soon — fine-tuning in progress
 from transformers import pipeline
 pipe = pipeline("text-generation", model="togolm/togolm-7b-instruct-v1")
 ```
+
+---
 
 ## License
 
@@ -97,4 +254,4 @@ pipe = pipeline("text-generation", model="togolm/togolm-7b-instruct-v1")
 
 ---
 
-**Project lead:** Omar Farouk KOUGBADA · GDE Flutter · Lomé, Togo
+**Project lead:** Omar Farouk KOUGBADA · GDE Flutter · Director, KOF CORPORATION · Lomé, Togo

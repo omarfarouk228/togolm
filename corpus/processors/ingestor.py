@@ -29,6 +29,9 @@ EMBED_BATCH_SIZE = 20
 CHUNK_SIZE = 400   # words per chunk (~512 tokens)
 CHUNK_OVERLAP = 50  # words of overlap between consecutive chunks
 
+# Module-level embedder cache — avoids re-instantiating (and re-checking Gemini quota) per batch
+_embedder = None
+
 FR_MONTHS = {
     "janvier": "01", "février": "02", "mars": "03", "avril": "04",
     "mai": "05", "juin": "06", "juillet": "07", "août": "08",
@@ -74,13 +77,17 @@ def get_connection() -> psycopg2.extensions.connection:
 def embed_batch(texts: list[str]) -> list[list[float]]:
     """
     Embed a batch of texts.
-    Retries with exponential backoff on rate limit; falls back to
-    sentence-transformers if Gemini quota is exhausted.
+    Uses a module-level cached embedder to avoid re-checking Gemini quota every batch.
+    Retries with exponential backoff on rate limit; permanently falls back to
+    sentence-transformers if Gemini quota is exhausted for the rest of the run.
     """
-    embedder = get_embedder()
+    global _embedder
+    if _embedder is None:
+        _embedder = get_embedder()
+
     for attempt in range(4):
         try:
-            return embedder.encode(texts)
+            return _embedder.encode(texts)
         except Exception as e:
             msg = str(e)
             if "429" in msg or "RESOURCE_EXHAUSTED" in msg:
@@ -89,12 +96,13 @@ def embed_batch(texts: list[str]) -> list[list[float]]:
                     print(f"  [RATE LIMIT] Waiting {wait}s before retry {attempt + 1}/3...")
                     time.sleep(wait)
                 else:
-                    print("  [RATE LIMIT] Gemini quota exhausted — switching to local model")
+                    print("  [RATE LIMIT] Gemini quota exhausted — switching to local model for this run")
                     from corpus.processors.embedder import LocalEmbedder
-                    return LocalEmbedder().encode(texts)
+                    _embedder = LocalEmbedder()
+                    return _embedder.encode(texts)
             else:
                 raise
-    return embedder.encode(texts)
+    return _embedder.encode(texts)
 
 
 def upsert_document(cur, doc: dict) -> str:
