@@ -150,6 +150,16 @@ SITES = [
             "https://urbanisme.gouv.tg/wp-sitemap-posts-documentation-1.xml",
         ],
     },
+    # ── Social Security ───────────────────────────────────────────────────────
+    {
+        "domain": "cnss.tg",
+        "source": "cnss.tg",
+        "category": "legal",
+        "sitemaps": [
+            "https://cnss.tg/wp-sitemap-posts-post-1.xml",
+            "https://cnss.tg/sitemap.xml",
+        ],
+    },
 ]
 
 # Paths that are never articles
