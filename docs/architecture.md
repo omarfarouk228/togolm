@@ -67,7 +67,6 @@
 |--------|--------|-----------|--------|
 | `service_public` | service-public.gouv.tg | administrative | ✅ Actif |
 | `presidence` | presidence.gouv.tg | politics | ✅ Actif |
-| `mef` | mef.gouv.tg | economy | ✅ Actif |
 | `inseed` | inseed.tg | economy | ✅ Actif |
 | `gouv_ministry` | *.gouv.tg (12 ministères) | government | ✅ Actif |
 | `journal_officiel` | jo.gouv.tg | legal | ✅ Actif |
@@ -77,6 +76,10 @@
 | `republicoftogo` | republicoftogo.com | press | ✅ Actif |
 | `letogolais` | letogolais.com | press | ✅ Actif |
 | `savoirnews` | savoirnews.net | press | ✅ Actif |
+| `lomeinfos` | lomeinfos.com | press | ✅ Actif |
+| `togoactualite` | togoactualite.com | press | ✅ Actif |
+| `wikipedia` | fr.wikipedia.org | encyclopedic | ✅ Actif |
+| `mef` | mef.gouv.tg | economy | ❌ DNS failure |
 | `assemblee_nationale` | assemblee-nationale.tg | legal | ❌ Cloudflare |
 | `atp` | agencetogopresse.com | press | ❌ DNS failure |
 | `haac` | haac.tg | government | ❌ DNS failure |

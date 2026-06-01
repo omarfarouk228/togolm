@@ -4,9 +4,24 @@ Generate Q&A pairs from the TogoLM corpus for supervised fine-tuning.
 Reads documents from PostgreSQL, sends each one to Gemini with a generation
 prompt, and returns structured Q&A pairs ready for formatting.
 
+The output file is appended to so interrupted runs can be resumed safely
+using --offset N (where N = number of docs already processed).
+
+NOTE FOR FREE-TIER USERS: gemini-2.5-flash is limited to ~20 requests/day
+on the free tier. Run incrementally using --limit 20 per day and track
+progress with --offset N.
+
 Usage:
-    uv run python -m finetuning.dataset.generator --limit 50 --out finetuning/datasets/qa_raw.jsonl
-    uv run python -m finetuning.dataset.generator --source jo.gouv.tg --pairs-per-doc 5
+    # Paid API key — process a large batch in one run
+    python -m finetuning.dataset.generator --source jo.gouv.tg --limit 500
+
+    # Free tier — process 20 docs per day, resuming each time
+    python -m finetuning.dataset.generator --source jo.gouv.tg --limit 20 --offset 0
+    python -m finetuning.dataset.generator --source jo.gouv.tg --limit 20 --offset 20
+    # (script prints the exact --offset to use on quota exhaustion)
+
+    # After all sources: format the dataset
+    python -m finetuning.dataset.formatter --format alpaca
 """
 
 import argparse
@@ -105,16 +120,25 @@ def _fetch_documents(
         return [dict(zip(cols, row)) for row in cur.fetchall()]
 
 
-# Model fallback chain — gemini-2.5-flash has a tiny free-tier RPD quota (20/day);
-# fall back to gemini-1.5-flash (1 500 RPD) when quota is hit.
-_MODELS = ["gemini-2.5-flash", "gemini-1.5-flash"]
+# Model fallback chain — used when a model's daily quota (RPD) is exhausted.
+# On the free tier, gemini-2.5-flash is limited to ~20 RPD; on a paid key the
+# daily limits are much higher but per-minute limits (RPM) still apply.
+_MODELS = ["gemini-2.5-flash", "gemini-2.0-flash", "gemini-2.5-flash-lite"]
 _active_model_idx = 0  # tracks which model in _MODELS is currently in use
+
+
+def _is_rpm_error(msg: str) -> bool:
+    """Return True for per-minute rate limits (temporary) vs daily quota (permanent)."""
+    low = msg.lower()
+    return "per_minute" in low or "per minute" in low or "rate_limit_exceeded" in low
 
 
 def _generate_pairs(doc: dict, n: int, client, types) -> list[QAPair]:
     """Call Gemini to generate Q&A pairs for one document.
 
-    Falls back from gemini-2.5-flash → gemini-1.5-flash on quota exhaustion.
+    Handles two kinds of 429 errors differently:
+    - RPM (per-minute rate limit): waits with exponential backoff, retries same model.
+    - RPD (daily quota exhausted): switches to next model in the fallback chain.
     """
     global _active_model_idx
 
@@ -132,24 +156,47 @@ def _generate_pairs(doc: dict, n: int, client, types) -> list[QAPair]:
         n=n,
     )
 
-    for attempt in range(3):
+    for attempt in range(5):
         model = _MODELS[_active_model_idx]
         try:
             response = client.models.generate_content(
                 model=model,
                 contents=prompt,
                 config=types.GenerateContentConfig(
-                    max_output_tokens=800,
+                    max_output_tokens=2048,
                     temperature=0.7,
                 ),
             )
-            raw = response.text.strip()
+            # Guard: safety filter may leave response.text None or raise
+            try:
+                raw = response.text
+            except Exception:
+                raw = None
+
+            if not raw:
+                # Blocked by safety filter or empty response
+                finish = getattr(response, "candidates", None)
+                reason = (
+                    finish[0].finish_reason if finish else "unknown"
+                ) if finish else "no candidates"
+                print(f"  [BLOCKED] doc {doc['id']} — finish_reason: {reason}")
+                return []
+
+            raw = raw.strip()
+
             # Strip markdown code fences if present
             if raw.startswith("```"):
                 raw = raw.split("```")[1]
                 if raw.startswith("json"):
                     raw = raw[4:]
             raw = raw.strip()
+
+            # Try to extract a JSON array if model added preamble text
+            if not raw.startswith("["):
+                start = raw.find("[")
+                end = raw.rfind("]")
+                if start != -1 and end != -1:
+                    raw = raw[start : end + 1]
 
             pairs_data = json.loads(raw)
             return [
@@ -165,26 +212,31 @@ def _generate_pairs(doc: dict, n: int, client, types) -> list[QAPair]:
                 if p.get("question") and p.get("answer")
             ]
         except json.JSONDecodeError:
-            if attempt < 2:
+            if attempt < 4:
                 time.sleep(2)
                 continue
-            print(f"  [WARN] JSON parse failed for doc {doc['id']} after 3 attempts")
+            # Print a sample of what the model returned so we can diagnose
+            preview = repr(raw[:200]) if raw else "<empty>"
+            print(f"  [WARN] JSON parse failed for doc {doc['id']} — response: {preview}")
             return []
         except Exception as e:
             msg = str(e)
             if "429" in msg or "RESOURCE_EXHAUSTED" in msg:
-                # Try next model in fallback chain
-                if _active_model_idx + 1 < len(_MODELS):
-                    _active_model_idx += 1
-                    next_model = _MODELS[_active_model_idx]
-                    print(f"  [QUOTA] {model} daily quota hit — switching to {next_model}")
-                    # Retry immediately with new model (don't count as an attempt)
-                    attempt -= 1
+                if _is_rpm_error(msg):
+                    # Temporary per-minute rate limit — back off and retry same model
+                    wait = min(30 * (attempt + 1), 120)
+                    print(f"  [RPM] {model} rate limit — waiting {wait}s (attempt {attempt + 1}/5)...")
+                    time.sleep(wait)
                     continue
-                # All models exhausted — use exponential backoff
-                wait = 2 ** attempt * 20
-                print(f"  [RATE LIMIT] All models at quota. Waiting {wait}s... (attempt {attempt+1}/3)")
-                time.sleep(wait)
+                else:
+                    # Daily quota exhausted — switch to next model in fallback chain
+                    if _active_model_idx + 1 < len(_MODELS):
+                        _active_model_idx += 1
+                        next_model = _MODELS[_active_model_idx]
+                        print(f"  [QUOTA] {model} daily quota hit — switching to {next_model}")
+                        continue
+                    # All models exhausted — raise so caller can handle
+                    raise RuntimeError("QUOTA_EXHAUSTED: all Gemini models at daily quota")
             else:
                 print(f"  [ERROR] {doc['source']} — {type(e).__name__}: {e}")
                 return []
@@ -212,20 +264,40 @@ def generate(
 
     output.parent.mkdir(parents=True, exist_ok=True)
     total_pairs = 0
+    processed_docs = 0  # docs actually attempted (used to compute next --offset)
 
     with open(output, "a", encoding="utf-8") as f:
         for doc in tqdm(docs, desc="Generating"):
             words = len((doc["clean_content"] or "").split())
             if words < MIN_DOC_WORDS:
+                processed_docs += 1  # count even skipped docs so offset stays aligned
                 continue
 
-            pairs = _generate_pairs(doc, pairs_per_doc, client, types)
+            try:
+                pairs = _generate_pairs(doc, pairs_per_doc, client, types)
+            except RuntimeError as e:
+                if "QUOTA_EXHAUSTED" in str(e):
+                    next_offset = offset + processed_docs
+                    print(
+                        f"\n[QUOTA EXHAUSTED] Daily Gemini quota reached after "
+                        f"{total_pairs} pairs from {processed_docs} docs.\n"
+                        f"Resume tomorrow with:\n"
+                        f"  python -m finetuning.dataset.generator"
+                        f" --offset {next_offset}"
+                        + (f" --source {source}" if source else "")
+                        + (f" --category {category}" if category else "")
+                        + f" --limit {limit}"
+                    )
+                    break
+                raise
+
             for pair in pairs:
                 f.write(json.dumps(asdict(pair), ensure_ascii=False) + "\n")
                 total_pairs += 1
             if pairs:
                 f.flush()  # Persist to disk immediately, don't wait for buffer
 
+            processed_docs += 1
             time.sleep(0.3)  # Rate limit headroom
 
     print(f"Done: {total_pairs} Q&A pairs written to {output}")

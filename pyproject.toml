@@ -47,6 +47,7 @@ finetuning = [
     "bitsandbytes>=0.43",
     "datasets>=2.21",
     "accelerate>=0.34",
+    "huggingface_hub>=0.23",
 ]
 
 [tool.hatch.build.targets.wheel]
