@@ -4,8 +4,6 @@ GET /v1/documents/{id}    — Single document with its chunks
 GET /v1/search            — Full-text keyword search
 """
 
-from typing import Literal
-
 import psycopg2
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel

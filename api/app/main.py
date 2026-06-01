@@ -13,13 +13,13 @@ Endpoints:
 
 from dotenv import load_dotenv
 
-load_dotenv()  # charge .env avant tout import qui lit os.getenv()
+load_dotenv()  # must run before any module that reads os.getenv()
 
-from fastapi import Depends, FastAPI
-from fastapi.middleware.cors import CORSMiddleware
+from fastapi import Depends, FastAPI  # noqa: E402
+from fastapi.middleware.cors import CORSMiddleware  # noqa: E402
 
-from api.app.rate_limit import check_rate_limit
-from api.app.routers import corpus, documents, query
+from api.app.rate_limit import check_rate_limit  # noqa: E402
+from api.app.routers import corpus, documents, query  # noqa: E402
 
 app = FastAPI(
     title="TogoLM API",

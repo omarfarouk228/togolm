@@ -103,7 +103,7 @@ def run_spider(spider_name: str) -> bool:
             print(f"  ❌ Exit code {result.returncode} after {elapsed:.0f}s")
             return False
     except subprocess.TimeoutExpired:
-        print(f"  ⏱  Timeout (10 min) — spider may still have partial results")
+        print("  ⏱  Timeout (10 min) — spider may still have partial results")
         return False
     except Exception as e:
         print(f"  ❌ Error: {e}")

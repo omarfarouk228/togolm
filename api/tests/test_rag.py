@@ -6,10 +6,7 @@ All DB and embedder calls are mocked — no real PostgreSQL needed.
 
 from unittest.mock import MagicMock, patch
 
-import pytest
-
 from api.app.services.rag import RetrievedChunk, build_answer, retrieve
-
 
 # ---------------------------------------------------------------------------
 # Helpers

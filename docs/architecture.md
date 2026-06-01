@@ -12,7 +12,7 @@
 │                      SOURCES DE DONNÉES                          │
 │  Gouvernement · Presse · Journal Officiel · OTR · INSEED        │
 └──────────────────────────┬──────────────────────────────────────┘
-                           │ Scrapy (17 spiders)
+                           │ Scrapy (20 spiders)
                            ▼
 ┌─────────────────────────────────────────────────────────────────┐
 │                    PIPELINE DE COLLECTE                          │
@@ -24,8 +24,8 @@
                            ▼
 ┌─────────────────────────────────────────────────────────────────┐
 │                   POSTGRESQL + PGVECTOR                          │
-│  Table: documents   (34 000+ docs)                              │
-│  Table: chunks      (54 000+ chunks, 384-dim embeddings)        │
+│  Table: documents   (62 000+ docs, 26 sources)                  │
+│  Table: chunks      (101 000+ chunks, 384-dim embeddings)       │
 │  Table: api_keys    (SHA-256, plans: free / dev / institution)  │
 └──────────┬──────────────────────────────┬───────────────────────┘
            │                              │

@@ -2,7 +2,6 @@ from datetime import datetime
 
 import scrapy
 from bs4 import BeautifulSoup
-
 from scrapers.items import DocumentItem
 
 

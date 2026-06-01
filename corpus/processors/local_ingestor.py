@@ -54,7 +54,7 @@ def infer_title(text: str, filename: str) -> str:
     Skips institutional boilerplate, collects the ALL-CAPS title block,
     stops at the first article body line.
     """
-    lines = [l.strip() for l in text.split("\n") if l.strip()]
+    lines = [ln.strip() for ln in text.split("\n") if ln.strip()]
 
     # Find where the boilerplate ends (first line NOT matching header patterns)
     start = 0

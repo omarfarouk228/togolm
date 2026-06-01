@@ -62,7 +62,7 @@ def create_key(owner_name: str, owner_email: str | None, plan: str) -> str:
     print(f"  Key ID : {row[0]}")
     print(f"  Created: {row[1]}")
     print()
-    print(f"  API KEY (shown once — save it now):")
+    print("  API KEY (shown once — save it now):")
     print(f"  {raw_key}")
     print("=" * 60 + "\n")
 
@@ -111,8 +111,8 @@ def list_keys() -> None:
     print("-" * 100)
     for r in rows:
         last = r[6].strftime("%Y-%m-%d") if r[6] else "never"
-        active = "✓" if r[4] else "✗"
-        print(f"{r[0]!s:<38} {(r[1] or '—'):<20} {r[3]:<12} {active:<8} {last}")
+        active = "yes" if r[4] else "no"
+        print(f"{r[0]!s:<38} {(r[1] or '-'):<20} {r[3]:<12} {active:<8} {last}")
     print()
 
 

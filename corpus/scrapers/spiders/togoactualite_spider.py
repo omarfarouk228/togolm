@@ -8,7 +8,6 @@ Uses post sitemaps for complete article discovery.
 """
 
 import scrapy
-
 from scrapers.spiders.base_spider import BaseTogoSpider
 
 # All 28 post sitemaps (ordered oldest → newest; newest = highest number)

@@ -87,10 +87,16 @@ def train(
     training_cfg: TrainingConfig | None = None,
     data_cfg: DataConfig | None = None,
 ):
-    from peft import LoraConfig as PeftLoraConfig, get_peft_model, prepare_model_for_kbit_training
-    from transformers import AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig, TrainingArguments
-    from trl import SFTTrainer
     import torch
+    from peft import LoraConfig as PeftLoraConfig
+    from peft import get_peft_model, prepare_model_for_kbit_training
+    from transformers import (
+        AutoModelForCausalLM,
+        AutoTokenizer,
+        BitsAndBytesConfig,
+        TrainingArguments,
+    )
+    from trl import SFTTrainer
 
     model_cfg = model_cfg or ModelConfig()
     lora_cfg = lora_cfg or LoraConfig()

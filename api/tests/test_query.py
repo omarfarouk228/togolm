@@ -7,7 +7,6 @@ DB and Gemini calls are mocked — no external services needed.
 import json
 from unittest.mock import patch
 
-import pytest
 from fastapi.testclient import TestClient
 
 from api.app.main import app

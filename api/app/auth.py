@@ -18,12 +18,10 @@ Environment (fallback only):
 import hashlib
 import os
 from dataclasses import dataclass
-from typing import Optional
 
 from fastapi import Header, HTTPException
 
 from api.app.db import get_conn
-
 
 # ---------------------------------------------------------------------------
 # Data model
@@ -100,8 +98,8 @@ def _check_env_fallback(key: str) -> bool:
 # ---------------------------------------------------------------------------
 
 async def get_api_key(
-    x_api_key: Optional[str] = Header(None),
-) -> Optional[APIKeyRecord | str]:
+    x_api_key: str | None = Header(None),
+) -> APIKeyRecord | str | None:
     """
     FastAPI dependency — extracts and validates X-API-Key header.
 

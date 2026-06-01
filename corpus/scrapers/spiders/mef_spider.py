@@ -13,7 +13,6 @@ import re
 from urllib.parse import urljoin
 
 import scrapy
-
 from scrapers.spiders.base_spider import BaseTogoSpider
 
 DOCUMENT_EXTENSIONS = re.compile(r"\.(pdf|doc|docx|xls|xlsx)$", re.IGNORECASE)

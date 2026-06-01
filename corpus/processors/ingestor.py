@@ -8,9 +8,8 @@ Usage:
 
 import argparse
 import json
-import re
 import os
-import sys
+import re
 import time
 from pathlib import Path
 
@@ -19,8 +18,8 @@ from dotenv import load_dotenv
 from pgvector.psycopg2 import register_vector
 from tqdm import tqdm
 
-from corpus.processors.cleaner import clean_document, is_useful
 from corpus.processors.chunker import chunk_by_words
+from corpus.processors.cleaner import clean_document, is_useful
 from corpus.processors.embedder import get_embedder
 
 load_dotenv(Path(__file__).resolve().parents[2] / ".env")

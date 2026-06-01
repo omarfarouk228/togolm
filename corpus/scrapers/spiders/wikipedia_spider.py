@@ -13,10 +13,9 @@ API endpoints used:
 """
 
 import json
-from urllib.parse import urljoin, urlencode
+from urllib.parse import urlencode
 
 import scrapy
-
 from scrapers.spiders.base_spider import BaseTogoSpider
 
 BASE_API = "https://fr.wikipedia.org/w/api.php"
@@ -163,8 +162,9 @@ class WikipediaSpider(BaseTogoSpider):
 
     def make_document(self, response, title, raw_content, subcategory="", **kwargs):
         """Override to use canonical Wikipedia URL instead of API URL."""
-        from scrapers.items import DocumentItem
         from datetime import datetime
+
+        from scrapers.items import DocumentItem
         meta = kwargs.get("metadata", {})
         url = meta.get("source_url", response.url)
 

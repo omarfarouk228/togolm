@@ -13,7 +13,6 @@ Strategy:
 from urllib.parse import urljoin
 
 import scrapy
-
 from scrapers.spiders.base_spider import BaseTogoSpider
 
 # Seed pages that contain static service listings

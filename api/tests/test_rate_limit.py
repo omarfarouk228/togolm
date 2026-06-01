@@ -71,7 +71,7 @@ class TestRateLimitAnonymous:
         mock_redis = MagicMock()
         mock_redis.incr.return_value = 1
         request = _make_request(ip="10.0.0.1", forwarded_for="203.0.113.5, 10.0.0.1")
-        with patch("api.app.rate_limit._get_redis", return_value=mock_redis) as mock_get:
+        with patch("api.app.rate_limit._get_redis", return_value=mock_redis):
             await check_rate_limit(request, api_key=None)
         # The Redis key should use the first IP in X-Forwarded-For
         call_args = mock_redis.incr.call_args[0][0]

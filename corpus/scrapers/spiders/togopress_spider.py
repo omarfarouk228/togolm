@@ -8,7 +8,6 @@ import re
 from urllib.parse import urljoin
 
 import scrapy
-
 from scrapers.spiders.base_spider import BaseTogoSpider
 
 # WordPress date URLs (/2024/05/slug/) or simple slugs (/article-slug/)

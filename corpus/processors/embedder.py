@@ -9,9 +9,6 @@ Both produce 384-dim vectors compatible with the pgvector schema.
 """
 
 import os
-from functools import cached_property
-
-import numpy as np
 
 MODEL_NAME = "paraphrase-multilingual-MiniLM-L12-v2"  # 384-dim, multilingual, ~120 MB
 

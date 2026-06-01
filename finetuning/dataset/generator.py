@@ -105,8 +105,19 @@ def _fetch_documents(
         return [dict(zip(cols, row)) for row in cur.fetchall()]
 
 
+# Model fallback chain — gemini-2.5-flash has a tiny free-tier RPD quota (20/day);
+# fall back to gemini-1.5-flash (1 500 RPD) when quota is hit.
+_MODELS = ["gemini-2.5-flash", "gemini-1.5-flash"]
+_active_model_idx = 0  # tracks which model in _MODELS is currently in use
+
+
 def _generate_pairs(doc: dict, n: int, client, types) -> list[QAPair]:
-    """Call Gemini to generate Q&A pairs for one document."""
+    """Call Gemini to generate Q&A pairs for one document.
+
+    Falls back from gemini-2.5-flash → gemini-1.5-flash on quota exhaustion.
+    """
+    global _active_model_idx
+
     content = doc["clean_content"]
     # Use first 2000 words to stay within context limits and avoid long docs
     words = content.split()
@@ -122,9 +133,10 @@ def _generate_pairs(doc: dict, n: int, client, types) -> list[QAPair]:
     )
 
     for attempt in range(3):
+        model = _MODELS[_active_model_idx]
         try:
             response = client.models.generate_content(
-                model="gemini-2.5-flash",
+                model=model,
                 contents=prompt,
                 config=types.GenerateContentConfig(
                     max_output_tokens=800,
@@ -156,15 +168,25 @@ def _generate_pairs(doc: dict, n: int, client, types) -> list[QAPair]:
             if attempt < 2:
                 time.sleep(2)
                 continue
+            print(f"  [WARN] JSON parse failed for doc {doc['id']} after 3 attempts")
             return []
         except Exception as e:
             msg = str(e)
             if "429" in msg or "RESOURCE_EXHAUSTED" in msg:
+                # Try next model in fallback chain
+                if _active_model_idx + 1 < len(_MODELS):
+                    _active_model_idx += 1
+                    next_model = _MODELS[_active_model_idx]
+                    print(f"  [QUOTA] {model} daily quota hit — switching to {next_model}")
+                    # Retry immediately with new model (don't count as an attempt)
+                    attempt -= 1
+                    continue
+                # All models exhausted — use exponential backoff
                 wait = 2 ** attempt * 20
-                print(f"  [RATE LIMIT] Waiting {wait}s...")
+                print(f"  [RATE LIMIT] All models at quota. Waiting {wait}s... (attempt {attempt+1}/3)")
                 time.sleep(wait)
             else:
-                print(f"  [ERROR] {doc['source']} — {e}")
+                print(f"  [ERROR] {doc['source']} — {type(e).__name__}: {e}")
                 return []
     return []
 
@@ -201,6 +223,8 @@ def generate(
             for pair in pairs:
                 f.write(json.dumps(asdict(pair), ensure_ascii=False) + "\n")
                 total_pairs += 1
+            if pairs:
+                f.flush()  # Persist to disk immediately, don't wait for buffer
 
             time.sleep(0.3)  # Rate limit headroom
 

@@ -10,7 +10,6 @@ import re
 from urllib.parse import urljoin
 
 import scrapy
-
 from scrapers.spiders.base_spider import BaseTogoSpider
 
 # WordPress simple slug: /slug/ (no date in path)

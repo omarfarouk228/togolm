@@ -9,10 +9,8 @@ Uses post sitemaps for complete article discovery (same approach as icilome).
 """
 
 import re
-from urllib.parse import urljoin
 
 import scrapy
-
 from scrapers.spiders.base_spider import BaseTogoSpider
 
 # All known post sitemaps (WordPress generates one per ~1000 posts)

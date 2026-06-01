@@ -9,7 +9,6 @@ and regulatory frameworks for Togolese media.
 from urllib.parse import urljoin
 
 import scrapy
-
 from scrapers.spiders.base_spider import BaseTogoSpider
 
 ENTRY_URLS = [

@@ -11,7 +11,6 @@ Content lives in .ezxmltext-field divs inside article.view-type-full.
 from urllib.parse import urljoin
 
 import scrapy
-
 from scrapers.spiders.base_spider import BaseTogoSpider
 
 BASE = "https://www.republicoftogo.com/toutes-les-rubriques"

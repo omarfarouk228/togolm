@@ -8,10 +8,8 @@ Uses sitemaps for complete discovery (upgraded from category-page approach).
 """
 
 import re
-from urllib.parse import urljoin
 
 import scrapy
-
 from scrapers.spiders.base_spider import BaseTogoSpider
 
 # savoirnews uses simple slugs: /article-slug/ (no date prefix in path)

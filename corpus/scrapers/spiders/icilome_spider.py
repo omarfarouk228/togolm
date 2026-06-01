@@ -7,10 +7,8 @@ Date-based article URLs: /YYYY/MM/slug/
 """
 
 import re
-from urllib.parse import urljoin
 
 import scrapy
-
 from scrapers.spiders.base_spider import BaseTogoSpider
 
 WP_DATE_URL_RE = re.compile(r"/\d{4}/\d{2}/.+/$")
