@@ -4,24 +4,15 @@ GET /v1/documents/{id}    — Single document with its chunks
 GET /v1/search            — Full-text keyword search
 """
 
-import os
 from typing import Literal
 
 import psycopg2
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel
 
+from api.app.db import get_conn
+
 router = APIRouter(tags=["Documents"])
-
-
-def _get_conn():
-    return psycopg2.connect(
-        host=os.getenv("POSTGRES_HOST", "localhost"),
-        port=int(os.getenv("POSTGRES_PORT", "5432")),
-        dbname=os.getenv("POSTGRES_DB", "togolm"),
-        user=os.getenv("POSTGRES_USER"),
-        password=os.getenv("POSTGRES_PASSWORD") or None,
-    )
 
 
 class ChunkOut(BaseModel):
@@ -95,7 +86,7 @@ def list_documents(
         sql_where += " AND d.language = %s"
         params.append(language)
 
-    conn = _get_conn()
+    conn = get_conn()
     try:
         with conn.cursor() as cur:
             cur.execute(
@@ -151,7 +142,7 @@ def list_documents(
 @router.get("/documents/{doc_id}", response_model=DocumentDetail)
 def get_document(doc_id: str):
     """Fetch a single document with its text chunks."""
-    conn = _get_conn()
+    conn = get_conn()
     try:
         with conn.cursor() as cur:
             cur.execute(
@@ -227,7 +218,7 @@ def search_documents(
         sql_where += " AND category = %s"
         params.append(category)
 
-    conn = _get_conn()
+    conn = get_conn()
     try:
         with conn.cursor() as cur:
             try:

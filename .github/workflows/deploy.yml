@@ -1,0 +1,41 @@
+name: Deploy to VPS
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    name: Deploy API to production
+    runs-on: ubuntu-latest
+    environment: production
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Deploy via SSH
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          script: |
+            set -e
+            cd /opt/togolm
+
+            # Pull latest code
+            git pull origin main
+
+            # Build and restart only the api service (zero-downtime)
+            docker compose build api
+            docker compose up -d --no-deps api
+
+            # Wait for health check
+            timeout 60 bash -c 'until curl -sf http://localhost:8000/health; do sleep 2; done'
+            echo "API is healthy."
+
+            # Run DB migrations if needed (idempotent init.sql)
+            # docker compose exec -T db psql -U $POSTGRES_USER -d $POSTGRES_DB -f /tmp/init.sql
+
+            echo "Deployment complete."

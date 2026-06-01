@@ -14,19 +14,22 @@ import scrapy
 
 from scrapers.spiders.base_spider import BaseTogoSpider
 
-ENTRY_URLS = [
-    "https://www.republicoftogo.com/",
-    "https://www.republicoftogo.com/toutes-les-rubriques/politique",
-    "https://www.republicoftogo.com/toutes-les-rubriques/eco-finance",
-    "https://www.republicoftogo.com/toutes-les-rubriques/societe",
-    "https://www.republicoftogo.com/toutes-les-rubriques/diplomatie",
-    "https://www.republicoftogo.com/toutes-les-rubriques/culture",
-    "https://www.republicoftogo.com/toutes-les-rubriques/sante",
-    "https://www.republicoftogo.com/toutes-les-rubriques/environnement",
-    "https://www.republicoftogo.com/toutes-les-rubriques/education",
-    "https://www.republicoftogo.com/toutes-les-rubriques/justice",
-    "https://www.republicoftogo.com/toutes-les-rubriques/sport",
+BASE = "https://www.republicoftogo.com/toutes-les-rubriques"
+
+CATEGORIES = [
+    "politique", "eco-finance", "societe", "diplomatie",
+    "culture", "sante", "environnement", "education",
+    "justice", "sport", "cooperation", "developpement",
+    "medias", "idees",
 ]
+
+ENTRY_URLS = (
+    ["https://www.republicoftogo.com/"]
+    + [f"{BASE}/{cat}" for cat in CATEGORIES]
+)
+
+# Paginate up to MAX_PAGES per category (each page = ~10 articles)
+MAX_PAGES = 50
 
 EXCLUDED_PATHS = [
     "/connexion", "/inscription", "/recherche", "/contact",
@@ -49,10 +52,19 @@ class RepublicoftogoSpider(BaseTogoSpider):
     }
 
     def parse(self, response):
+        articles_found = 0
         for href in response.css("a::attr(href)").getall():
             url = urljoin(response.url, href)
             if self._is_article_url(url):
                 yield scrapy.Request(url, callback=self.parse_article, priority=10)
+                articles_found += 1
+
+        # Pagination: ?page=N, stop when no new articles or beyond MAX_PAGES
+        current_page = int(response.url.split("page=")[-1]) if "page=" in response.url else 1
+        if articles_found > 0 and current_page < MAX_PAGES:
+            base_url = response.url.split("?")[0]
+            next_page_url = f"{base_url}?page={current_page + 1}"
+            yield scrapy.Request(next_page_url, callback=self.parse, priority=5)
 
     def parse_article(self, response):
         # eZ Publish: <h1 class="full-page-title"><span class="ezstring-field">Title</span></h1>

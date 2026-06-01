@@ -81,8 +81,7 @@ class GeminiEmbedder:
 
 def _has_valid_gemini_key() -> bool:
     key = os.getenv("GEMINI_API_KEY", "")
-    # Gemini keys start with "AIza" and are 39 characters long
-    return key.startswith("AIza") and len(key) > 20
+    return bool(key) and len(key) > 10
 
 
 def get_embedder() -> LocalEmbedder | GeminiEmbedder:

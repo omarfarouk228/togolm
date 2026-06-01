@@ -23,7 +23,7 @@ from corpus.processors.cleaner import clean_document, is_useful
 from corpus.processors.chunker import chunk_by_words
 from corpus.processors.embedder import get_embedder
 
-load_dotenv()
+load_dotenv(Path(__file__).resolve().parents[2] / ".env")
 
 EMBED_BATCH_SIZE = 20
 CHUNK_SIZE = 400   # words per chunk (~512 tokens)

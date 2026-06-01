@@ -2,7 +2,9 @@
 Spider for savoirnews.net — Togo news and information portal.
 
 Covers politics, economy, society, diplomacy, sport, and culture in Togo.
-WordPress-based site with category pages and date-based article URLs.
+WordPress site with 6 post sitemaps (~1,200 articles total).
+
+Uses sitemaps for complete discovery (upgraded from category-page approach).
 """
 
 import re
@@ -15,19 +17,14 @@ from scrapers.spiders.base_spider import BaseTogoSpider
 # savoirnews uses simple slugs: /article-slug/ (no date prefix in path)
 ARTICLE_SLUG_RE = re.compile(r"^/[a-z][a-z0-9\-]{14,}/?$")
 
-CATEGORY_URLS = [
-    "https://www.savoirnews.net/category/politique/",
-    "https://www.savoirnews.net/category/economie/",
-    "https://www.savoirnews.net/category/societe/",
-    "https://www.savoirnews.net/category/diplomatie/",
-    "https://www.savoirnews.net/category/sport/",
-    "https://www.savoirnews.net/category/culture/",
-    "https://www.savoirnews.net/",
+POST_SITEMAPS = [
+    f"https://www.savoirnews.net/post-sitemap{'' if i == 1 else i}.xml"
+    for i in range(1, 7)   # sitemaps 1..6 = ~1,200 articles
 ]
 
 EXCLUDED_PATHS = [
     "/tag/", "/author/", "/page/", "/feed/", "/wp-admin/", "/wp-content/",
-    "/category/", "/contact", "/about", "/wp-login",
+    "/category/", "/contact", "/about", "/wp-login", "/sitemap",
 ]
 
 
@@ -37,17 +34,23 @@ class SavoirnewsSpider(BaseTogoSpider):
     category = "press"
     language = "fr"
 
-    start_urls = CATEGORY_URLS
+    start_urls = POST_SITEMAPS
+
+    custom_settings = {
+        "DOWNLOAD_DELAY": 0.5,
+        "CONCURRENT_REQUESTS_PER_DOMAIN": 4,
+    }
 
     def parse(self, response):
-        for href in response.css("a::attr(href)").getall():
-            url = urljoin(response.url, href)
-            if self._is_article_url(url):
-                yield scrapy.Request(url, callback=self.parse_article, priority=10)
-
-        next_page = response.css("a.next::attr(href), a[rel='next']::attr(href)").get()
-        if next_page:
-            yield scrapy.Request(urljoin(response.url, next_page), callback=self.parse)
+        ct = response.headers.get("Content-Type", b"").decode()
+        if "xml" in ct or response.url.endswith(".xml"):
+            response.selector.remove_namespaces()
+            for url in response.xpath("//loc/text()").getall():
+                url = url.strip()
+                if self._is_article_url(url):
+                    yield scrapy.Request(url, callback=self.parse_article, priority=10)
+        else:
+            yield from self.parse_article(response)
 
     def parse_article(self, response):
         title = (

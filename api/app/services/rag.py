@@ -13,9 +13,7 @@ When Gemini key is available, generation can be added on top.
 import os
 from dataclasses import dataclass
 
-import psycopg2
-from pgvector.psycopg2 import register_vector
-
+from api.app.db import get_conn
 from corpus.processors.embedder import get_embedder
 
 _embedder = None
@@ -26,19 +24,6 @@ def _get_embedder():
     if _embedder is None:
         _embedder = get_embedder()
     return _embedder
-
-
-def _get_conn():
-    password = os.getenv("POSTGRES_PASSWORD") or None
-    conn = psycopg2.connect(
-        host=os.getenv("POSTGRES_HOST", "localhost"),
-        port=int(os.getenv("POSTGRES_PORT", "5432")),
-        dbname=os.getenv("POSTGRES_DB", "togolm"),
-        user=os.getenv("POSTGRES_USER"),
-        password=password,
-    )
-    register_vector(conn)
-    return conn
 
 
 @dataclass
@@ -64,7 +49,7 @@ def retrieve(
     embedder = _get_embedder()
     query_vector = embedder.encode_one(question)
 
-    conn = _get_conn()
+    conn = get_conn(vector=True)
     try:
         with conn.cursor() as cur:
             cur.execute("SELECT COUNT(*) FROM chunks WHERE embedding IS NOT NULL")

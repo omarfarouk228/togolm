@@ -11,9 +11,14 @@ Endpoints:
   GET  /v1/search           — Full-text keyword search
 """
 
-from fastapi import FastAPI
+from dotenv import load_dotenv
+
+load_dotenv()  # charge .env avant tout import qui lit os.getenv()
+
+from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from api.app.rate_limit import check_rate_limit
 from api.app.routers import corpus, documents, query
 
 app = FastAPI(
@@ -31,9 +36,11 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-app.include_router(query.router, prefix="/v1")
-app.include_router(corpus.router, prefix="/v1")
-app.include_router(documents.router, prefix="/v1")
+_security = [Depends(check_rate_limit)]
+
+app.include_router(query.router, prefix="/v1", dependencies=_security)
+app.include_router(corpus.router, prefix="/v1", dependencies=_security)
+app.include_router(documents.router, prefix="/v1", dependencies=_security)
 
 
 @app.get("/", include_in_schema=False)

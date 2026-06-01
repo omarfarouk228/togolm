@@ -143,7 +143,7 @@ def stream_query(request: QueryRequest):
             yield f"data: {json.dumps({'type': 'chunk', 'text': no_result})}\n\n"
         else:
             gemini_key = os.getenv("GEMINI_API_KEY", "")
-            use_gemini = gemini_key.startswith("AIza") and len(gemini_key) > 20
+            use_gemini = bool(gemini_key) and len(gemini_key) > 10
             if use_gemini:
                 try:
                     yield from _stream_gemini(request.question, chunks)
@@ -166,10 +166,12 @@ def stream_query(request: QueryRequest):
 @router.post("/embed", response_model=EmbedResponse)
 async def embed_text(request: EmbedRequest):
     """Generate an embedding vector for the provided text."""
-    from corpus.processors.embedder import get_embedder
+    from corpus.processors.embedder import LocalEmbedder
 
     try:
-        embedder = get_embedder()
+        # Always use the local model for real-time inference: no rate limits,
+        # no API key required, and the model is pre-baked into the Docker image.
+        embedder = LocalEmbedder()
         vector = embedder.encode_one(request.text)
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Embedding error: {e}")
