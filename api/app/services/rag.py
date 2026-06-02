@@ -189,9 +189,7 @@ def _generate_with_gemini(question: str, chunks: list[RetrievedChunk]) -> str:
 
     client = genai.Client(api_key=os.environ["GEMINI_API_KEY"])
 
-    context = "\n\n".join(
-        f"[{c.source} — {c.title}]\n{c.content[:600]}" for c in chunks
-    )
+    context = "\n\n".join(f"[{c.source} — {c.title}]\n{c.content[:600]}" for c in chunks)
 
     system_instruction = """Tu es TogoLM, un assistant IA expert des connaissances togolaises.
 Tu maîtrises la législation, l'économie, l'éducation, l'histoire et l'actualité du Togo.

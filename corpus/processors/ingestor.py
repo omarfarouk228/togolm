@@ -25,20 +25,27 @@ from corpus.processors.embedder import get_embedder
 load_dotenv(Path(__file__).resolve().parents[2] / ".env")
 
 EMBED_BATCH_SIZE = 20
-CHUNK_SIZE = 400   # words per chunk (~512 tokens)
+CHUNK_SIZE = 400  # words per chunk (~512 tokens)
 CHUNK_OVERLAP = 50  # words of overlap between consecutive chunks
 
 # Module-level embedder cache — avoids re-instantiating (and re-checking Gemini quota) per batch
 _embedder = None
 
 FR_MONTHS = {
-    "janvier": "01", "février": "02", "mars": "03", "avril": "04",
-    "mai": "05", "juin": "06", "juillet": "07", "août": "08",
-    "septembre": "09", "octobre": "10", "novembre": "11", "décembre": "12",
+    "janvier": "01",
+    "février": "02",
+    "mars": "03",
+    "avril": "04",
+    "mai": "05",
+    "juin": "06",
+    "juillet": "07",
+    "août": "08",
+    "septembre": "09",
+    "octobre": "10",
+    "novembre": "11",
+    "décembre": "12",
 }
-FR_DATE_RE = re.compile(
-    r"(\d{1,2})\s+(" + "|".join(FR_MONTHS) + r")\s+(\d{4})", re.IGNORECASE
-)
+FR_DATE_RE = re.compile(r"(\d{1,2})\s+(" + "|".join(FR_MONTHS) + r")\s+(\d{4})", re.IGNORECASE)
 
 
 def normalize_date(raw: str | None) -> str | None:
@@ -90,13 +97,16 @@ def embed_batch(texts: list[str]) -> list[list[float]]:
         except Exception as e:
             msg = str(e)
             if "429" in msg or "RESOURCE_EXHAUSTED" in msg:
-                wait = 2 ** attempt * 15  # 15s, 30s, 60s, 120s
+                wait = 2**attempt * 15  # 15s, 30s, 60s, 120s
                 if attempt < 3:
                     print(f"  [RATE LIMIT] Waiting {wait}s before retry {attempt + 1}/3...")
                     time.sleep(wait)
                 else:
-                    print("  [RATE LIMIT] Gemini quota exhausted — switching to local model for this run")
+                    print(
+                        "  [RATE LIMIT] Gemini quota exhausted — switching to local model for this run"
+                    )
                     from corpus.processors.embedder import LocalEmbedder
+
                     _embedder = LocalEmbedder()
                     return _embedder.encode(texts)
             else:
@@ -140,7 +150,9 @@ def upsert_document(cur, doc: dict) -> str:
     return cur.fetchone()[0]
 
 
-def upsert_chunks(cur, document_id: str, chunks_text: list[str], embeddings: list[list[float] | None]) -> None:
+def upsert_chunks(
+    cur, document_id: str, chunks_text: list[str], embeddings: list[list[float] | None]
+) -> None:
     """Delete existing chunks for a document, then insert fresh ones."""
     cur.execute("DELETE FROM chunks WHERE document_id = %s", (document_id,))
     for idx, (text, emb) in enumerate(zip(chunks_text, embeddings)):
@@ -184,8 +196,10 @@ def process_file(jsonl_path: Path, embed: bool, conn) -> tuple[int, int, int]:
 
             # Split into chunks
             raw_chunks = chunk_by_words(
-                doc["clean_content"], doc_id,
-                chunk_size=CHUNK_SIZE, overlap=CHUNK_OVERLAP,
+                doc["clean_content"],
+                doc_id,
+                chunk_size=CHUNK_SIZE,
+                overlap=CHUNK_OVERLAP,
             )
             chunk_texts = [c.text for c in raw_chunks]
 
@@ -217,7 +231,9 @@ def main():
     args = parser.parse_args()
 
     conn = get_connection()
-    print(f"Connected to PostgreSQL — {'embeddings ON' if not args.no_embed else 'embeddings OFF'}\n")
+    print(
+        f"Connected to PostgreSQL — {'embeddings ON' if not args.no_embed else 'embeddings OFF'}\n"
+    )
 
     total_all = inserted_all = skipped_all = 0
 

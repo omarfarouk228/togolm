@@ -25,10 +25,23 @@ CATEGORY_URLS = [
 ]
 
 EXCLUDED_PATHS = [
-    "/tag/", "/author/", "/page/", "/feed/", "/wp-admin/", "/wp-content/",
-    "/wp-json/", "/category/", "/lettre-dinformations/", "/publicite/",
-    "/soutenez/", "/contact", "/about", "/elementor-",
-    "mailto:", "javascript:", "#",
+    "/tag/",
+    "/author/",
+    "/page/",
+    "/feed/",
+    "/wp-admin/",
+    "/wp-content/",
+    "/wp-json/",
+    "/category/",
+    "/lettre-dinformations/",
+    "/publicite/",
+    "/soutenez/",
+    "/contact",
+    "/about",
+    "/elementor-",
+    "mailto:",
+    "javascript:",
+    "#",
 ]
 
 
@@ -57,9 +70,9 @@ class LetogolaisSpider(BaseTogoSpider):
 
     def parse_article(self, response):
         title = (
-            response.css("h1.entry-title::text").get("") or
-            response.css("h1::text").get("") or
-            response.css("h1 *::text").get("")
+            response.css("h1.entry-title::text").get("")
+            or response.css("h1::text").get("")
+            or response.css("h1 *::text").get("")
         ).strip()
 
         if not title or len(title) < 5:
@@ -78,9 +91,9 @@ class LetogolaisSpider(BaseTogoSpider):
             return
 
         published_at = (
-            response.css("time::attr(datetime)").get("") or
-            response.css("meta[property='article:published_time']::attr(content)").get("") or
-            ""
+            response.css("time::attr(datetime)").get("")
+            or response.css("meta[property='article:published_time']::attr(content)").get("")
+            or ""
         )
 
         subcategory = self._infer_subcategory(response.url)

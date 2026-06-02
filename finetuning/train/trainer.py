@@ -59,12 +59,14 @@ def _load_dataset(data_config: DataConfig):
 def _formatting_fn(data_config: DataConfig):
     """Return a function that converts a dataset row to a training string."""
     if data_config.dataset_format == "alpaca":
+
         def fmt(example):
             return ALPACA_TEMPLATE.format(
                 instruction=example["instruction"],
                 output=example["output"],
             )
     else:
+
         def fmt(example):
             convs = example["conversations"]
             parts = []

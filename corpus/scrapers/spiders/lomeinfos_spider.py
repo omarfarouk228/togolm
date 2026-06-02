@@ -25,10 +25,24 @@ POST_SITEMAPS = [
 # Match article slugs at root: /some-title-here/
 # Exclude static pages and WordPress internals
 EXCLUDED_PATHS = [
-    "/category/", "/togo/", "/tag/", "/author/", "/page/", "/feed/",
-    "/wp-content/", "/wp-admin/", "/wp-json/",
-    "/mentions-legales/", "/partenariat/", "/publicites/", "/contacts/",
-    "/e-reputation/", "/sitemap", "mailto:", "javascript:", "#",
+    "/category/",
+    "/togo/",
+    "/tag/",
+    "/author/",
+    "/page/",
+    "/feed/",
+    "/wp-content/",
+    "/wp-admin/",
+    "/wp-json/",
+    "/mentions-legales/",
+    "/partenariat/",
+    "/publicites/",
+    "/contacts/",
+    "/e-reputation/",
+    "/sitemap",
+    "mailto:",
+    "javascript:",
+    "#",
 ]
 
 SLUG_RE = re.compile(r"^/[a-z][a-z0-9\-]{8,}/$")
@@ -86,10 +100,10 @@ class LomeinfosSpider(BaseTogoSpider):
     def _parse_article(self, response):
         # Standard WordPress selectors
         title = (
-            response.css("h1.entry-title::text").get("") or
-            response.css("h1.post-title::text").get("") or
-            response.css("h1::text").get("") or
-            response.css("title::text").get("")
+            response.css("h1.entry-title::text").get("")
+            or response.css("h1.post-title::text").get("")
+            or response.css("h1::text").get("")
+            or response.css("title::text").get("")
         ).strip()
 
         # Remove site name suffix from title
@@ -117,10 +131,10 @@ class LomeinfosSpider(BaseTogoSpider):
             return
 
         published_at = (
-            response.css("time.entry-date::attr(datetime)").get("") or
-            response.css("time.published::attr(datetime)").get("") or
-            response.css("meta[property='article:published_time']::attr(content)").get("") or
-            ""
+            response.css("time.entry-date::attr(datetime)").get("")
+            or response.css("time.published::attr(datetime)").get("")
+            or response.css("meta[property='article:published_time']::attr(content)").get("")
+            or ""
         )
 
         # Infer subcategory from article's CSS class (category-{slug})
@@ -151,7 +165,7 @@ class LomeinfosSpider(BaseTogoSpider):
         """Extract subcategory from WordPress article class 'category-{slug}'."""
         for cls in class_str.split():
             if cls.startswith("category-"):
-                cat_slug = cls[len("category-"):]
+                cat_slug = cls[len("category-") :]
                 if cat_slug in SUBCATEGORY_MAP:
                     return SUBCATEGORY_MAP[cat_slug]
         # Fallback to URL-based inference

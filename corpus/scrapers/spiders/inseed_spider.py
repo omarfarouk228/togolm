@@ -42,11 +42,12 @@ class InseedSpider(BaseTogoSpider):
     def parse_article(self, response):
         # Extract title from breadcrumb or penci-single heading
         title = (
-            response.css("[class*=penci-single] h1::text").get("") or
-            response.css("[class*=penci-single] h2.title::text").get("") or
+            response.css("[class*=penci-single] h1::text").get("")
+            or response.css("[class*=penci-single] h2.title::text").get("")
+            or
             # Derive from the breadcrumb last item
-            response.css(".breadcrumb span:last-child::text").get("") or
-            response.css("title::text").get("").split("|")[0]
+            response.css(".breadcrumb span:last-child::text").get("")
+            or response.css("title::text").get("").split("|")[0]
         ).strip()
 
         if not title or len(title) < 5:
@@ -60,9 +61,9 @@ class InseedSpider(BaseTogoSpider):
             return
 
         published_at = (
-            response.css("time::attr(datetime)").get("") or
-            response.css("meta[property='article:published_time']::attr(content)").get("") or
-            ""
+            response.css("time::attr(datetime)").get("")
+            or response.css("meta[property='article:published_time']::attr(content)").get("")
+            or ""
         )
 
         yield self.make_document(

@@ -70,8 +70,10 @@ class TestAuthOnQueryEndpoint:
         assert resp.status_code == 401
 
     def test_valid_key_reaches_query(self, with_api_keys):
-        with patch("api.app.routers.query.retrieve", return_value=[]), \
-             patch("api.app.services.rag.build_answer", return_value="OK"):
+        with (
+            patch("api.app.routers.query.retrieve", return_value=[]),
+            patch("api.app.services.rag.build_answer", return_value="OK"),
+        ):
             resp = client.post(
                 "/v1/query",
                 json={"question": "Question valide ?"},

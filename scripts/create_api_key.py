@@ -122,7 +122,7 @@ if __name__ == "__main__":
 
     # create
     p_create = sub.add_parser("create", help="Create a new API key")
-    p_create.add_argument("--owner-name",  required=True)
+    p_create.add_argument("--owner-name", required=True)
     p_create.add_argument("--owner-email", default=None)
     p_create.add_argument("--plan", choices=["free", "dev", "institution"], default="dev")
 

@@ -86,7 +86,7 @@ def infer_title(text: str, filename: str) -> str:
         return " ".join(tokens).strip()
 
     title_parts = []
-    for line in lines[start:start + 25]:
+    for line in lines[start : start + 25]:
         if re.match(r"^article\s+(premier|1|ier)\b", line, re.IGNORECASE):
             break
         if _is_garbage(line):

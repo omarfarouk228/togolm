@@ -67,10 +67,7 @@ async def query_corpus(request: QueryRequest):
 
     return QueryResponse(
         answer=answer,
-        sources=[
-            Source(title=c.title, url=c.url, score=round(c.score, 4))
-            for c in chunks
-        ],
+        sources=[Source(title=c.title, url=c.url, score=round(c.score, 4)) for c in chunks],
         model="togolm-rag-v1",
         latency_ms=latency_ms,
     )
@@ -82,9 +79,7 @@ def _stream_gemini(question: str, chunks: list[RetrievedChunk]):
     from google.genai import types
 
     client = genai.Client(api_key=os.environ["GEMINI_API_KEY"])
-    context = "\n\n".join(
-        f"[{c.source} — {c.title}]\n{c.content[:600]}" for c in chunks
-    )
+    context = "\n\n".join(f"[{c.source} — {c.title}]\n{c.content[:600]}" for c in chunks)
     prompt = (
         "You are TogoLM, an AI assistant specialized in Togolese knowledge.\n"
         "Answer the following question based only on the provided context.\n"
@@ -104,11 +99,7 @@ def _stream_gemini(question: str, chunks: list[RetrievedChunk]):
 def _extractive_stream(chunks: list[RetrievedChunk]):
     """Yield a single SSE data line with the top extractive passage."""
     top = chunks[0]
-    excerpt = (
-        top.content[:800].rsplit(" ", 1)[0] + "…"
-        if len(top.content) > 800
-        else top.content
-    )
+    excerpt = top.content[:800].rsplit(" ", 1)[0] + "…" if len(top.content) > 800 else top.content
     text = f"{excerpt}\n\n[Source: {top.source}]"
     yield f"data: {json.dumps({'type': 'chunk', 'text': text})}\n\n"
 
@@ -123,6 +114,7 @@ def stream_query(request: QueryRequest):
       {type: 'error',   message: str}
     Terminated by: data: [DONE]
     """
+
     def generate():
         t0 = time.monotonic()
 
@@ -133,13 +125,12 @@ def stream_query(request: QueryRequest):
             yield "data: [DONE]\n\n"
             return
 
-        sources = [
-            {"title": c.title, "url": c.url, "score": round(c.score, 4)}
-            for c in chunks
-        ]
+        sources = [{"title": c.title, "url": c.url, "score": round(c.score, 4)} for c in chunks]
 
         if not chunks:
-            no_result = "Aucune information pertinente trouvée dans le corpus TogoLM pour cette question."
+            no_result = (
+                "Aucune information pertinente trouvée dans le corpus TogoLM pour cette question."
+            )
             yield f"data: {json.dumps({'type': 'chunk', 'text': no_result})}\n\n"
         else:
             gemini_key = os.getenv("GEMINI_API_KEY", "")

@@ -35,7 +35,7 @@ DATASETS_DIR = ROOT / "corpus" / "datasets"
 # Use the project venv Python if available (needed when system Python lacks scrapy)
 _venv_python = ROOT / ".venv" / "Scripts" / "python.exe"  # Windows
 if not _venv_python.exists():
-    _venv_python = ROOT / ".venv" / "bin" / "python"       # Linux/macOS
+    _venv_python = ROOT / ".venv" / "bin" / "python"  # Linux/macOS
 PYTHON = str(_venv_python) if _venv_python.exists() else sys.executable
 
 # All available spiders — ordered from most critical to supplementary
@@ -73,18 +73,24 @@ BROKEN_SPIDERS = ["assemblee_nationale", "mef", "atp", "haac", "togoinfos", "tog
 
 def run_spider(spider_name: str) -> bool:
     """Run a single Scrapy spider. Returns True on success."""
-    print(f"\n{'='*60}")
+    print(f"\n{'=' * 60}")
     print(f"  Spider : {spider_name}")
-    print(f"{'='*60}")
+    print(f"{'=' * 60}")
 
     output_file = DATASETS_DIR / f"{spider_name}.jsonl"
     # Use append mode so re-runs accumulate without overwriting
     DATASETS_DIR.mkdir(exist_ok=True)
 
     cmd = [
-        PYTHON, "-m", "scrapy", "crawl", spider_name,
-        "--logfile", str(DATASETS_DIR / f"{spider_name}.log"),
-        "-L", "WARNING",
+        PYTHON,
+        "-m",
+        "scrapy",
+        "crawl",
+        spider_name,
+        "--logfile",
+        str(DATASETS_DIR / f"{spider_name}.log"),
+        "-L",
+        "WARNING",
     ]
 
     start = time.time()
@@ -92,7 +98,7 @@ def run_spider(spider_name: str) -> bool:
         result = subprocess.run(
             cmd,
             cwd=str(SCRAPY_DIR),
-            timeout=600,   # 10 min max per spider
+            timeout=600,  # 10 min max per spider
         )
         elapsed = time.time() - start
         size = output_file.stat().st_size / 1024 if output_file.exists() else 0
@@ -117,12 +123,11 @@ def run_ingestor(no_embed: bool) -> bool:
         print("\n[INGESTOR] No JSONL files found in corpus/datasets/ — skipping.")
         return False
 
-    print(f"\n{'='*60}")
+    print(f"\n{'=' * 60}")
     print(f"  Ingestor — {len(jsonl_files)} file(s)")
-    print(f"{'='*60}")
+    print(f"{'=' * 60}")
 
-    cmd = [PYTHON, "-m", "corpus.processors.ingestor"] + \
-          [str(f) for f in jsonl_files]
+    cmd = [PYTHON, "-m", "corpus.processors.ingestor"] + [str(f) for f in jsonl_files]
     if no_embed:
         cmd.append("--no-embed")
 
@@ -133,7 +138,9 @@ def run_ingestor(no_embed: bool) -> bool:
 def main():
     parser = argparse.ArgumentParser(description="TogoLM master scraping pipeline")
     parser.add_argument(
-        "--spiders", nargs="+", metavar="SPIDER",
+        "--spiders",
+        nargs="+",
+        metavar="SPIDER",
         help="Spiders to run (default: all)",
     )
     parser.add_argument("--no-scrape", action="store_true", help="Skip scraping, ingest only")

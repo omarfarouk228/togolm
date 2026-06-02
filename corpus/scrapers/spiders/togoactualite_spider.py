@@ -15,13 +15,22 @@ from scrapers.spiders.base_spider import BaseTogoSpider
 # without crawling 10+ years of archived content.
 POST_SITEMAPS = [
     f"https://togoactualite.com/post-sitemap{'' if i == 1 else i}.xml"
-    for i in range(15, 29)   # sitemaps 15..28 = ~14,000 recent articles
+    for i in range(15, 29)  # sitemaps 15..28 = ~14,000 recent articles
 ]
 
 EXCLUDED_PATHS = [
-    "/category/", "/tag/", "/author/", "/page/", "/feed/",
-    "/wp-content/", "/wp-admin/", "/wp-json/", "/sitemap",
-    "mailto:", "javascript:", "#",
+    "/category/",
+    "/tag/",
+    "/author/",
+    "/page/",
+    "/feed/",
+    "/wp-content/",
+    "/wp-admin/",
+    "/wp-json/",
+    "/sitemap",
+    "mailto:",
+    "javascript:",
+    "#",
 ]
 
 SUBCATEGORY_MAP = {
@@ -70,10 +79,10 @@ class TogoactualiteSpider(BaseTogoSpider):
     def _parse_article(self, response):
         # JEG theme selectors
         title = (
-            response.css("h1.jeg_post_title::text").get("") or
-            response.css("h1.entry-title::text").get("") or
-            response.css("h1::text").get("") or
-            ""
+            response.css("h1.jeg_post_title::text").get("")
+            or response.css("h1.entry-title::text").get("")
+            or response.css("h1::text").get("")
+            or ""
         ).strip()
 
         if not title or len(title) < 5:
@@ -81,10 +90,10 @@ class TogoactualiteSpider(BaseTogoSpider):
 
         # Main article body
         body_html = (
-            response.css(".entry-content").get("") or
-            response.css(".jeg_inner_content .content-inner").get("") or
-            response.css(".content-inner").get("") or
-            ""
+            response.css(".entry-content").get("")
+            or response.css(".jeg_inner_content .content-inner").get("")
+            or response.css(".content-inner").get("")
+            or ""
         )
         raw_content = self.html_to_text(body_html) if body_html else ""
 
@@ -98,9 +107,9 @@ class TogoactualiteSpider(BaseTogoSpider):
             return
 
         published_at = (
-            response.css("time::attr(datetime)").get("") or
-            response.css("meta[property='article:published_time']::attr(content)").get("") or
-            ""
+            response.css("time::attr(datetime)").get("")
+            or response.css("meta[property='article:published_time']::attr(content)").get("")
+            or ""
         )
 
         subcategory = self._infer_subcategory(response.url)

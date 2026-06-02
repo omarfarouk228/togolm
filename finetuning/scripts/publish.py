@@ -40,10 +40,7 @@ def publish(
 
     token = token or os.environ.get("HF_TOKEN")
     if not token:
-        raise ValueError(
-            "HuggingFace token required. "
-            "Set the HF_TOKEN env var or pass --token."
-        )
+        raise ValueError("HuggingFace token required. Set the HF_TOKEN env var or pass --token.")
 
     model_dir = Path(model_dir)
     if not model_dir.exists():
@@ -55,8 +52,7 @@ def publish(
     adapter_config_path = model_dir / "adapter_config.json"
     if not adapter_config_path.exists():
         raise FileNotFoundError(
-            f"adapter_config.json not found in {model_dir}. "
-            "Is this a valid LoRA adapter directory?"
+            f"adapter_config.json not found in {model_dir}. Is this a valid LoRA adapter directory?"
         )
     with open(adapter_config_path) as f:
         adapter_config = json.load(f)
@@ -94,9 +90,7 @@ def publish(
 
 
 def main():
-    parser = argparse.ArgumentParser(
-        description="Publish a TogoLM LoRA adapter to HuggingFace Hub"
-    )
+    parser = argparse.ArgumentParser(description="Publish a TogoLM LoRA adapter to HuggingFace Hub")
     parser.add_argument(
         "--model",
         type=Path,

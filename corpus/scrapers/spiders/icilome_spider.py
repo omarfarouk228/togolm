@@ -13,14 +13,16 @@ from scrapers.spiders.base_spider import BaseTogoSpider
 
 WP_DATE_URL_RE = re.compile(r"/\d{4}/\d{2}/.+/$")
 
-POST_SITEMAPS = [
-    f"https://icilome.com/post-sitemap{'' if i == 1 else i}.xml"
-    for i in range(1, 24)
-]
+POST_SITEMAPS = [f"https://icilome.com/post-sitemap{'' if i == 1 else i}.xml" for i in range(1, 24)]
 
 EXCLUDED_PATHS = [
-    "/category/", "/tag/", "/author/", "/page/", "/feed/",
-    "/wp-content/", "/wp-admin/",
+    "/category/",
+    "/tag/",
+    "/author/",
+    "/page/",
+    "/feed/",
+    "/wp-content/",
+    "/wp-admin/",
 ]
 
 SUBCATEGORY_MAP = {
@@ -66,9 +68,9 @@ class IcilomeSpider(BaseTogoSpider):
 
     def _parse_article(self, response):
         title = (
-            response.css("h1.entry-title::text").get("") or
-            response.css("h1::text").get("") or
-            response.css(".post-title::text").get("")
+            response.css("h1.entry-title::text").get("")
+            or response.css("h1::text").get("")
+            or response.css(".post-title::text").get("")
         ).strip()
 
         if not title or len(title) < 5:
@@ -87,9 +89,9 @@ class IcilomeSpider(BaseTogoSpider):
             return
 
         published_at = (
-            response.css("time::attr(datetime)").get("") or
-            response.css("meta[property='article:published_time']::attr(content)").get("") or
-            ""
+            response.css("time::attr(datetime)").get("")
+            or response.css("meta[property='article:published_time']::attr(content)").get("")
+            or ""
         )
 
         yield self.make_document(

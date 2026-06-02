@@ -70,7 +70,7 @@ class WikipediaSpider(BaseTogoSpider):
     # Use a browser-like User-Agent (Wikipedia may rate-limit bots)
     custom_settings = {
         "USER_AGENT": "TogoLM-Bot/0.1 (+https://github.com/togolm/togolm; educational use)",
-        "DOWNLOAD_DELAY": 0.5,   # Wikipedia API is fast and allows bots
+        "DOWNLOAD_DELAY": 0.5,  # Wikipedia API is fast and allows bots
         "CONCURRENT_REQUESTS_PER_DOMAIN": 2,
         "ROBOTSTXT_OBEY": False,  # Wikipedia explicitly allows API bots
     }
@@ -109,7 +109,7 @@ class WikipediaSpider(BaseTogoSpider):
                         titles=title,
                         prop="extracts|info",
                         exlimit=1,
-                        explaintext=1,         # Plain text, no HTML
+                        explaintext=1,  # Plain text, no HTML
                         inprop="url",
                     ),
                     callback=self.parse_article,
@@ -142,8 +142,10 @@ class WikipediaSpider(BaseTogoSpider):
                 continue
 
             # Wikipedia canonical URL
-            url = page.get("canonicalurl", "") or \
-                  f"https://fr.wikipedia.org/wiki/{title.replace(' ', '_')}"
+            url = (
+                page.get("canonicalurl", "")
+                or f"https://fr.wikipedia.org/wiki/{title.replace(' ', '_')}"
+            )
 
             # Infer subcategory from content (first 200 chars)
             subcategory = self._infer_subcategory(title, raw_content[:200])
@@ -165,6 +167,7 @@ class WikipediaSpider(BaseTogoSpider):
         from datetime import datetime
 
         from scrapers.items import DocumentItem
+
         meta = kwargs.get("metadata", {})
         url = meta.get("source_url", response.url)
 

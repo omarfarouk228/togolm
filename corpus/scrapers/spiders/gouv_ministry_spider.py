@@ -162,8 +162,14 @@ SITES = [
 
 # Paths that are never articles
 EXCLUDED_PATHS = [
-    "/category/", "/tag/", "/author/", "/page/", "/feed/",
-    "/wp-content/", "/wp-admin/", "/#",
+    "/category/",
+    "/tag/",
+    "/author/",
+    "/page/",
+    "/feed/",
+    "/wp-content/",
+    "/wp-admin/",
+    "/#",
 ]
 
 # Slug must be at least 10 chars (digits allowed at start for year-prefixed URLs like /2017-la-...)
@@ -172,7 +178,7 @@ SLUG_RE = re.compile(r"/[a-z0-9][a-z0-9\-]{8,}/?$")
 
 class GouvMinistrySpider(BaseTogoSpider):
     name = "gouv_ministry"
-    source = "gouv.tg"      # overridden per-URL via meta
+    source = "gouv.tg"  # overridden per-URL via meta
     category = "government"  # overridden per-URL via meta
     language = "fr"
 
@@ -214,9 +220,9 @@ class GouvMinistrySpider(BaseTogoSpider):
         site = response.meta.get("site") or self._site_for_url(response.url) or {}
 
         title = (
-            response.css("h1::text").get("") or
-            response.css("h2.entry-title::text").get("") or
-            response.css("title::text").get("").split("|")[0]
+            response.css("h1::text").get("")
+            or response.css("h2.entry-title::text").get("")
+            or response.css("title::text").get("").split("|")[0]
         ).strip()
 
         if not title or len(title) < 5:
@@ -234,9 +240,9 @@ class GouvMinistrySpider(BaseTogoSpider):
             return
 
         published_at = (
-            response.css("time::attr(datetime)").get("") or
-            response.xpath('//meta[@property="article:published_time"]/@content').get("") or
-            ""
+            response.css("time::attr(datetime)").get("")
+            or response.xpath('//meta[@property="article:published_time"]/@content').get("")
+            or ""
         )
 
         subcategory = self._infer_subcategory(response.url)

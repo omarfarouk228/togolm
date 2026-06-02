@@ -86,8 +86,7 @@ async def corpus_stats():
         conn.close()
 
     sources = [
-        SourceStat(source=row[0], documents=row[1], chunks=row[2] or 0)
-        for row in source_rows
+        SourceStat(source=row[0], documents=row[1], chunks=row[2] or 0) for row in source_rows
     ]
 
     return StatsResponse(

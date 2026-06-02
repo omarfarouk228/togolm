@@ -28,10 +28,13 @@ FAKE_CHUNK = RetrievedChunk(
 # POST /v1/query
 # ---------------------------------------------------------------------------
 
+
 class TestQueryEndpoint:
     def test_returns_expected_shape(self):
-        with patch("api.app.routers.query.retrieve", return_value=[FAKE_CHUNK]), \
-             patch("api.app.services.rag._generate_with_gemini", return_value="Réponse test"):
+        with (
+            patch("api.app.routers.query.retrieve", return_value=[FAKE_CHUNK]),
+            patch("api.app.services.rag._generate_with_gemini", return_value="Réponse test"),
+        ):
             resp = client.post("/v1/query", json={"question": "Quel est le régime du Togo ?"})
         assert resp.status_code == 200
         data = resp.json()
@@ -42,8 +45,10 @@ class TestQueryEndpoint:
         assert isinstance(data["latency_ms"], int)
 
     def test_sources_include_title_url_score(self):
-        with patch("api.app.routers.query.retrieve", return_value=[FAKE_CHUNK]), \
-             patch("api.app.services.rag._generate_with_gemini", return_value="OK"):
+        with (
+            patch("api.app.routers.query.retrieve", return_value=[FAKE_CHUNK]),
+            patch("api.app.services.rag._generate_with_gemini", return_value="OK"),
+        ):
             resp = client.post("/v1/query", json={"question": "Régime politique du Togo ?"})
         sources = resp.json()["sources"]
         assert len(sources) == 1
@@ -75,6 +80,7 @@ class TestQueryEndpoint:
 # POST /v1/query/stream (SSE)
 # ---------------------------------------------------------------------------
 
+
 def _parse_sse(text: str) -> list[dict]:
     """Parse SSE response body into a list of event data dicts."""
     events = []
@@ -86,21 +92,27 @@ def _parse_sse(text: str) -> list[dict]:
 
 class TestStreamEndpoint:
     def test_response_is_event_stream(self):
-        with patch("api.app.routers.query.retrieve", return_value=[FAKE_CHUNK]), \
-             patch("api.app.routers.query._stream_gemini", return_value=iter([])):
+        with (
+            patch("api.app.routers.query.retrieve", return_value=[FAKE_CHUNK]),
+            patch("api.app.routers.query._stream_gemini", return_value=iter([])),
+        ):
             resp = client.post("/v1/query/stream", json={"question": "Question stream ?"})
         assert resp.status_code == 200
         assert "text/event-stream" in resp.headers["content-type"]
 
     def test_stream_ends_with_done(self):
-        with patch("api.app.routers.query.retrieve", return_value=[FAKE_CHUNK]), \
-             patch("api.app.routers.query._stream_gemini", return_value=iter([])):
+        with (
+            patch("api.app.routers.query.retrieve", return_value=[FAKE_CHUNK]),
+            patch("api.app.routers.query._stream_gemini", return_value=iter([])),
+        ):
             resp = client.post("/v1/query/stream", json={"question": "Question stream ?"})
         assert "data: [DONE]" in resp.text
 
     def test_stream_includes_sources_event(self):
-        with patch("api.app.routers.query.retrieve", return_value=[FAKE_CHUNK]), \
-             patch("api.app.routers.query._stream_gemini", return_value=iter([])):
+        with (
+            patch("api.app.routers.query.retrieve", return_value=[FAKE_CHUNK]),
+            patch("api.app.routers.query._stream_gemini", return_value=iter([])),
+        ):
             resp = client.post("/v1/query/stream", json={"question": "Question stream ?"})
         events = _parse_sse(resp.text)
         sources_events = [e for e in events if e.get("type") == "sources"]
@@ -110,8 +122,12 @@ class TestStreamEndpoint:
     def test_stream_uses_gemini_when_key_set(self, monkeypatch):
         monkeypatch.setenv("GEMINI_API_KEY", "AQ.fake-key")
         gemini_event = f"data: {json.dumps({'type': 'chunk', 'text': 'Réponse Gemini'})}\n\n"
-        with patch("api.app.routers.query.retrieve", return_value=[FAKE_CHUNK]), \
-             patch("api.app.routers.query._stream_gemini", return_value=iter([gemini_event])) as mock_g:
+        with (
+            patch("api.app.routers.query.retrieve", return_value=[FAKE_CHUNK]),
+            patch(
+                "api.app.routers.query._stream_gemini", return_value=iter([gemini_event])
+            ) as mock_g,
+        ):
             resp = client.post("/v1/query/stream", json={"question": "Question Gemini ?"})
         mock_g.assert_called_once()
         # SSE body is JSON — accented chars are unicode-escaped

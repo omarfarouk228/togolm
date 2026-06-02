@@ -27,9 +27,15 @@ ENTRY_URLS = [
 ]
 
 EXCLUDED_PATHS = [
-    "/wp-admin/", "/wp-content/", "/wp-login",
-    "/feed/", "/tag/", "/author/", "/#",
-    "/category/", "/search/",
+    "/wp-admin/",
+    "/wp-content/",
+    "/wp-login",
+    "/feed/",
+    "/tag/",
+    "/author/",
+    "/#",
+    "/category/",
+    "/search/",
 ]
 
 # Slugs must have at least 8 characters and contain a hyphen
@@ -78,9 +84,9 @@ class MefSpider(BaseTogoSpider):
 
     def parse_page(self, response):
         title = (
-            response.css("h1::text").get("") or
-            response.css("h1 *::text").get("") or
-            response.css("title::text").get("").split("|")[0]
+            response.css("h1::text").get("")
+            or response.css("h1 *::text").get("")
+            or response.css("title::text").get("").split("|")[0]
         ).strip()
 
         if not title or len(title) < 5:
@@ -101,9 +107,9 @@ class MefSpider(BaseTogoSpider):
             return
 
         published_at = (
-            response.css("time::attr(datetime)").get("") or
-            response.css("meta[property='article:published_time']::attr(content)").get("") or
-            ""
+            response.css("time::attr(datetime)").get("")
+            or response.css("meta[property='article:published_time']::attr(content)").get("")
+            or ""
         )
 
         subcategory = self._infer_subcategory(response.url)

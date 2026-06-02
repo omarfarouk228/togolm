@@ -27,19 +27,22 @@ from api.app.db import get_conn
 # Data model
 # ---------------------------------------------------------------------------
 
+
 @dataclass
 class APIKeyRecord:
     """Validated API key with owner metadata and plan."""
+
     id: str
     owner_name: str | None
     owner_email: str | None
-    plan: str          # free | dev | institution
-    preview: str       # first 8 chars + "..." for safe logging
+    plan: str  # free | dev | institution
+    preview: str  # first 8 chars + "..." for safe logging
 
 
 # ---------------------------------------------------------------------------
 # Internals
 # ---------------------------------------------------------------------------
+
 
 def _hash_key(key: str) -> str:
     return hashlib.sha256(key.encode()).hexdigest()
@@ -96,6 +99,7 @@ def _check_env_fallback(key: str) -> bool:
 # ---------------------------------------------------------------------------
 # FastAPI dependency
 # ---------------------------------------------------------------------------
+
 
 async def get_api_key(
     x_api_key: str | None = Header(None),

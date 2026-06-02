@@ -64,9 +64,15 @@ def run_spider(self, spider_name: str) -> dict:
     DATASETS_DIR.mkdir(exist_ok=True)
 
     cmd = [
-        PYTHON, "-m", "scrapy", "crawl", spider_name,
-        "--logfile", str(DATASETS_DIR / f"{spider_name}.log"),
-        "-L", "WARNING",
+        PYTHON,
+        "-m",
+        "scrapy",
+        "crawl",
+        spider_name,
+        "--logfile",
+        str(DATASETS_DIR / f"{spider_name}.log"),
+        "-L",
+        "WARNING",
     ]
 
     result = subprocess.run(cmd, cwd=str(SCRAPY_DIR), timeout=590)

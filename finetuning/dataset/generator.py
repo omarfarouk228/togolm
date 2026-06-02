@@ -37,7 +37,7 @@ from tqdm import tqdm
 
 load_dotenv()
 
-PAIRS_PER_DOC = 3   # Q&A pairs to generate per document
+PAIRS_PER_DOC = 3  # Q&A pairs to generate per document
 MIN_DOC_WORDS = 50  # Skip documents shorter than this
 
 SYSTEM_PROMPT = """Tu es TogoLM, un assistant IA expert des connaissances togolaises.
@@ -177,8 +177,10 @@ def _generate_pairs(doc: dict, n: int, client, types) -> list[QAPair]:
                 # Blocked by safety filter or empty response
                 finish = getattr(response, "candidates", None)
                 reason = (
-                    finish[0].finish_reason if finish else "unknown"
-                ) if finish else "no candidates"
+                    (finish[0].finish_reason if finish else "unknown")
+                    if finish
+                    else "no candidates"
+                )
                 print(f"  [BLOCKED] doc {doc['id']} — finish_reason: {reason}")
                 return []
 
@@ -225,7 +227,9 @@ def _generate_pairs(doc: dict, n: int, client, types) -> list[QAPair]:
                 if _is_rpm_error(msg):
                     # Temporary per-minute rate limit — back off and retry same model
                     wait = min(30 * (attempt + 1), 120)
-                    print(f"  [RPM] {model} rate limit — waiting {wait}s (attempt {attempt + 1}/5)...")
+                    print(
+                        f"  [RPM] {model} rate limit — waiting {wait}s (attempt {attempt + 1}/5)..."
+                    )
                     time.sleep(wait)
                     continue
                 else:
