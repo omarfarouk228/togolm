@@ -3,23 +3,12 @@ GET /v1/categories — List corpus categories
 GET /v1/stats      — Public corpus statistics
 """
 
-import os
-
-import psycopg2
 from fastapi import APIRouter
 from pydantic import BaseModel
 
+from api.app.db import get_conn
+
 router = APIRouter(tags=["Corpus"])
-
-
-def _get_conn():
-    return psycopg2.connect(
-        host=os.getenv("POSTGRES_HOST", "localhost"),
-        port=int(os.getenv("POSTGRES_PORT", "5432")),
-        dbname=os.getenv("POSTGRES_DB", "togolm"),
-        user=os.getenv("POSTGRES_USER"),
-        password=os.getenv("POSTGRES_PASSWORD") or None,
-    )
 
 CATEGORIES = [
     "administrative",
@@ -65,7 +54,7 @@ async def list_categories():
 @router.get("/stats", response_model=StatsResponse)
 async def corpus_stats():
     """Return live statistics about the corpus from PostgreSQL."""
-    conn = _get_conn()
+    conn = get_conn()
     try:
         with conn.cursor() as cur:
             cur.execute("SELECT COUNT(*) FROM documents WHERE status = 'active'")
@@ -97,8 +86,7 @@ async def corpus_stats():
         conn.close()
 
     sources = [
-        SourceStat(source=row[0], documents=row[1], chunks=row[2] or 0)
-        for row in source_rows
+        SourceStat(source=row[0], documents=row[1], chunks=row[2] or 0) for row in source_rows
     ]
 
     return StatsResponse(

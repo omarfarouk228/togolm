@@ -109,8 +109,8 @@ def format_dataset(
         for pair in eval_pairs:
             f.write(json.dumps(converter(pair), ensure_ascii=False) + "\n")
 
-    print(f"Train: {len(train_pairs)} examples → {train_path}")
-    print(f"Eval : {len(eval_pairs)} examples → {eval_path}")
+    print(f"Train: {len(train_pairs)} examples -> {train_path}")
+    print(f"Eval : {len(eval_pairs)} examples -> {eval_path}")
     return len(train_pairs), len(eval_pairs)
 
 

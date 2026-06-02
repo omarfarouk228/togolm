@@ -12,8 +12,7 @@ def normalize_whitespace(text: str) -> str:
 
 def remove_control_characters(text: str) -> str:
     return "".join(
-        ch for ch in text
-        if not unicodedata.category(ch).startswith("C") or ch in "\n\t"
+        ch for ch in text if not unicodedata.category(ch).startswith("C") or ch in "\n\t"
     )
 
 

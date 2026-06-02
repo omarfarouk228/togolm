@@ -9,9 +9,6 @@ Both produce 384-dim vectors compatible with the pgvector schema.
 """
 
 import os
-from functools import cached_property
-
-import numpy as np
 
 MODEL_NAME = "paraphrase-multilingual-MiniLM-L12-v2"  # 384-dim, multilingual, ~120 MB
 
@@ -26,6 +23,7 @@ class LocalEmbedder:
     def _best_device(self) -> str:
         try:
             import torch
+
             if torch.backends.mps.is_available():
                 return "mps"
             if torch.cuda.is_available():
@@ -37,6 +35,7 @@ class LocalEmbedder:
     def _load(self):
         if self._model is None:
             from sentence_transformers import SentenceTransformer
+
             device = self._best_device()
             print(f"Loading embedding model '{self.model_name}' on {device}...")
             self._model = SentenceTransformer(self.model_name, device=device)
@@ -61,6 +60,7 @@ class GeminiEmbedder:
     def __init__(self):
         from google import genai
         from google.genai import types
+
         self._client = genai.Client(api_key=os.environ["GEMINI_API_KEY"])
         self._types = types
 
@@ -81,8 +81,7 @@ class GeminiEmbedder:
 
 def _has_valid_gemini_key() -> bool:
     key = os.getenv("GEMINI_API_KEY", "")
-    # Gemini keys start with "AIza" and are 39 characters long
-    return key.startswith("AIza") and len(key) > 20
+    return bool(key) and len(key) > 10
 
 
 def get_embedder() -> LocalEmbedder | GeminiEmbedder:

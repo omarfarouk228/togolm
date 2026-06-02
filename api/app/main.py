@@ -11,10 +11,15 @@ Endpoints:
   GET  /v1/search           — Full-text keyword search
 """
 
-from fastapi import FastAPI
-from fastapi.middleware.cors import CORSMiddleware
+from dotenv import load_dotenv
 
-from api.app.routers import corpus, documents, query
+load_dotenv()  # must run before any module that reads os.getenv()
+
+from fastapi import Depends, FastAPI  # noqa: E402
+from fastapi.middleware.cors import CORSMiddleware  # noqa: E402
+
+from api.app.rate_limit import check_rate_limit  # noqa: E402
+from api.app.routers import corpus, documents, query  # noqa: E402
 
 app = FastAPI(
     title="TogoLM API",
@@ -31,9 +36,11 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-app.include_router(query.router, prefix="/v1")
-app.include_router(corpus.router, prefix="/v1")
-app.include_router(documents.router, prefix="/v1")
+_security = [Depends(check_rate_limit)]
+
+app.include_router(query.router, prefix="/v1", dependencies=_security)
+app.include_router(corpus.router, prefix="/v1", dependencies=_security)
+app.include_router(documents.router, prefix="/v1", dependencies=_security)
 
 
 @app.get("/", include_in_schema=False)

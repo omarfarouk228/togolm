@@ -9,7 +9,6 @@ and regulatory frameworks for Togolese media.
 from urllib.parse import urljoin
 
 import scrapy
-
 from scrapers.spiders.base_spider import BaseTogoSpider
 
 ENTRY_URLS = [
@@ -22,9 +21,16 @@ ENTRY_URLS = [
 ]
 
 EXCLUDED_PATHS = [
-    "/wp-admin/", "/wp-content/", "/wp-login",
-    "/feed/", "/tag/", "/author/", "/#",
-    "mailto:", "javascript:", "/search/",
+    "/wp-admin/",
+    "/wp-content/",
+    "/wp-login",
+    "/feed/",
+    "/tag/",
+    "/author/",
+    "/#",
+    "mailto:",
+    "javascript:",
+    "/search/",
 ]
 
 
@@ -45,7 +51,9 @@ class HaacSpider(BaseTogoSpider):
         # Try WordPress sitemap
         if response.url in ENTRY_URLS and response.url.endswith("/"):
             sitemap_url = urljoin(response.url, "/wp-sitemap.xml")
-            yield scrapy.Request(sitemap_url, callback=self._parse_sitemap, dont_filter=True, priority=20)
+            yield scrapy.Request(
+                sitemap_url, callback=self._parse_sitemap, dont_filter=True, priority=20
+            )
 
         for href in response.css("a::attr(href)").getall():
             url = urljoin(response.url, href)
@@ -60,10 +68,10 @@ class HaacSpider(BaseTogoSpider):
 
     def parse_page(self, response):
         title = (
-            response.css("h1::text").get("") or
-            response.css("h1 *::text").get("") or
-            response.css(".entry-title::text").get("") or
-            response.css("title::text").get("").split("|")[0]
+            response.css("h1::text").get("")
+            or response.css("h1 *::text").get("")
+            or response.css(".entry-title::text").get("")
+            or response.css("title::text").get("").split("|")[0]
         ).strip()
 
         if not title or len(title) < 5:
@@ -82,9 +90,9 @@ class HaacSpider(BaseTogoSpider):
             return
 
         published_at = (
-            response.css("time::attr(datetime)").get("") or
-            response.css("meta[property='article:published_time']::attr(content)").get("") or
-            ""
+            response.css("time::attr(datetime)").get("")
+            or response.css("meta[property='article:published_time']::attr(content)").get("")
+            or ""
         )
 
         subcategory = self._infer_subcategory(response.url)

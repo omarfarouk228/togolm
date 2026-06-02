@@ -4,24 +4,13 @@ GET /v1/documents/{id}    — Single document with its chunks
 GET /v1/search            — Full-text keyword search
 """
 
-import os
-from typing import Literal
-
 import psycopg2
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel
 
+from api.app.db import get_conn
+
 router = APIRouter(tags=["Documents"])
-
-
-def _get_conn():
-    return psycopg2.connect(
-        host=os.getenv("POSTGRES_HOST", "localhost"),
-        port=int(os.getenv("POSTGRES_PORT", "5432")),
-        dbname=os.getenv("POSTGRES_DB", "togolm"),
-        user=os.getenv("POSTGRES_USER"),
-        password=os.getenv("POSTGRES_PASSWORD") or None,
-    )
 
 
 class ChunkOut(BaseModel):
@@ -95,7 +84,7 @@ def list_documents(
         sql_where += " AND d.language = %s"
         params.append(language)
 
-    conn = _get_conn()
+    conn = get_conn()
     try:
         with conn.cursor() as cur:
             cur.execute(
@@ -151,7 +140,7 @@ def list_documents(
 @router.get("/documents/{doc_id}", response_model=DocumentDetail)
 def get_document(doc_id: str):
     """Fetch a single document with its text chunks."""
-    conn = _get_conn()
+    conn = get_conn()
     try:
         with conn.cursor() as cur:
             cur.execute(
@@ -182,10 +171,7 @@ def get_document(doc_id: str):
     finally:
         conn.close()
 
-    chunks = [
-        ChunkOut(chunk_index=c[0], content=c[1], word_count=c[2])
-        for c in chunk_rows
-    ]
+    chunks = [ChunkOut(chunk_index=c[0], content=c[1], word_count=c[2]) for c in chunk_rows]
 
     return DocumentDetail(
         id=str(row[0]),
@@ -227,7 +213,7 @@ def search_documents(
         sql_where += " AND category = %s"
         params.append(category)
 
-    conn = _get_conn()
+    conn = get_conn()
     try:
         with conn.cursor() as cur:
             try:
@@ -256,12 +242,11 @@ def search_documents(
                     f"""
                     SELECT id, source, url, title, clean_content, 0.5
                     FROM documents
-                    {sql_where.replace('%s', '%s').replace('to_tsquery', '')}
+                    {sql_where.replace("%s", "%s").replace("to_tsquery", "")}
                       AND (title ILIKE %s OR clean_content ILIKE %s)
                     LIMIT %s
                     """,
-                    (f"%{q}%", f"%{q}%", limit)
-                    + tuple(p for p in (source, category) if p),
+                    (f"%{q}%", f"%{q}%", limit) + tuple(p for p in (source, category) if p),
                 )
                 rows = cur.fetchall()
 
@@ -296,7 +281,7 @@ def search_documents(
         idx = content.lower().find(q_lower.split()[0])
         if idx >= 0:
             start = max(0, idx - 100)
-            excerpt = ("…" if start > 0 else "") + content[start:idx + 200].strip() + "…"
+            excerpt = ("…" if start > 0 else "") + content[start : idx + 200].strip() + "…"
         else:
             excerpt = content[:200] + "…" if len(content) > 200 else content
 

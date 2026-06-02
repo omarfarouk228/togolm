@@ -8,7 +8,6 @@ import re
 from urllib.parse import urljoin
 
 import scrapy
-
 from scrapers.spiders.base_spider import BaseTogoSpider
 
 WP_DATE_URL_RE = re.compile(r"/\d{4}/\d{2}/.+/$")
@@ -48,9 +47,9 @@ class TogoinfosSpider(BaseTogoSpider):
 
     def parse_article(self, response):
         title = (
-            response.css("h1.entry-title::text").get("") or
-            response.css("h1::text").get("") or
-            response.css(".post-title::text").get("")
+            response.css("h1.entry-title::text").get("")
+            or response.css("h1::text").get("")
+            or response.css(".post-title::text").get("")
         ).strip()
 
         if not title or len(title) < 5:
@@ -69,9 +68,9 @@ class TogoinfosSpider(BaseTogoSpider):
             return
 
         published_at = (
-            response.css("time::attr(datetime)").get("") or
-            response.css("meta[property='article:published_time']::attr(content)").get("") or
-            ""
+            response.css("time::attr(datetime)").get("")
+            or response.css("meta[property='article:published_time']::attr(content)").get("")
+            or ""
         )
 
         subcategory = self._infer_subcategory(response.url)

@@ -22,7 +22,7 @@ class JsonWriterPipeline:
         instance.spider_name = crawler.spider.name if crawler.spider else "output"
         return instance
 
-    def open_spider(self):
+    def open_spider(self, *_args, **_kwargs):
         output_dir = Path(__file__).parent.parent / "datasets"
         output_dir.mkdir(exist_ok=True)
         self.file = open(output_dir / f"{self.spider_name}.jsonl", "a", encoding="utf-8")

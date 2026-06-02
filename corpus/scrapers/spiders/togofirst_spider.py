@@ -12,7 +12,6 @@ import re
 from urllib.parse import urljoin
 
 import scrapy
-
 from scrapers.spiders.base_spider import BaseTogoSpider
 
 # Joomla K2 article URL: /fr/category/DDMM-NNNNN-slug
@@ -40,9 +39,21 @@ CATEGORY_URLS = [
 ]
 
 EXCLUDED_PATHS = [
-    "/templates/", "/components/", "/modules/", "/plugins/", "/media/",
-    "/administrator/", "/cache/", "?", "#", "mailto:", "javascript:",
-    "/contact", "/login", "/register", "/user",
+    "/templates/",
+    "/components/",
+    "/modules/",
+    "/plugins/",
+    "/media/",
+    "/administrator/",
+    "/cache/",
+    "?",
+    "#",
+    "mailto:",
+    "javascript:",
+    "/contact",
+    "/login",
+    "/register",
+    "/user",
 ]
 
 
@@ -75,7 +86,9 @@ class TogofirstSpider(BaseTogoSpider):
                 yield scrapy.Request(url, callback=self.parse_article, priority=10)
 
         # Pagination (Joomla style: ?start=N)
-        next_links = response.css("a.pagenav::attr(href), li.next a::attr(href), .pagination a::attr(href)").getall()
+        next_links = response.css(
+            "a.pagenav::attr(href), li.next a::attr(href), .pagination a::attr(href)"
+        ).getall()
         for href in next_links:
             url = urljoin(response.url, href)
             if "togofirst.com" in url:
@@ -96,8 +109,8 @@ class TogofirstSpider(BaseTogoSpider):
 
     def parse_article(self, response):
         title = (
-            response.css("h1::text, h2.itemTitle::text, .itemTitle a::text").get("") or
-            response.css("h1 *::text").get("")
+            response.css("h1::text, h2.itemTitle::text, .itemTitle a::text").get("")
+            or response.css("h1 *::text").get("")
         ).strip()
 
         if not title or len(title) < 5:
@@ -105,8 +118,7 @@ class TogofirstSpider(BaseTogoSpider):
 
         # K2 article body
         body_html = response.css(
-            ".itemBody, .itemIntroText, .itemFullText, "
-            "article .content, .k2-item-body"
+            ".itemBody, .itemIntroText, .itemFullText, article .content, .k2-item-body"
         ).get("")
         raw_content = self.html_to_text(body_html) if body_html else ""
 
@@ -118,10 +130,10 @@ class TogofirstSpider(BaseTogoSpider):
             return
 
         published_at = (
-            response.css("time::attr(datetime)").get("") or
-            response.css(".itemDateCreated::text, .published::text").get("") or
-            response.css("meta[property='article:published_time']::attr(content)").get("") or
-            ""
+            response.css("time::attr(datetime)").get("")
+            or response.css(".itemDateCreated::text, .published::text").get("")
+            or response.css("meta[property='article:published_time']::attr(content)").get("")
+            or ""
         )
 
         subcategory = self._infer_subcategory(response.url)

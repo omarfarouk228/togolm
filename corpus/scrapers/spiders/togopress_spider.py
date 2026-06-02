@@ -8,7 +8,6 @@ import re
 from urllib.parse import urljoin
 
 import scrapy
-
 from scrapers.spiders.base_spider import BaseTogoSpider
 
 # WordPress date URLs (/2024/05/slug/) or simple slugs (/article-slug/)
@@ -24,8 +23,15 @@ CATEGORY_URLS = [
 ]
 
 EXCLUDED_PATHS = [
-    "/tag/", "/author/", "/page/", "/feed/", "/wp-admin/", "/wp-content/",
-    "/category/", "/contact", "/about",
+    "/tag/",
+    "/author/",
+    "/page/",
+    "/feed/",
+    "/wp-admin/",
+    "/wp-content/",
+    "/category/",
+    "/contact",
+    "/about",
 ]
 
 
@@ -49,16 +55,13 @@ class TogopressSpider(BaseTogoSpider):
 
     def parse_article(self, response):
         title = (
-            response.css("h1.entry-title::text").get("") or
-            response.css("h1::text").get("")
+            response.css("h1.entry-title::text").get("") or response.css("h1::text").get("")
         ).strip()
 
         if not title or len(title) < 5:
             return
 
-        body_html = response.css(
-            ".entry-content, .post-content, article .content"
-        ).get("")
+        body_html = response.css(".entry-content, .post-content, article .content").get("")
         raw_content = self.html_to_text(body_html) if body_html else ""
 
         if not raw_content or len(raw_content.split()) < 30:
@@ -69,9 +72,9 @@ class TogopressSpider(BaseTogoSpider):
             return
 
         published_at = (
-            response.css("time::attr(datetime)").get("") or
-            response.css("meta[property='article:published_time']::attr(content)").get("") or
-            ""
+            response.css("time::attr(datetime)").get("")
+            or response.css("meta[property='article:published_time']::attr(content)").get("")
+            or ""
         )
 
         subcategory = self._infer_subcategory(response.url)

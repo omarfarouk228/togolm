@@ -13,9 +13,7 @@ When Gemini key is available, generation can be added on top.
 import os
 from dataclasses import dataclass
 
-import psycopg2
-from pgvector.psycopg2 import register_vector
-
+from api.app.db import get_conn
 from corpus.processors.embedder import get_embedder
 
 _embedder = None
@@ -26,19 +24,6 @@ def _get_embedder():
     if _embedder is None:
         _embedder = get_embedder()
     return _embedder
-
-
-def _get_conn():
-    password = os.getenv("POSTGRES_PASSWORD") or None
-    conn = psycopg2.connect(
-        host=os.getenv("POSTGRES_HOST", "localhost"),
-        port=int(os.getenv("POSTGRES_PORT", "5432")),
-        dbname=os.getenv("POSTGRES_DB", "togolm"),
-        user=os.getenv("POSTGRES_USER"),
-        password=password,
-    )
-    register_vector(conn)
-    return conn
 
 
 @dataclass
@@ -64,7 +49,7 @@ def retrieve(
     embedder = _get_embedder()
     query_vector = embedder.encode_one(question)
 
-    conn = _get_conn()
+    conn = get_conn(vector=True)
     try:
         with conn.cursor() as cur:
             cur.execute("SELECT COUNT(*) FROM chunks WHERE embedding IS NOT NULL")
@@ -204,25 +189,33 @@ def _generate_with_gemini(question: str, chunks: list[RetrievedChunk]) -> str:
 
     client = genai.Client(api_key=os.environ["GEMINI_API_KEY"])
 
-    context = "\n\n".join(
-        f"[{c.source} — {c.title}]\n{c.content[:600]}" for c in chunks
-    )
+    context = "\n\n".join(f"[{c.source} — {c.title}]\n{c.content[:600]}" for c in chunks)
 
-    prompt = f"""You are TogoLM, an AI assistant specialized in Togolese knowledge.
-Answer the following question based only on the provided context.
-If the context does not contain enough information, say so clearly.
-Answer in the same language as the question.
+    system_instruction = """Tu es TogoLM, un assistant IA expert des connaissances togolaises.
+Tu maîtrises la législation, l'économie, l'éducation, l'histoire et l'actualité du Togo.
 
-CONTEXT:
+Règles de réponse :
+1. Si le contexte du corpus contient les informations nécessaires, base ta réponse dessus et
+indique les sources.
+2. Si le contexte est insuffisant ou hors-sujet, réponds quand même avec tes connaissances
+générales sur le Togo — en précisant en fin de réponse : "⚠️ Cette réponse est basée sur
+mes connaissances générales et non sur le corpus TogoLM."
+3. Réponds toujours dans la langue de la question (français par défaut).
+4. Ne réponds jamais "je n'ai pas suffisamment d'informations" sans fournir une réponse utile."""
+
+    prompt = f"""CONTEXTE DU CORPUS TOGOLM :
 {context}
 
-QUESTION: {question}
+QUESTION : {question}
 
-ANSWER:"""
+RÉPONSE :"""
 
     response = client.models.generate_content(
         model="gemini-2.5-flash",
         contents=prompt,
-        config=types.GenerateContentConfig(max_output_tokens=1000),
+        config=types.GenerateContentConfig(
+            system_instruction=system_instruction,
+            max_output_tokens=1000,
+        ),
     )
     return response.text

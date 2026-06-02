@@ -9,7 +9,6 @@ import re
 from urllib.parse import urljoin
 
 import scrapy
-
 from scrapers.spiders.base_spider import BaseTogoSpider
 
 # WordPress date-based article URL pattern
@@ -66,17 +65,15 @@ class PresidenceSpider(BaseTogoSpider):
 
         # Broader fallback
         if not raw_content or len(raw_content.split()) < 20:
-            raw_content = " ".join(response.css(
-                ".elementor-widget-container p::text"
-            ).getall())
+            raw_content = " ".join(response.css(".elementor-widget-container p::text").getall())
 
         if not raw_content or len(raw_content.split()) < 20:
             return
 
         published_at = (
-            response.css("time::attr(datetime)").get("") or
-            response.css("meta[property='article:published_time']::attr(content)").get("") or
-            ""
+            response.css("time::attr(datetime)").get("")
+            or response.css("meta[property='article:published_time']::attr(content)").get("")
+            or ""
         )
 
         # Infer subcategory from URL path (e.g. /category/diplomatie/ → diplomatie)

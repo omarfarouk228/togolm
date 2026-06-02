@@ -9,7 +9,6 @@ import re
 from urllib.parse import urljoin
 
 import scrapy
-
 from scrapers.spiders.base_spider import BaseTogoSpider
 
 LISTING_URLS = [
@@ -35,9 +34,10 @@ class JournalOfficielSpider(BaseTogoSpider):
 
     start_urls = LISTING_URLS
 
-    # jo.gouv.tg assigns sequential node IDs — we crawl down from the latest known
-    MAX_NODE_ID = 15900
-    MIN_NODE_ID = 14000  # ~2 years of history
+    # jo.gouv.tg assigns sequential node IDs — we crawl from MIN to MAX
+    # Node IDs go back to ~1000 (1960s decrees). Use 8000 for ~10 years of history.
+    MAX_NODE_ID = 16000
+    MIN_NODE_ID = 8000  # ~10 years of history (~2015+)
 
     def parse(self, response):
         """Parse listing pages: follow /node/ links and discover more IDs."""

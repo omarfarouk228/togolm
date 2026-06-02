@@ -225,8 +225,6 @@ export default function ChatPage() {
                         ) : (
                           <span className="truncate max-w-[160px] sm:max-w-[220px]">{s.title}</span>
                         )}
-                        <span className="text-slate-300">·</span>
-                        <span className="flex-shrink-0 tabular-nums">{(s.score * 100).toFixed(0)}%</span>
                       </div>
                     ))}
                     {m.latency_ms !== undefined && (

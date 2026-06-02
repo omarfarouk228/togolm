@@ -59,12 +59,14 @@ def _load_dataset(data_config: DataConfig):
 def _formatting_fn(data_config: DataConfig):
     """Return a function that converts a dataset row to a training string."""
     if data_config.dataset_format == "alpaca":
+
         def fmt(example):
             return ALPACA_TEMPLATE.format(
                 instruction=example["instruction"],
                 output=example["output"],
             )
     else:
+
         def fmt(example):
             convs = example["conversations"]
             parts = []
@@ -87,10 +89,16 @@ def train(
     training_cfg: TrainingConfig | None = None,
     data_cfg: DataConfig | None = None,
 ):
-    from peft import LoraConfig as PeftLoraConfig, get_peft_model, prepare_model_for_kbit_training
-    from transformers import AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig, TrainingArguments
-    from trl import SFTTrainer
     import torch
+    from peft import LoraConfig as PeftLoraConfig
+    from peft import get_peft_model, prepare_model_for_kbit_training
+    from transformers import (
+        AutoModelForCausalLM,
+        AutoTokenizer,
+        BitsAndBytesConfig,
+        TrainingArguments,
+    )
+    from trl import SFTTrainer
 
     model_cfg = model_cfg or ModelConfig()
     lora_cfg = lora_cfg or LoraConfig()

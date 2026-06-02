@@ -9,11 +9,12 @@ import re
 from urllib.parse import urljoin
 
 import scrapy
-
 from scrapers.spiders.base_spider import BaseTogoSpider
 
 # Article URLs typically have a numeric ID or date segment
-ARTICLE_URL_RE = re.compile(r"/(article|actualite|depeche|news)/\d+|/\d{4}/\d{2}/.+/$|/[a-z\-]{15,}/?$")
+ARTICLE_URL_RE = re.compile(
+    r"/(article|actualite|depeche|news)/\d+|/\d{4}/\d{2}/.+/$|/[a-z\-]{15,}/?$"
+)
 
 ENTRY_URLS = [
     "https://www.agencetogopresse.com/",
@@ -25,8 +26,15 @@ ENTRY_URLS = [
 ]
 
 EXCLUDED_PATHS = [
-    "/login", "/register", "/search", "/tag", "/auteur", "/feed",
-    "#", "mailto:", "javascript:",
+    "/login",
+    "/register",
+    "/search",
+    "/tag",
+    "/auteur",
+    "/feed",
+    "#",
+    "mailto:",
+    "javascript:",
 ]
 
 
@@ -59,10 +67,10 @@ class AtpSpider(BaseTogoSpider):
 
     def parse_article(self, response):
         title = (
-            response.css("h1::text").get("") or
-            response.css("h1 *::text").get("") or
-            response.css(".article-title::text").get("") or
-            response.css(".titre::text").get("")
+            response.css("h1::text").get("")
+            or response.css("h1 *::text").get("")
+            or response.css(".article-title::text").get("")
+            or response.css(".titre::text").get("")
         ).strip()
 
         if not title or len(title) < 5:
@@ -81,10 +89,10 @@ class AtpSpider(BaseTogoSpider):
             return
 
         published_at = (
-            response.css("time::attr(datetime)").get("") or
-            response.css("meta[property='article:published_time']::attr(content)").get("") or
-            response.css(".date::text, .published-date::text").get("") or
-            ""
+            response.css("time::attr(datetime)").get("")
+            or response.css("meta[property='article:published_time']::attr(content)").get("")
+            or response.css(".date::text, .published-date::text").get("")
+            or ""
         )
 
         subcategory = self._infer_subcategory(response.url)

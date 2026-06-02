@@ -1,0 +1,161 @@
+"""
+Unit tests for the /query and /query/stream endpoints.
+
+DB and Gemini calls are mocked — no external services needed.
+"""
+
+import json
+from unittest.mock import patch
+
+from fastapi.testclient import TestClient
+
+from api.app.main import app
+from api.app.services.rag import RetrievedChunk
+
+client = TestClient(app)
+
+FAKE_CHUNK = RetrievedChunk(
+    title="Constitution du Togo",
+    url="https://assemblee-nationale.tg/constitution",
+    source="assemblee-nationale.tg",
+    category="legal",
+    content="Le Togo est une République. Le Chef de l'État est le Président.",
+    score=0.91,
+)
+
+
+# ---------------------------------------------------------------------------
+# POST /v1/query
+# ---------------------------------------------------------------------------
+
+
+class TestQueryEndpoint:
+    def test_returns_expected_shape(self):
+        with (
+            patch("api.app.routers.query.retrieve", return_value=[FAKE_CHUNK]),
+            patch("api.app.services.rag._generate_with_gemini", return_value="Réponse test"),
+        ):
+            resp = client.post("/v1/query", json={"question": "Quel est le régime du Togo ?"})
+        assert resp.status_code == 200
+        data = resp.json()
+        assert "answer" in data
+        assert "sources" in data
+        assert "model" in data
+        assert "latency_ms" in data
+        assert isinstance(data["latency_ms"], int)
+
+    def test_sources_include_title_url_score(self):
+        with (
+            patch("api.app.routers.query.retrieve", return_value=[FAKE_CHUNK]),
+            patch("api.app.services.rag._generate_with_gemini", return_value="OK"),
+        ):
+            resp = client.post("/v1/query", json={"question": "Régime politique du Togo ?"})
+        sources = resp.json()["sources"]
+        assert len(sources) == 1
+        assert sources[0]["title"] == FAKE_CHUNK.title
+        assert sources[0]["url"] == FAKE_CHUNK.url
+        assert 0 <= sources[0]["score"] <= 1
+
+    def test_empty_corpus_returns_answer(self):
+        with patch("api.app.routers.query.retrieve", return_value=[]):
+            resp = client.post("/v1/query", json={"question": "Question sans résultat ?"})
+        assert resp.status_code == 200
+        assert resp.json()["sources"] == []
+
+    def test_question_too_short_rejected(self):
+        resp = client.post("/v1/query", json={"question": "ab"})
+        assert resp.status_code == 422
+
+    def test_question_too_long_rejected(self):
+        resp = client.post("/v1/query", json={"question": "x" * 1001})
+        assert resp.status_code == 422
+
+    def test_retrieval_error_returns_500(self):
+        with patch("api.app.routers.query.retrieve", side_effect=Exception("DB error")):
+            resp = client.post("/v1/query", json={"question": "Question valide ?"})
+        assert resp.status_code == 500
+
+
+# ---------------------------------------------------------------------------
+# POST /v1/query/stream (SSE)
+# ---------------------------------------------------------------------------
+
+
+def _parse_sse(text: str) -> list[dict]:
+    """Parse SSE response body into a list of event data dicts."""
+    events = []
+    for line in text.splitlines():
+        if line.startswith("data: ") and line != "data: [DONE]":
+            events.append(json.loads(line[6:]))
+    return events
+
+
+class TestStreamEndpoint:
+    def test_response_is_event_stream(self):
+        with (
+            patch("api.app.routers.query.retrieve", return_value=[FAKE_CHUNK]),
+            patch("api.app.routers.query._stream_gemini", return_value=iter([])),
+        ):
+            resp = client.post("/v1/query/stream", json={"question": "Question stream ?"})
+        assert resp.status_code == 200
+        assert "text/event-stream" in resp.headers["content-type"]
+
+    def test_stream_ends_with_done(self):
+        with (
+            patch("api.app.routers.query.retrieve", return_value=[FAKE_CHUNK]),
+            patch("api.app.routers.query._stream_gemini", return_value=iter([])),
+        ):
+            resp = client.post("/v1/query/stream", json={"question": "Question stream ?"})
+        assert "data: [DONE]" in resp.text
+
+    def test_stream_includes_sources_event(self):
+        with (
+            patch("api.app.routers.query.retrieve", return_value=[FAKE_CHUNK]),
+            patch("api.app.routers.query._stream_gemini", return_value=iter([])),
+        ):
+            resp = client.post("/v1/query/stream", json={"question": "Question stream ?"})
+        events = _parse_sse(resp.text)
+        sources_events = [e for e in events if e.get("type") == "sources"]
+        assert len(sources_events) == 1
+        assert "latency_ms" in sources_events[0]
+
+    def test_stream_uses_gemini_when_key_set(self, monkeypatch):
+        monkeypatch.setenv("GEMINI_API_KEY", "AQ.fake-key")
+        gemini_event = f"data: {json.dumps({'type': 'chunk', 'text': 'Réponse Gemini'})}\n\n"
+        with (
+            patch("api.app.routers.query.retrieve", return_value=[FAKE_CHUNK]),
+            patch(
+                "api.app.routers.query._stream_gemini", return_value=iter([gemini_event])
+            ) as mock_g,
+        ):
+            resp = client.post("/v1/query/stream", json={"question": "Question Gemini ?"})
+        mock_g.assert_called_once()
+        # SSE body is JSON — accented chars are unicode-escaped
+        assert "R\\u00e9ponse Gemini" in resp.text or "Réponse Gemini" in resp.text
+
+    def test_stream_extractive_fallback_when_no_key(self, monkeypatch):
+        monkeypatch.delenv("GEMINI_API_KEY", raising=False)
+        with patch("api.app.routers.query.retrieve", return_value=[FAKE_CHUNK]):
+            resp = client.post("/v1/query/stream", json={"question": "Question extractive ?"})
+        events = _parse_sse(resp.text)
+        chunk_events = [e for e in events if e.get("type") == "chunk"]
+        assert len(chunk_events) >= 1
+        # Extractive mode includes source attribution
+        combined = " ".join(e["text"] for e in chunk_events)
+        assert "assemblee-nationale.tg" in combined
+
+    def test_stream_no_results_message(self):
+        with patch("api.app.routers.query.retrieve", return_value=[]):
+            resp = client.post("/v1/query/stream", json={"question": "Question sans résultat ?"})
+        events = _parse_sse(resp.text)
+        chunk_events = [e for e in events if e.get("type") == "chunk"]
+        assert len(chunk_events) == 1
+        assert "Aucune information" in chunk_events[0]["text"]
+
+    def test_stream_retrieval_error_yields_error_event(self):
+        with patch("api.app.routers.query.retrieve", side_effect=Exception("DB down")):
+            resp = client.post("/v1/query/stream", json={"question": "Question erreur ?"})
+        events = _parse_sse(resp.text)
+        error_events = [e for e in events if e.get("type") == "error"]
+        assert len(error_events) == 1
+        assert "DB down" in error_events[0]["message"]
