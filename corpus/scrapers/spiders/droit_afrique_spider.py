@@ -17,6 +17,7 @@ from scrapers.spiders.base_spider import BaseTogoSpider
 
 # Specific Wikipedia pages for major Togolese legal texts
 WIKIPEDIA_LEGAL_PAGES = [
+    # Juridique
     "https://fr.wikipedia.org/wiki/Constitution_du_Togo",
     "https://fr.wikipedia.org/wiki/Droit_du_travail_au_Togo",
     "https://fr.wikipedia.org/wiki/Code_p%C3%A9nal_togolais",
@@ -25,6 +26,21 @@ WIKIPEDIA_LEGAL_PAGES = [
     "https://fr.wikipedia.org/wiki/Assembl%C3%A9e_nationale_(Togo)",
     "https://fr.wikipedia.org/wiki/Cour_supr%C3%AAme_(Togo)",
     "https://fr.wikipedia.org/wiki/Cour_constitutionnelle_(Togo)",
+    # Éducation & universités
+    "https://fr.wikipedia.org/wiki/%C3%89ducation_au_Togo",
+    "https://fr.wikipedia.org/wiki/Universit%C3%A9_de_Lom%C3%A9",
+    "https://fr.wikipedia.org/wiki/Universit%C3%A9_de_Kara",
+    "https://fr.wikipedia.org/wiki/Enseignement_sup%C3%A9rieur_au_Togo",
+    # Économie & gouvernement
+    "https://fr.wikipedia.org/wiki/%C3%89conomie_du_Togo",
+    "https://fr.wikipedia.org/wiki/Budget_du_Togo",
+    "https://fr.wikipedia.org/wiki/Gouvernement_du_Togo",
+    "https://fr.wikipedia.org/wiki/Office_togolais_des_recettes",
+    # Géographie & société
+    "https://fr.wikipedia.org/wiki/Togo",
+    "https://fr.wikipedia.org/wiki/Lom%C3%A9",
+    "https://fr.wikipedia.org/wiki/D%C3%A9mographie_du_Togo",
+    "https://fr.wikipedia.org/wiki/Sant%C3%A9_au_Togo",
 ]
 
 # legitogo.gouv.tg — official legal portal
