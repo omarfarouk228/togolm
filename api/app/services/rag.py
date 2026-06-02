@@ -197,8 +197,11 @@ def _generate_with_gemini(question: str, chunks: list[RetrievedChunk]) -> str:
 Tu maîtrises la législation, l'économie, l'éducation, l'histoire et l'actualité du Togo.
 
 Règles de réponse :
-1. Si le contexte du corpus contient les informations nécessaires, base ta réponse dessus et indique les sources.
-2. Si le contexte est insuffisant ou hors-sujet, réponds quand même avec tes connaissances générales sur le Togo — en précisant en fin de réponse : "⚠️ Cette réponse est basée sur mes connaissances générales et non sur le corpus TogoLM."
+1. Si le contexte du corpus contient les informations nécessaires, base ta réponse dessus et
+indique les sources.
+2. Si le contexte est insuffisant ou hors-sujet, réponds quand même avec tes connaissances
+générales sur le Togo — en précisant en fin de réponse : "⚠️ Cette réponse est basée sur
+mes connaissances générales et non sur le corpus TogoLM."
 3. Réponds toujours dans la langue de la question (français par défaut).
 4. Ne réponds jamais "je n'ai pas suffisamment d'informations" sans fournir une réponse utile."""
 
