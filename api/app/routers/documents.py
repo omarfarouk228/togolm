@@ -205,13 +205,13 @@ def search_documents(
     tsquery = " & ".join(words)
 
     sql_where = "WHERE status = 'active'"
-    params: list = [tsquery, tsquery]
+    filter_params: list = []
     if source:
         sql_where += " AND source = %s"
-        params.append(source)
+        filter_params.append(source)
     if category:
         sql_where += " AND category = %s"
-        params.append(category)
+        filter_params.append(category)
 
     conn = get_conn()
     try:
@@ -220,7 +220,7 @@ def search_documents(
                 cur.execute(
                     f"""
                     SELECT
-                        id, source, url, title, clean_content,
+                        id, source, url, title, clean_content, category,
                         ts_rank(
                             to_tsvector('french', coalesce(title,'') || ' ' || coalesce(clean_content,'')),
                             to_tsquery('french', %s)
@@ -232,7 +232,7 @@ def search_documents(
                     ORDER BY score DESC
                     LIMIT %s
                     """,
-                    params + [limit],
+                    [tsquery] + filter_params + [tsquery, limit],
                 )
                 rows = cur.fetchall()
             except psycopg2.Error:
@@ -240,22 +240,16 @@ def search_documents(
                 # tsquery syntax error — fall back to ILIKE
                 cur.execute(
                     f"""
-                    SELECT id, source, url, title, clean_content, 0.5
+                    SELECT id, source, url, title, clean_content, category, 0.5
                     FROM documents
-                    {sql_where.replace("%s", "%s").replace("to_tsquery", "")}
+                    {sql_where}
                       AND (title ILIKE %s OR clean_content ILIKE %s)
                     LIMIT %s
                     """,
-                    (f"%{q}%", f"%{q}%", limit) + tuple(p for p in (source, category) if p),
+                    filter_params + [f"%{q}%", f"%{q}%", limit],
                 )
                 rows = cur.fetchall()
 
-            # COUNT uses only one tsquery placeholder + filter params
-            count_params: list = [tsquery]
-            if source:
-                count_params.append(source)
-            if category:
-                count_params.append(category)
             try:
                 cur.execute(
                     f"""
@@ -264,7 +258,7 @@ def search_documents(
                       AND to_tsvector('french', coalesce(title,'') || ' ' || coalesce(clean_content,''))
                           @@ to_tsquery('french', %s)
                     """,
-                    count_params,
+                    filter_params + [tsquery],
                 )
                 total = cur.fetchone()[0]
             except Exception:
@@ -292,8 +286,8 @@ def search_documents(
                 url=row[2],
                 title=row[3],
                 excerpt=excerpt,
-                score=round(float(row[5]), 4),
-                category=None,
+                score=round(float(row[6]), 4),
+                category=row[5],
             )
         )
 
