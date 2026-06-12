@@ -26,6 +26,7 @@ def disable_rate_limit():
     yield
     app.dependency_overrides.pop(check_rate_limit, None)
 
+
 FAKE_CHUNK = RetrievedChunk(
     title="Constitution du Togo",
     url="https://assemblee-nationale.tg/constitution",

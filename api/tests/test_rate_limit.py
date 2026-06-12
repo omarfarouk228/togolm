@@ -53,7 +53,9 @@ class TestRateLimitAnonymous:
     @pytest.mark.asyncio
     async def test_at_limit_passes(self):
         mock_redis = MagicMock()
-        mock_redis.incr.return_value = 20  # exactly at anon limit; count > max_req → 20 > 20 = False
+        mock_redis.incr.return_value = (
+            20  # exactly at anon limit; count > max_req → 20 > 20 = False
+        )
         with patch("api.app.rate_limit._get_redis", return_value=mock_redis):
             await check_rate_limit(_make_request(), api_key=None)
 
