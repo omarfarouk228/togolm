@@ -88,6 +88,7 @@ services:
       celery -A corpus.celery_app beat
       --loglevel=info
       --scheduler celery.beat.PersistentScheduler
+      --schedule /tmp/celerybeat-schedule
     environment:
       POSTGRES_HOST: db
       POSTGRES_PORT: 5432
