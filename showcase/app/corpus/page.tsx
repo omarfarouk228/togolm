@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { ExternalLink, FileText, Layers, ChevronLeft, ChevronRight, Filter } from "lucide-react";
 import { useLanguage } from "@/contexts/language";
+import { RateLimitBanner } from "@/components/rate-limit-banner";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 const BASE_HEADERS: HeadersInit = { "ngrok-skip-browser-warning": "true" };
@@ -149,6 +150,7 @@ export default function CorpusPage() {
   const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [rateLimited, setRateLimited] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [selectedSource, setSelectedSource] = useState<string | null>(null);
   const [sources, setSources] = useState<string[]>([]);
@@ -158,19 +160,29 @@ export default function CorpusPage() {
   const fetchDocs = useCallback(async () => {
     setLoading(true);
     setError(null);
+    setRateLimited(false);
     try {
       const params = new URLSearchParams({ page: String(page), page_size: String(PAGE_SIZE) });
       if (selectedCategory) params.set("category", selectedCategory);
       if (selectedSource) params.set("source", selectedSource);
 
       const res = await fetch(`${API_BASE}/v1/documents?${params}`, { headers: BASE_HEADERS, cache: "no-store" });
-      if (!res.ok) throw new Error("Failed");
+      if (!res.ok) {
+        if (res.status === 429) throw new Error("rate_limited");
+        throw new Error(`HTTP ${res.status}`);
+      }
       const data: DocumentListResponse = await res.json();
       setDocs(data.documents);
       setTotal(data.total);
       setPages(data.pages);
-    } catch {
-      setError(t.corpus.error);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "";
+      if (msg === "rate_limited") {
+        setRateLimited(true);
+      } else {
+        console.error("[Corpus] fetch failed:", msg, "API_BASE:", API_BASE);
+        setError(`${t.corpus.error}${msg ? ` (${msg})` : ""}`);
+      }
     } finally {
       setLoading(false);
     }
@@ -278,6 +290,13 @@ export default function CorpusPage() {
           >
             {t.corpus.clear}
           </button>
+        </div>
+      )}
+
+      {/* Rate limit banner */}
+      {rateLimited && (
+        <div className="mb-6">
+          <RateLimitBanner />
         </div>
       )}
 

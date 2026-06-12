@@ -4,6 +4,12 @@ const BASE_HEADERS: HeadersInit = {
   "ngrok-skip-browser-warning": "true",
 };
 
+async function checkResponse(res: Response): Promise<Response> {
+  if (res.ok) return res;
+  if (res.status === 429) throw new Error("rate_limited");
+  throw new Error(`http_${res.status}`);
+}
+
 export interface CorpusStats {
   total_documents: number;
   total_chunks: number;
@@ -57,7 +63,7 @@ export async function searchCorpus(q: string, source?: string): Promise<SearchRe
     headers: BASE_HEADERS,
     cache: "no-store",
   });
-  if (!res.ok) throw new Error("Search failed");
+  await checkResponse(res);
   return res.json();
 }
 
@@ -115,7 +121,7 @@ export async function queryRAG(question: string): Promise<QueryResponse> {
     body: JSON.stringify({ question }),
     cache: "no-store",
   });
-  if (!res.ok) throw new Error("Query failed");
+  await checkResponse(res);
   return res.json();
 }
 
@@ -126,16 +132,21 @@ export type StreamEvent =
 
 export async function* queryRAGStream(
   question: string,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  apiKey?: string,
 ): AsyncGenerator<StreamEvent> {
   const res = await fetch(`${API_BASE}/v1/query/stream`, {
     method: "POST",
-    headers: { ...BASE_HEADERS, "Content-Type": "application/json" },
+    headers: {
+      ...BASE_HEADERS,
+      "Content-Type": "application/json",
+      ...(apiKey ? { "X-API-Key": apiKey } : {}),
+    },
     body: JSON.stringify({ question }),
     cache: "no-store",
     signal,
   });
-  if (!res.ok) throw new Error("Stream failed");
+  await checkResponse(res);
 
   const reader = res.body!.getReader();
   const decoder = new TextDecoder();
