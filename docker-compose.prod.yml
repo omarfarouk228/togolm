@@ -61,7 +61,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-      target: deps
+      target: production
     command: >
       celery -A corpus.celery_app worker
       --loglevel=info
@@ -83,7 +83,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-      target: deps
+      target: production
     command: >
       celery -A corpus.celery_app beat
       --loglevel=info
