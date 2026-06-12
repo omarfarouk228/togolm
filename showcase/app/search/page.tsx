@@ -4,6 +4,7 @@ import { useState } from "react";
 import { searchCorpus, type SearchResult } from "@/lib/api";
 import { Search, ExternalLink, Loader2, FileText } from "lucide-react";
 import { useLanguage } from "@/contexts/language";
+import { RateLimitBanner } from "@/components/rate-limit-banner";
 
 function SkeletonCard() {
   return (
@@ -32,6 +33,7 @@ export default function SearchPage() {
   const [total, setTotal] = useState<number | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [rateLimited, setRateLimited] = useState(false);
   const [searched, setSearched] = useState(false);
   const [lastQuery, setLastQuery] = useState("");
 
@@ -41,15 +43,22 @@ export default function SearchPage() {
     const q = query.trim();
     setLoading(true);
     setError(null);
+    setRateLimited(false);
     setSearched(false);
     try {
-      const data = await searchCorpus(q);
+      const key = localStorage.getItem("togolm-api-key") ?? "";
+      const data = await searchCorpus(q, undefined, key || undefined);
       setResults(data.results);
       setTotal(data.total);
       setLastQuery(q);
       setSearched(true);
-    } catch {
-      setError(t.search.error);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "";
+      if (msg === "rate_limited") {
+        setRateLimited(true);
+      } else {
+        setError(t.search.error);
+      }
       setResults([]);
       setTotal(null);
     } finally {
@@ -84,6 +93,12 @@ export default function SearchPage() {
           {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : t.search.searchBtn}
         </button>
       </form>
+
+      {rateLimited && (
+        <div className="mb-6">
+          <RateLimitBanner />
+        </div>
+      )}
 
       {error && (
         <div className="bg-red-50 border border-red-200 rounded-xl px-4 py-3 text-sm text-red-600 mb-6">
@@ -156,7 +171,7 @@ export default function SearchPage() {
         </div>
       )}
 
-      {!searched && !loading && !error && (
+      {!searched && !loading && !error && !rateLimited && (
         <div className="text-center py-16 text-slate-400 text-sm">
           {t.search.initialHint}
         </div>

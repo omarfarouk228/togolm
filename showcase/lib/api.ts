@@ -4,6 +4,12 @@ const BASE_HEADERS: HeadersInit = {
   "ngrok-skip-browser-warning": "true",
 };
 
+async function checkResponse(res: Response): Promise<Response> {
+  if (res.ok) return res;
+  if (res.status === 429) throw new Error("rate_limited");
+  throw new Error(`http_${res.status}`);
+}
+
 export interface CorpusStats {
   total_documents: number;
   total_chunks: number;
@@ -50,14 +56,14 @@ export async function fetchStats(): Promise<CorpusStats> {
   return res.json();
 }
 
-export async function searchCorpus(q: string, source?: string): Promise<SearchResponse> {
+export async function searchCorpus(q: string, source?: string, apiKey?: string): Promise<SearchResponse> {
   const params = new URLSearchParams({ q });
   if (source) params.set("source", source);
   const res = await fetch(`${API_BASE}/v1/search?${params}`, {
-    headers: BASE_HEADERS,
+    headers: { ...BASE_HEADERS, ...(apiKey ? { "X-API-Key": apiKey } : {}) },
     cache: "no-store",
   });
-  if (!res.ok) throw new Error("Search failed");
+  await checkResponse(res);
   return res.json();
 }
 
@@ -115,8 +121,13 @@ export async function queryRAG(question: string): Promise<QueryResponse> {
     body: JSON.stringify({ question }),
     cache: "no-store",
   });
-  if (!res.ok) throw new Error("Query failed");
+  await checkResponse(res);
   return res.json();
+}
+
+export interface HistoryMessage {
+  role: "user" | "assistant";
+  content: string;
 }
 
 export type StreamEvent =
@@ -126,16 +137,29 @@ export type StreamEvent =
 
 export async function* queryRAGStream(
   question: string,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  apiKey?: string,
+  history?: HistoryMessage[],
 ): AsyncGenerator<StreamEvent> {
+  const body: Record<string, unknown> = { question };
+  if (history && history.length > 0) {
+    body.history = history.map((m) => ({
+      role: m.role,
+      content: m.content.slice(0, 500),
+    }));
+  }
   const res = await fetch(`${API_BASE}/v1/query/stream`, {
     method: "POST",
-    headers: { ...BASE_HEADERS, "Content-Type": "application/json" },
-    body: JSON.stringify({ question }),
+    headers: {
+      ...BASE_HEADERS,
+      "Content-Type": "application/json",
+      ...(apiKey ? { "X-API-Key": apiKey } : {}),
+    },
+    body: JSON.stringify(body),
     cache: "no-store",
     signal,
   });
-  if (!res.ok) throw new Error("Stream failed");
+  await checkResponse(res);
 
   const reader = res.body!.getReader();
   const decoder = new TextDecoder();

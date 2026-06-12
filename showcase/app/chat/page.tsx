@@ -3,9 +3,12 @@
 import { useState, useRef, useEffect } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
-import { queryRAGStream, type QuerySource } from "@/lib/api";
+import { queryRAGStream, type QuerySource, type HistoryMessage } from "@/lib/api";
 import { Send, ExternalLink, Bot, User } from "lucide-react";
 import { useLanguage } from "@/contexts/language";
+import { RateLimitBanner } from "@/components/rate-limit-banner";
+
+const API_KEY_STORAGE = "togolm-api-key";
 
 interface Message {
   role: "user" | "assistant";
@@ -25,10 +28,11 @@ function StreamingCursor() {
 }
 
 export default function ChatPage() {
-  const { t } = useLanguage();
+  const { t, lang } = useLanguage();
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
+  const [rateLimited, setRateLimited] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const abortRef = useRef<AbortController | null>(null);
@@ -41,6 +45,13 @@ export default function ChatPage() {
     if (!question.trim() || loading) return;
     const q = question.trim();
     setInput("");
+    setRateLimited(false);
+
+    // Capture completed history before adding the new exchange to state
+    const history: HistoryMessage[] = messages
+      .filter((m) => m.content && !m.streaming)
+      .slice(-6)
+      .map((m) => ({ role: m.role, content: m.content }));
 
     setMessages((prev) => [
       ...prev,
@@ -52,8 +63,10 @@ export default function ChatPage() {
     const ctrl = new AbortController();
     abortRef.current = ctrl;
 
+    const apiKey = localStorage.getItem(API_KEY_STORAGE) || undefined;
+
     try {
-      for await (const event of queryRAGStream(q, ctrl.signal)) {
+      for await (const event of queryRAGStream(q, ctrl.signal, apiKey, history)) {
         if (event.type === "chunk") {
           setMessages((prev) => {
             const last = prev[prev.length - 1];
@@ -87,16 +100,36 @@ export default function ChatPage() {
       }
     } catch (err: unknown) {
       if (err instanceof Error && err.name === "AbortError") return;
-      setMessages((prev) => {
-        const last = prev[prev.length - 1];
-        if (last?.role === "assistant" && last.streaming) {
-          return [
-            ...prev.slice(0, -1),
-            { role: "assistant", content: t.chat.error },
-          ];
-        }
-        return prev;
-      });
+      const msg = err instanceof Error ? err.message : "";
+      if (msg === "rate_limited") {
+        setRateLimited(true);
+        setMessages((prev) => {
+          const last = prev[prev.length - 1];
+          if (last?.role === "assistant" && last.streaming) {
+            return [
+              ...prev.slice(0, -1),
+              {
+                role: "assistant",
+                content: lang === "fr"
+                  ? "Limite de requêtes atteinte. Obtenez une clé API pour continuer."
+                  : "Rate limit reached. Get an API key to continue.",
+              },
+            ];
+          }
+          return prev;
+        });
+      } else {
+        setMessages((prev) => {
+          const last = prev[prev.length - 1];
+          if (last?.role === "assistant" && last.streaming) {
+            return [
+              ...prev.slice(0, -1),
+              { role: "assistant", content: t.chat.error },
+            ];
+          }
+          return prev;
+        });
+      }
     } finally {
       setLoading(false);
       setMessages((prev) => {
@@ -240,27 +273,30 @@ export default function ChatPage() {
         </div>
       )}
 
-      {/* Input */}
-      <form
-        onSubmit={(e) => { e.preventDefault(); send(input); }}
-        className="flex gap-2 sticky bottom-4"
-      >
-        <input
-          ref={inputRef}
-          value={input}
-          onChange={(e) => setInput(e.target.value)}
-          placeholder={t.chat.placeholder}
-          className="flex-1 px-4 py-3.5 border border-slate-200 rounded-2xl text-sm bg-white focus:outline-none focus:ring-2 focus:ring-green-800/25 focus:border-green-800/50 shadow-sm transition-all"
-        />
-        <button
-          type="submit"
-          disabled={loading || !input.trim()}
-          className="px-4 py-3.5 rounded-2xl text-white disabled:opacity-40 transition-opacity hover:opacity-90 shadow-sm"
-          style={{ background: "var(--togo-green)" }}
+      {/* Sticky input area */}
+      <div className="sticky bottom-4 space-y-2">
+        {rateLimited && <RateLimitBanner />}
+        <form
+          onSubmit={(e) => { e.preventDefault(); send(input); }}
+          className="flex gap-2"
         >
-          <Send className="w-4 h-4" />
-        </button>
-      </form>
+          <input
+            ref={inputRef}
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            placeholder={t.chat.placeholder}
+            className="flex-1 px-4 py-3.5 border border-slate-200 rounded-2xl text-sm bg-white focus:outline-none focus:ring-2 focus:ring-green-800/25 focus:border-green-800/50 shadow-sm transition-all"
+          />
+          <button
+            type="submit"
+            disabled={loading || !input.trim()}
+            className="px-4 py-3.5 rounded-2xl text-white disabled:opacity-40 transition-opacity hover:opacity-90 shadow-sm"
+            style={{ background: "var(--togo-green)" }}
+          >
+            <Send className="w-4 h-4" />
+          </button>
+        </form>
+      </div>
     </div>
   );
 }
