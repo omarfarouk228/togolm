@@ -49,7 +49,7 @@ function Navbar() {
         {/* Right */}
         <div className="ml-auto flex items-center gap-2 sm:gap-3">
           <a
-            href="https://github.com/togolm/togolm"
+            href="https://github.com/omarfarouk228/togolm"
             target="_blank"
             rel="noopener noreferrer"
             className="flex items-center gap-1.5 text-xs text-slate-500 hover:text-slate-900 transition-colors"
