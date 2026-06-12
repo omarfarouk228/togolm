@@ -130,9 +130,7 @@ def _stream_gemini(
     from google.genai import types
 
     client = genai.Client(api_key=os.environ["GEMINI_API_KEY"])
-    context = "\n\n".join(
-        f"[{c.source} — {c.title}]\n{c.content[:600]}" for c in chunks
-    )
+    context = "\n\n".join(f"[{c.source} — {c.title}]\n{c.content[:600]}" for c in chunks)
 
     system_instruction = (
         "Tu es TogoLM, un assistant IA expert des connaissances togolaises.\n"
@@ -141,7 +139,7 @@ def _stream_gemini(
         "1. Si le contexte du corpus contient les informations nécessaires, base ta réponse dessus et indique les sources.\n"
         "2. Si le contexte est insuffisant ou hors-sujet, réponds quand même avec tes connaissances générales sur le Togo "
         "— en précisant en fin de réponse : "
-        "\"⚠️ Cette réponse est basée sur mes connaissances générales et non sur le corpus TogoLM.\"\n"
+        '"⚠️ Cette réponse est basée sur mes connaissances générales et non sur le corpus TogoLM."\n'
         "3. Réponds toujours dans la langue de la question (français par défaut).\n"
         "4. Ne réponds jamais \"je n'ai pas suffisamment d'informations\" sans fournir une réponse utile."
     )
@@ -227,7 +225,9 @@ def stream_query(request: QueryRequest):
         elif chunks:
             yield from _extractive_stream(chunks)
         else:
-            no_result = "Aucune information pertinente trouvée dans le corpus TogoLM pour cette question."
+            no_result = (
+                "Aucune information pertinente trouvée dans le corpus TogoLM pour cette question."
+            )
             yield f"data: {json.dumps({'type': 'chunk', 'text': no_result})}\n\n"
 
         latency_ms = int((time.monotonic() - t0) * 1000)

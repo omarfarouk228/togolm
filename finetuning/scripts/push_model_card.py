@@ -1,6 +1,7 @@
 """Push model card README to togolm/togolm-7b-instruct-v1 on HuggingFace Hub."""
 
 import os
+
 from huggingface_hub import HfApi
 
 HF_REPO = "togolm/togolm-7b-instruct-v1"
@@ -170,10 +171,11 @@ covering corpus collection, RAG engine, fine-tuned LLM, and a public REST API.
 ```
 """
 
+
 def main():
     token = os.environ.get("HF_TOKEN")
     if not token:
-        raise EnvironmentError("Set HF_TOKEN environment variable before running.")
+        raise OSError("Set HF_TOKEN environment variable before running.")
 
     api = HfApi(token=token)
     api.upload_file(

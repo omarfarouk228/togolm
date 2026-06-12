@@ -247,6 +247,7 @@ class LegalPdfSpider(BaseTogoSpider):
     def _title_from_url(self, url: str) -> str:
         """Derive a human-readable title from the PDF filename."""
         from urllib.parse import unquote
+
         filename = url.rstrip("/").split("/")[-1]
         try:
             filename = unquote(filename)

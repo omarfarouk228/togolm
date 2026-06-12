@@ -25,8 +25,8 @@ ROOT = Path(__file__).resolve().parent.parent
 load_dotenv(ROOT / ".env")
 sys.path.insert(0, str(ROOT))
 
-from corpus.processors.chunker import chunk_by_words
-from corpus.processors.embedder import get_embedder
+from corpus.processors.chunker import chunk_by_words  # noqa: E402
+from corpus.processors.embedder import get_embedder  # noqa: E402
 
 EMBED_BATCH_SIZE = 20
 CHUNK_SIZE = 400
@@ -61,7 +61,7 @@ def fetch_unembedded(conn, source=None, limit=None) -> list[tuple]:
     sql = f"""
         SELECT d.id, d.clean_content, d.source
         FROM documents d
-        WHERE {' AND '.join(where)}
+        WHERE {" AND ".join(where)}
         ORDER BY d.source, d.id
     """
     if limit:
@@ -74,9 +74,7 @@ def fetch_unembedded(conn, source=None, limit=None) -> list[tuple]:
 
 def embed_doc(conn, embedder, doc_id: str, clean_content: str):
     """Chunk + embed one document, replace its chunks in DB."""
-    chunks = chunk_by_words(
-        clean_content, doc_id, chunk_size=CHUNK_SIZE, overlap=CHUNK_OVERLAP
-    )
+    chunks = chunk_by_words(clean_content, doc_id, chunk_size=CHUNK_SIZE, overlap=CHUNK_OVERLAP)
     chunk_texts = [c.text for c in chunks]
     if not chunk_texts:
         return 0
@@ -100,6 +98,7 @@ def embed_doc(conn, embedder, doc_id: str, clean_content: str):
                     else:
                         tqdm.write("  [RATE LIMIT] switching to local model")
                         from corpus.processors.embedder import LocalEmbedder
+
                         embedder.__class__ = LocalEmbedder
                         embedder._model = None
                         batch_embs = embedder.encode(batch)

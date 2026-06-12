@@ -44,8 +44,18 @@ SITES = [
             "https://ul.tg/recherche/",
             "https://ul.tg/vie-universitaire/",
         ],
-        "content_keywords": ["faculte", "ecole", "formation", "programme", "actualite",
-                              "scolarite", "licence", "master", "doctorat", "inscription"],
+        "content_keywords": [
+            "faculte",
+            "ecole",
+            "formation",
+            "programme",
+            "actualite",
+            "scolarite",
+            "licence",
+            "master",
+            "doctorat",
+            "inscription",
+        ],
     },
     # ── Economy / Investment ───────────────────────────────────────────────────
     {
@@ -68,8 +78,17 @@ SITES = [
             "https://api.tg/services/",
             "https://api.tg/guichet-unique/",
         ],
-        "content_keywords": ["investir", "entreprise", "secteur", "actualite", "service",
-                              "creation", "juridique", "fiscal", "guichet"],
+        "content_keywords": [
+            "investir",
+            "entreprise",
+            "secteur",
+            "actualite",
+            "service",
+            "creation",
+            "juridique",
+            "fiscal",
+            "guichet",
+        ],
     },
     # ── Utilities ─────────────────────────────────────────────────────────────
     {
@@ -89,8 +108,17 @@ SITES = [
             "https://www.ceet.tg/decouvrir-la-ceet/",
             "https://www.ceet.tg/clients/",
         ],
-        "content_keywords": ["tarif", "raccordement", "offre", "actualite", "electricite",
-                              "client", "service", "facturation", "compteur"],
+        "content_keywords": [
+            "tarif",
+            "raccordement",
+            "offre",
+            "actualite",
+            "electricite",
+            "client",
+            "service",
+            "facturation",
+            "compteur",
+        ],
     },
     # ── Legal ─────────────────────────────────────────────────────────────────
     {
@@ -109,8 +137,16 @@ SITES = [
             "https://www.cour-constitutionnelle.tg/arrets/",
             "https://www.cour-constitutionnelle.tg/avis/",
         ],
-        "content_keywords": ["decision", "arret", "avis", "jurisprudence", "constitution",
-                              "actualite", "election", "loi"],
+        "content_keywords": [
+            "decision",
+            "arret",
+            "avis",
+            "jurisprudence",
+            "constitution",
+            "actualite",
+            "election",
+            "loi",
+        ],
     },
     # ── Health ────────────────────────────────────────────────────────────────
     {
@@ -130,8 +166,16 @@ SITES = [
             "https://www.inam.tg/remboursements/",
             "https://www.inam.tg/assures/",
         ],
-        "content_keywords": ["prestation", "assure", "remboursement", "structure",
-                              "actualite", "adherent", "cotisation", "soin"],
+        "content_keywords": [
+            "prestation",
+            "assure",
+            "remboursement",
+            "structure",
+            "actualite",
+            "adherent",
+            "cotisation",
+            "soin",
+        ],
     },
 ]
 
@@ -141,9 +185,21 @@ SITES = [
 _SLUG_RE = re.compile(r"/[a-z0-9][a-z0-9\-]{6,}/?$")
 
 _EXCLUDED_PATHS = [
-    "/category/", "/tag/", "/author/", "/page/", "/feed/",
-    "/wp-content/", "/wp-admin/", "/wp-json/", "/#", "/cdn-cgi/",
-    "/login", "/logout", "/search", "/panier", "/cart",
+    "/category/",
+    "/tag/",
+    "/author/",
+    "/page/",
+    "/feed/",
+    "/wp-content/",
+    "/wp-admin/",
+    "/wp-json/",
+    "/#",
+    "/cdn-cgi/",
+    "/login",
+    "/logout",
+    "/search",
+    "/panier",
+    "/cart",
 ]
 
 
@@ -180,7 +236,7 @@ class BetaSourcesSpider(BaseTogoSpider):
     """Crawl all beta-launch institutional sites in one pass."""
 
     name = "beta_sources"
-    source = "beta"       # overridden per-URL via meta
+    source = "beta"  # overridden per-URL via meta
     category = "general"  # overridden per-URL via meta
     language = "fr"
 
