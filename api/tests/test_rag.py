@@ -12,6 +12,7 @@ from api.app.services.rag import RetrievedChunk, build_answer, retrieve
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def make_chunk(**kwargs) -> RetrievedChunk:
     defaults = dict(
         title="Test doc",
@@ -27,6 +28,7 @@ def make_chunk(**kwargs) -> RetrievedChunk:
 # ---------------------------------------------------------------------------
 # build_answer — pure logic, no DB
 # ---------------------------------------------------------------------------
+
 
 class TestBuildAnswer:
     def test_empty_chunks_returns_no_result_message(self):
@@ -63,7 +65,9 @@ class TestBuildAnswer:
     def test_gemini_called_when_key_present(self, monkeypatch):
         monkeypatch.setenv("GEMINI_API_KEY", "AQ.fake-key-for-test")
         chunk = make_chunk()
-        with patch("api.app.services.rag._generate_with_gemini", return_value="Réponse Gemini") as mock_gemini:
+        with patch(
+            "api.app.services.rag._generate_with_gemini", return_value="Réponse Gemini"
+        ) as mock_gemini:
             answer = build_answer("question ?", [chunk])
         mock_gemini.assert_called_once()
         assert answer == "Réponse Gemini"
@@ -71,7 +75,9 @@ class TestBuildAnswer:
     def test_gemini_exception_falls_back_to_extractive(self, monkeypatch):
         monkeypatch.setenv("GEMINI_API_KEY", "AQ.fake-key-for-test")
         chunk = make_chunk(content="Texte de secours.")
-        with patch("api.app.services.rag._generate_with_gemini", side_effect=Exception("API error")):
+        with patch(
+            "api.app.services.rag._generate_with_gemini", side_effect=Exception("API error")
+        ):
             answer = build_answer("question ?", [chunk])
         assert "Texte de secours" in answer
 
@@ -79,6 +85,7 @@ class TestBuildAnswer:
 # ---------------------------------------------------------------------------
 # retrieve — mocked DB + embedder
 # ---------------------------------------------------------------------------
+
 
 class TestRetrieve:
     def _mock_conn(self, rows: list, chunk_count: int = 1):
@@ -99,8 +106,10 @@ class TestRetrieve:
         row = ("Titre doc", "https://test.tg", "test.tg", "legal", "Contenu.", 0.9)
         mock_conn = self._mock_conn([row], chunk_count=1)
 
-        with patch("api.app.services.rag.get_conn", return_value=mock_conn), \
-             patch("api.app.services.rag._get_embedder") as mock_emb:
+        with (
+            patch("api.app.services.rag.get_conn", return_value=mock_conn),
+            patch("api.app.services.rag._get_embedder") as mock_emb,
+        ):
             mock_emb.return_value.encode_one.return_value = [0.1] * 384
             result = retrieve("question de test", top_k=1)
 
@@ -113,8 +122,10 @@ class TestRetrieve:
         row = ("Titre", "https://test.tg", "test.tg", "legal", "Contenu.", 0.1)
         mock_conn = self._mock_conn([row], chunk_count=1)
 
-        with patch("api.app.services.rag.get_conn", return_value=mock_conn), \
-             patch("api.app.services.rag._get_embedder") as mock_emb:
+        with (
+            patch("api.app.services.rag.get_conn", return_value=mock_conn),
+            patch("api.app.services.rag._get_embedder") as mock_emb,
+        ):
             mock_emb.return_value.encode_one.return_value = [0.1] * 384
             result = retrieve("question", top_k=5)
 
@@ -124,8 +135,10 @@ class TestRetrieve:
         row = ("Titre FT", "https://test.tg", "test.tg", "legal", "Contenu FT.", 0.5)
         mock_conn = self._mock_conn([row], chunk_count=0)
 
-        with patch("api.app.services.rag.get_conn", return_value=mock_conn), \
-             patch("api.app.services.rag._get_embedder") as mock_emb:
+        with (
+            patch("api.app.services.rag.get_conn", return_value=mock_conn),
+            patch("api.app.services.rag._get_embedder") as mock_emb,
+        ):
             mock_emb.return_value.encode_one.return_value = [0.1] * 384
             result = retrieve("question")
 

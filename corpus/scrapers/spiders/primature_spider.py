@@ -18,9 +18,27 @@ BASE_URL = f"https://{BASE_DOMAIN}/"
 WP_DATE_URL_RE = re.compile(r"/\d{4}/\d{2}/\d{2}/.+")
 
 # Extensions to skip (non-text resources)
-SKIP_EXTENSIONS = {".jpg", ".jpeg", ".png", ".gif", ".svg", ".pdf",
-                   ".zip", ".doc", ".docx", ".xls", ".xlsx", ".mp4",
-                   ".mp3", ".avi", ".css", ".js", ".ico", ".woff", ".woff2"}
+SKIP_EXTENSIONS = {
+    ".jpg",
+    ".jpeg",
+    ".png",
+    ".gif",
+    ".svg",
+    ".pdf",
+    ".zip",
+    ".doc",
+    ".docx",
+    ".xls",
+    ".xlsx",
+    ".mp4",
+    ".mp3",
+    ".avi",
+    ".css",
+    ".js",
+    ".ico",
+    ".woff",
+    ".woff2",
+}
 
 
 def _is_skippable_url(url: str) -> bool:
@@ -86,8 +104,9 @@ class PrimatureSpider(BaseTogoSpider):
         ).strip()
 
         # Strip site name suffix (e.g. " - Primature du Togo")
-        title = re.sub(r"\s*[-|–]\s*(Primature|Gouvernement|Togo).*$", "", title,
-                       flags=re.IGNORECASE).strip()
+        title = re.sub(
+            r"\s*[-|–]\s*(Primature|Gouvernement|Togo).*$", "", title, flags=re.IGNORECASE
+        ).strip()
 
         if not title or len(title) < 5:
             return
@@ -155,17 +174,16 @@ class PrimatureSpider(BaseTogoSpider):
     def _infer_subcategory(self, url: str, title: str) -> str:
         url_low = url.lower()
         title_low = title.lower()
-        if any(k in url_low or k in title_low
-               for k in ["conseil-des-ministres", "conseil des ministres"]):
+        if any(
+            k in url_low or k in title_low
+            for k in ["conseil-des-ministres", "conseil des ministres"]
+        ):
             return "conseil_ministres"
-        if any(k in url_low or k in title_low
-               for k in ["discours", "allocution", "speech"]):
+        if any(k in url_low or k in title_low for k in ["discours", "allocution", "speech"]):
             return "discours"
-        if any(k in url_low or k in title_low
-               for k in ["communique", "communiqué", "press"]):
+        if any(k in url_low or k in title_low for k in ["communique", "communiqué", "press"]):
             return "communique"
-        if any(k in url_low or k in title_low
-               for k in ["actualit", "news", "article"]):
+        if any(k in url_low or k in title_low for k in ["actualit", "news", "article"]):
             return "actualite"
         if WP_DATE_URL_RE.search(url):
             return "actualite"

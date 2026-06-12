@@ -24,9 +24,9 @@ from api.app.auth import APIKeyRecord, get_api_key
 
 # Limits: plan → (max_requests, window_in_seconds)
 _LIMITS: dict[str, tuple[int, int]] = {
-    "anon":        (100,     86_400),
-    "free":        (100,     86_400),
-    "dev":         (1_000,   86_400),
+    "anon": (100, 86_400),
+    "free": (100, 86_400),
+    "dev": (1_000, 86_400),
     "institution": (100_000, 86_400),
 }
 
@@ -56,15 +56,15 @@ async def check_rate_limit(
         HTTPException 429 — rate limit exceeded
     """
     if isinstance(api_key, APIKeyRecord):
-        plan       = api_key.plan
+        plan = api_key.plan
         identifier = api_key.id
     elif isinstance(api_key, str):
         # env-fallback key: treat as "dev" plan
-        plan       = "dev"
+        plan = "dev"
         identifier = api_key
     else:
         # anonymous
-        plan       = "anon"
+        plan = "anon"
         identifier = _get_client_ip(request)
 
     max_req, window = _LIMITS.get(plan, _LIMITS["dev"])

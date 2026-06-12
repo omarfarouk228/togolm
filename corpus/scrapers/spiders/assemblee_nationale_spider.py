@@ -29,9 +29,19 @@ class AssembleeNationaleSpider(BaseTogoSpider):
     ]
 
     content_path_keywords = [
-        "loi", "lois", "decret", "ordonnance", "resolution",
-        "actualite", "actualites", "communique", "seance",
-        "rapport", "commission", "debat", "article",
+        "loi",
+        "lois",
+        "decret",
+        "ordonnance",
+        "resolution",
+        "actualite",
+        "actualites",
+        "communique",
+        "seance",
+        "rapport",
+        "commission",
+        "debat",
+        "article",
     ]
 
     denied_paths = ["/login", "/admin", "/search", "/api", "/wp-admin"]
@@ -110,8 +120,7 @@ class AssembleeNationaleSpider(BaseTogoSpider):
             return
 
         body_html = response.css(
-            "article, .article-body, .content, .post-content, "
-            ".entry-content, main p"
+            "article, .article-body, .content, .post-content, .entry-content, main p"
         ).get("")
 
         raw_content = self.html_to_text(body_html) if body_html else ""

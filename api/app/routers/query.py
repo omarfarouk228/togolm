@@ -67,10 +67,7 @@ async def query_corpus(request: QueryRequest):
 
     return QueryResponse(
         answer=answer,
-        sources=[
-            Source(title=c.title, url=c.url, score=round(c.score, 4))
-            for c in chunks
-        ],
+        sources=[Source(title=c.title, url=c.url, score=round(c.score, 4)) for c in chunks],
         model="togolm-rag-v1",
         latency_ms=latency_ms,
     )
@@ -121,11 +118,7 @@ def _stream_gemini(question: str, chunks: list[RetrievedChunk]):
 def _extractive_stream(chunks: list[RetrievedChunk]):
     """Yield a single SSE data line with the top extractive passage."""
     top = chunks[0]
-    excerpt = (
-        top.content[:800].rsplit(" ", 1)[0] + "…"
-        if len(top.content) > 800
-        else top.content
-    )
+    excerpt = top.content[:800].rsplit(" ", 1)[0] + "…" if len(top.content) > 800 else top.content
     text = f"{excerpt}\n\n[Source: {top.source}]"
     yield f"data: {json.dumps({'type': 'chunk', 'text': text})}\n\n"
 
@@ -140,6 +133,7 @@ def stream_query(request: QueryRequest):
       {type: 'error',   message: str}
     Terminated by: data: [DONE]
     """
+
     def generate():
         t0 = time.monotonic()
 
@@ -150,10 +144,7 @@ def stream_query(request: QueryRequest):
             yield "data: [DONE]\n\n"
             return
 
-        sources = [
-            {"title": c.title, "url": c.url, "score": round(c.score, 4)}
-            for c in chunks
-        ]
+        sources = [{"title": c.title, "url": c.url, "score": round(c.score, 4)} for c in chunks]
 
         gemini_key = os.getenv("GEMINI_API_KEY", "")
         use_gemini = bool(gemini_key) and len(gemini_key) > 10

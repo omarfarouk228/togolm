@@ -59,3 +59,25 @@ CREATE TABLE IF NOT EXISTS api_keys (
 
 CREATE INDEX IF NOT EXISTS api_keys_hash_idx    ON api_keys (key_hash);
 CREATE INDEX IF NOT EXISTS api_keys_active_idx  ON api_keys (is_active);
+
+-- Seed one document so stats/list/get-by-id tests pass in CI with an empty corpus
+INSERT INTO documents (id, source, url, category, title, raw_content, clean_content, language, status)
+VALUES (
+    '00000000-0000-0000-0000-000000000001',
+    'jo.gouv.tg',
+    'https://jo.gouv.tg/test-loi-finances-2025',
+    'legal',
+    'Loi de finances 2025',
+    'Le budget de l''État togolais pour 2025 s''élève à 2 400 milliards de FCFA.',
+    'Le budget de l''État togolais pour 2025 s''élève à 2 400 milliards de FCFA.',
+    'fr',
+    'active'
+) ON CONFLICT DO NOTHING;
+
+INSERT INTO chunks (document_id, chunk_index, content, word_count)
+VALUES (
+    '00000000-0000-0000-0000-000000000001',
+    0,
+    'Le budget de l''État togolais pour 2025 s''élève à 2 400 milliards de FCFA.',
+    13
+) ON CONFLICT DO NOTHING;

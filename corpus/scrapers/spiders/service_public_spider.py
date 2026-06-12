@@ -31,8 +31,15 @@ class ServicePublicSpider(BaseTogoSpider):
     start_urls = START_LISTING_PAGES
 
     denied_path_prefixes = [
-        "/login", "/logout", "/admin", "/search", "/api",
-        "/static", "/media", "/user/auth", "/sharefiles",
+        "/login",
+        "/logout",
+        "/admin",
+        "/search",
+        "/api",
+        "/static",
+        "/media",
+        "/user/auth",
+        "/sharefiles",
         "/cdn-cgi",
     ]
 
@@ -136,8 +143,7 @@ class ServicePublicSpider(BaseTogoSpider):
     def _extract_subcategory(self, response) -> str:
         """Extract subcategory from breadcrumb trail."""
         breadcrumbs = response.css(
-            ".d-none.d-md-flex a::text, "
-            "nav[aria-label='breadcrumb'] a::text"
+            ".d-none.d-md-flex a::text, nav[aria-label='breadcrumb'] a::text"
         ).getall()
         # Second-to-last breadcrumb is the category
         if len(breadcrumbs) >= 2:

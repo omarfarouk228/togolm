@@ -29,8 +29,16 @@ ENTRY_URLS = [
 ]
 
 EXCLUDED_PATHS = [
-    "/administrator/", "/cache/", "/templates/", "/components/", "/modules/",
-    "/wp-content/", "#", "mailto:", "javascript:", "?format=",
+    "/administrator/",
+    "/cache/",
+    "/templates/",
+    "/components/",
+    "/modules/",
+    "/wp-content/",
+    "#",
+    "mailto:",
+    "javascript:",
+    "?format=",
 ]
 
 
@@ -83,8 +91,8 @@ class OtrSpider(BaseTogoSpider):
         title = " ".join(t.strip() for t in title_parts if t.strip())
         if not title:
             title = (
-                response.css("h1::text").get("") or
-                response.css("title::text").get("").split(" - ")[0]
+                response.css("h1::text").get("")
+                or response.css("title::text").get("").split(" - ")[0]
             ).strip()
         # Exclude the generic site header
         if title.startswith("..::") or title == "OFFICE TOGOLAIS DES RECETTES":
@@ -99,19 +107,16 @@ class OtrSpider(BaseTogoSpider):
 
         if not raw_content or len(raw_content.split()) < 30:
             paragraphs = response.css("p::text").getall()
-            raw_content = " ".join(
-                p.strip() for p in paragraphs
-                if len(p.strip()) > 20
-            )
+            raw_content = " ".join(p.strip() for p in paragraphs if len(p.strip()) > 20)
 
         if not raw_content or len(raw_content.split()) < 30:
             return
 
         published_at = (
-            response.css("time::attr(datetime)").get("") or
-            response.css("meta[property='article:published_time']::attr(content)").get("") or
-            response.css(".article-info time::text, .published::text").get("") or
-            ""
+            response.css("time::attr(datetime)").get("")
+            or response.css("meta[property='article:published_time']::attr(content)").get("")
+            or response.css(".article-info time::text, .published::text").get("")
+            or ""
         )
 
         subcategory = self._infer_subcategory(response.url)

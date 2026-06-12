@@ -23,6 +23,7 @@ class LocalEmbedder:
     def _best_device(self) -> str:
         try:
             import torch
+
             if torch.backends.mps.is_available():
                 return "mps"
             if torch.cuda.is_available():
@@ -34,6 +35,7 @@ class LocalEmbedder:
     def _load(self):
         if self._model is None:
             from sentence_transformers import SentenceTransformer
+
             device = self._best_device()
             print(f"Loading embedding model '{self.model_name}' on {device}...")
             self._model = SentenceTransformer(self.model_name, device=device)
@@ -58,6 +60,7 @@ class GeminiEmbedder:
     def __init__(self):
         from google import genai
         from google.genai import types
+
         self._client = genai.Client(api_key=os.environ["GEMINI_API_KEY"])
         self._types = types
 

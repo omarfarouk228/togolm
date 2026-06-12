@@ -171,10 +171,7 @@ def get_document(doc_id: str):
     finally:
         conn.close()
 
-    chunks = [
-        ChunkOut(chunk_index=c[0], content=c[1], word_count=c[2])
-        for c in chunk_rows
-    ]
+    chunks = [ChunkOut(chunk_index=c[0], content=c[1], word_count=c[2]) for c in chunk_rows]
 
     return DocumentDetail(
         id=str(row[0]),
@@ -245,12 +242,11 @@ def search_documents(
                     f"""
                     SELECT id, source, url, title, clean_content, 0.5
                     FROM documents
-                    {sql_where.replace('%s', '%s').replace('to_tsquery', '')}
+                    {sql_where.replace("%s", "%s").replace("to_tsquery", "")}
                       AND (title ILIKE %s OR clean_content ILIKE %s)
                     LIMIT %s
                     """,
-                    (f"%{q}%", f"%{q}%", limit)
-                    + tuple(p for p in (source, category) if p),
+                    (f"%{q}%", f"%{q}%", limit) + tuple(p for p in (source, category) if p),
                 )
                 rows = cur.fetchall()
 
@@ -285,7 +281,7 @@ def search_documents(
         idx = content.lower().find(q_lower.split()[0])
         if idx >= 0:
             start = max(0, idx - 100)
-            excerpt = ("…" if start > 0 else "") + content[start:idx + 200].strip() + "…"
+            excerpt = ("…" if start > 0 else "") + content[start : idx + 200].strip() + "…"
         else:
             excerpt = content[:200] + "…" if len(content) > 200 else content
 
