@@ -306,8 +306,17 @@ export default function CorpusPage() {
 
       {/* Error */}
       {error && (
-        <div className="bg-red-50 border border-red-200 rounded-xl px-4 py-3 text-sm text-red-600 mb-6">
-          {error}
+        <div className="bg-red-50 border border-red-200 rounded-xl px-4 py-3 text-sm text-red-600 mb-6 flex items-center justify-between gap-4">
+          <span>
+            {error}
+            <span className="ml-1 font-mono text-xs text-red-400">{API_BASE}</span>
+          </span>
+          <button
+            onClick={fetchDocs}
+            className="flex-shrink-0 text-xs underline hover:no-underline"
+          >
+            Réessayer
+          </button>
         </div>
       )}
 
