@@ -14,9 +14,31 @@ from scrapers.spiders.base_spider import BaseTogoSpider
 WP_SLUG_RE = re.compile(r"/[a-z0-9][a-z0-9\-]{10,}/$")
 
 LISTING_URLS = [
+    # ── Core sections ─────────────────────────────────────────────────────────
+    "https://inseed.tg/",
     "https://inseed.tg/actualites/",
     "https://inseed.tg/annuaires/",
-    "https://inseed.tg/",
+    # ── Publications & reports (were missing → only 90 docs) ─────────────────
+    "https://inseed.tg/publications/",
+    "https://inseed.tg/rapports/",
+    "https://inseed.tg/enquetes/",
+    "https://inseed.tg/recensement/",
+    "https://inseed.tg/note-dinformation/",
+    "https://inseed.tg/bulletin/",
+    "https://inseed.tg/categories/emploi/",
+    "https://inseed.tg/categories/demographie/",
+    "https://inseed.tg/categories/economie/",
+    "https://inseed.tg/categories/prix/",
+    "https://inseed.tg/categories/agriculture/",
+    "https://inseed.tg/categories/commerce/",
+    "https://inseed.tg/donnees/",
+    "https://inseed.tg/indicateurs/",
+    # ── WordPress sitemaps ────────────────────────────────────────────────────
+    "https://inseed.tg/post-sitemap.xml",
+    "https://inseed.tg/wp-sitemap.xml",
+    "https://inseed.tg/wp-sitemap-posts-post-1.xml",
+    "https://inseed.tg/sitemap.xml",
+    "https://inseed.tg/sitemap_index.xml",
 ]
 
 
@@ -29,6 +51,22 @@ class InseedSpider(BaseTogoSpider):
     start_urls = LISTING_URLS
 
     def parse(self, response):
+        ct = response.headers.get("Content-Type", b"").decode().lower()
+        if "xml" in ct or response.url.endswith(".xml"):
+            yield from self._parse_sitemap(response)
+        else:
+            yield from self._parse_listing(response)
+
+    def _parse_sitemap(self, response):
+        """Extract URLs from a WordPress sitemap."""
+        response.selector.remove_namespaces()
+        for loc in response.xpath("//loc/text()").getall():
+            if loc.endswith(".xml"):
+                yield scrapy.Request(loc, callback=self.parse)
+            elif self._is_article_url(loc):
+                yield scrapy.Request(loc, callback=self.parse_article, priority=10)
+
+    def _parse_listing(self, response):
         for href in response.css("a::attr(href)").getall():
             url = urljoin(response.url, href)
             if self._is_article_url(url):
@@ -37,7 +75,7 @@ class InseedSpider(BaseTogoSpider):
         # WordPress pagination
         next_page = response.css("a.next::attr(href), a[rel='next']::attr(href)").get()
         if next_page:
-            yield scrapy.Request(urljoin(response.url, next_page), callback=self.parse)
+            yield scrapy.Request(urljoin(response.url, next_page), callback=self._parse_listing)
 
     def parse_article(self, response):
         # Extract title from breadcrumb or penci-single heading
