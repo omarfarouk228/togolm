@@ -196,75 +196,70 @@ def search_documents(
     category: str | None = Query(None),
     limit: int = Query(10, ge=1, le=50),
 ):
-    """Full-text keyword search over the corpus."""
-    # Build tsquery — join words with AND so results match all terms
+    """Full-text keyword search over the corpus.
+
+    Uses the pre-computed fts_vector column with a GIN index for fast search.
+    Falls back to ILIKE if the tsquery syntax is invalid.
+    """
+    # Build tsquery — OR between words so partial queries still return results
     words = [w.strip() for w in q.split() if len(w.strip()) > 1]
     if not words:
         raise HTTPException(status_code=400, detail="Query too short")
 
-    tsquery = " & ".join(words)
+    tsquery = " | ".join(words)
 
-    sql_where = "WHERE status = 'active'"
-    params: list = [tsquery, tsquery]
+    filters = ["status = 'active'", "fts_vector IS NOT NULL"]
+    filter_params: list = []
     if source:
-        sql_where += " AND source = %s"
-        params.append(source)
+        filters.append("source = %s")
+        filter_params.append(source)
     if category:
-        sql_where += " AND category = %s"
-        params.append(category)
+        filters.append("category = %s")
+        filter_params.append(category)
+    where_clause = "WHERE " + " AND ".join(filters)
 
     conn = get_conn()
     try:
         with conn.cursor() as cur:
             try:
+                # Main search — uses the GIN index on fts_vector (fast)
                 cur.execute(
                     f"""
                     SELECT
                         id, source, url, title, clean_content,
-                        ts_rank(
-                            to_tsvector('french', coalesce(title,'') || ' ' || coalesce(clean_content,'')),
-                            to_tsquery('french', %s)
-                        ) AS score
+                        ts_rank(fts_vector, to_tsquery('french', %s)) AS score
                     FROM documents
-                    {sql_where}
-                      AND to_tsvector('french', coalesce(title,'') || ' ' || coalesce(clean_content,''))
-                          @@ to_tsquery('french', %s)
+                    {where_clause}
+                      AND fts_vector @@ to_tsquery('french', %s)
                     ORDER BY score DESC
                     LIMIT %s
                     """,
-                    params + [limit],
+                    [tsquery] + filter_params + [tsquery, limit],
                 )
                 rows = cur.fetchall()
             except psycopg2.Error:
                 conn.rollback()
-                # tsquery syntax error — fall back to ILIKE
+                # tsquery syntax error (e.g. single special char) — fall back to ILIKE on title
                 cur.execute(
                     f"""
                     SELECT id, source, url, title, clean_content, 0.5
                     FROM documents
-                    {sql_where.replace("%s", "%s").replace("to_tsquery", "")}
+                    {where_clause}
                       AND (title ILIKE %s OR clean_content ILIKE %s)
                     LIMIT %s
                     """,
-                    (f"%{q}%", f"%{q}%", limit) + tuple(p for p in (source, category) if p),
+                    filter_params + [f"%{q}%", f"%{q}%", limit],
                 )
                 rows = cur.fetchall()
 
-            # COUNT uses only one tsquery placeholder + filter params
-            count_params: list = [tsquery]
-            if source:
-                count_params.append(source)
-            if category:
-                count_params.append(category)
             try:
                 cur.execute(
                     f"""
                     SELECT COUNT(*) FROM documents
-                    {sql_where}
-                      AND to_tsvector('french', coalesce(title,'') || ' ' || coalesce(clean_content,''))
-                          @@ to_tsquery('french', %s)
+                    {where_clause}
+                      AND fts_vector @@ to_tsquery('french', %s)
                     """,
-                    count_params,
+                    filter_params + [tsquery],
                 )
                 total = cur.fetchone()[0]
             except Exception:
