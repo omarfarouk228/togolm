@@ -1,5 +1,9 @@
 const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
+const BASE_HEADERS: HeadersInit = {
+  "ngrok-skip-browser-warning": "true",
+};
+
 export interface CorpusStats {
   total_documents: number;
   total_chunks: number;
@@ -38,7 +42,10 @@ export interface QueryResponse {
 }
 
 export async function fetchStats(): Promise<CorpusStats> {
-  const res = await fetch(`${API_BASE}/v1/stats`, { next: { revalidate: 60 } });
+  const res = await fetch(`${API_BASE}/v1/stats`, {
+    headers: BASE_HEADERS,
+    next: { revalidate: 60 },
+  });
   if (!res.ok) throw new Error("Failed to fetch stats");
   return res.json();
 }
@@ -46,15 +53,65 @@ export async function fetchStats(): Promise<CorpusStats> {
 export async function searchCorpus(q: string, source?: string): Promise<SearchResponse> {
   const params = new URLSearchParams({ q });
   if (source) params.set("source", source);
-  const res = await fetch(`${API_BASE}/v1/search?${params}`, { cache: "no-store" });
+  const res = await fetch(`${API_BASE}/v1/search?${params}`, {
+    headers: BASE_HEADERS,
+    cache: "no-store",
+  });
   if (!res.ok) throw new Error("Search failed");
+  return res.json();
+}
+
+export interface RegisterAPIKeyRequest {
+  name: string;
+  email: string;
+  use_case?: string;
+}
+
+export interface RegisterAPIKeyResponse {
+  api_key: string;
+  key_prefix: string;
+  plan: string;
+  quota_per_day: number;
+  message: string;
+}
+
+export interface APIKeyUsage {
+  name: string | null;
+  email: string | null;
+  plan: string;
+  key_prefix: string;
+  requests_today: number;
+  quota_per_day: number;
+  remaining_today: number;
+}
+
+export async function registerAPIKey(data: RegisterAPIKeyRequest): Promise<RegisterAPIKeyResponse> {
+  const res = await fetch(`${API_BASE}/v1/auth/register`, {
+    method: "POST",
+    headers: { ...BASE_HEADERS, "Content-Type": "application/json" },
+    body: JSON.stringify(data),
+    cache: "no-store",
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error((err as { detail?: string }).detail ?? "Registration failed");
+  }
+  return res.json();
+}
+
+export async function getAPIKeyUsage(apiKey: string): Promise<APIKeyUsage> {
+  const res = await fetch(`${API_BASE}/v1/auth/me`, {
+    headers: { ...BASE_HEADERS, "X-API-Key": apiKey },
+    cache: "no-store",
+  });
+  if (!res.ok) throw new Error("Invalid API key");
   return res.json();
 }
 
 export async function queryRAG(question: string): Promise<QueryResponse> {
   const res = await fetch(`${API_BASE}/v1/query`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { ...BASE_HEADERS, "Content-Type": "application/json" },
     body: JSON.stringify({ question }),
     cache: "no-store",
   });
@@ -73,7 +130,7 @@ export async function* queryRAGStream(
 ): AsyncGenerator<StreamEvent> {
   const res = await fetch(`${API_BASE}/v1/query/stream`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { ...BASE_HEADERS, "Content-Type": "application/json" },
     body: JSON.stringify({ question }),
     cache: "no-store",
     signal,

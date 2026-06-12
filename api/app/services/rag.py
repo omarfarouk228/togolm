@@ -215,7 +215,7 @@ RÉPONSE :"""
         contents=prompt,
         config=types.GenerateContentConfig(
             system_instruction=system_instruction,
-            max_output_tokens=1000,
+            max_output_tokens=2048,
         ),
     )
     return response.text

@@ -24,11 +24,13 @@ from api.app.auth import APIKeyRecord, get_api_key
 
 # Limits: plan → (max_requests, window_in_seconds)
 _LIMITS: dict[str, tuple[int, int]] = {
-    "anon": (100, 86_400),
-    "free": (100, 86_400),
+    "anon": (20, 86_400),
+    "free": (200, 86_400),
     "dev": (1_000, 86_400),
     "institution": (100_000, 86_400),
 }
+
+PLAN_QUOTAS: dict[str, int] = {k: v[0] for k, v in _LIMITS.items()}
 
 
 def _get_redis() -> redis.Redis:

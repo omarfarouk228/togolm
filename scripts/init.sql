@@ -48,9 +48,11 @@ CREATE INDEX IF NOT EXISTS chunks_document_id_idx ON chunks (document_id);
 CREATE TABLE IF NOT EXISTS api_keys (
     id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     key_hash    VARCHAR(64) NOT NULL UNIQUE,   -- SHA-256 hex digest
+    key_prefix  VARCHAR(20),                   -- first 14 chars for safe display
     owner_name  VARCHAR(255),
     owner_email VARCHAR(255),
-    plan        VARCHAR(20) DEFAULT 'dev'      -- free | dev | institution
+    use_case    TEXT,
+    plan        VARCHAR(20) DEFAULT 'free'     -- free | dev | institution
                 CHECK (plan IN ('free', 'dev', 'institution')),
     is_active   BOOLEAN DEFAULT TRUE,
     created_at  TIMESTAMP DEFAULT NOW(),

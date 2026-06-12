@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { searchCorpus, type SearchResult } from "@/lib/api";
 import { Search, ExternalLink, Loader2, FileText } from "lucide-react";
+import { useLanguage } from "@/contexts/language";
 
 function SkeletonCard() {
   return (
@@ -25,6 +26,7 @@ function SkeletonCard() {
 }
 
 export default function SearchPage() {
+  const { t } = useLanguage();
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<SearchResult[]>([]);
   const [total, setTotal] = useState<number | null>(null);
@@ -47,7 +49,7 @@ export default function SearchPage() {
       setLastQuery(q);
       setSearched(true);
     } catch {
-      setError("Search failed — is the API running?");
+      setError(t.search.error);
       setResults([]);
       setTotal(null);
     } finally {
@@ -58,8 +60,8 @@ export default function SearchPage() {
   return (
     <div className="max-w-3xl mx-auto px-4 py-12">
       <div className="mb-8">
-        <h1 className="text-3xl font-bold tracking-tight mb-2">Search</h1>
-        <p className="text-sm text-slate-500">Full-text search across the Togolese public document corpus.</p>
+        <h1 className="text-3xl font-bold tracking-tight mb-2">{t.search.title}</h1>
+        <p className="text-sm text-slate-500">{t.search.subtitle}</p>
       </div>
 
       <form onSubmit={handleSearch} className="flex gap-2 mb-8">
@@ -69,7 +71,7 @@ export default function SearchPage() {
             type="text"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="budget 2024, loi fiscale, recrutement enseignants…"
+            placeholder={t.search.placeholder}
             className="w-full pl-11 pr-4 py-3.5 border border-slate-200 rounded-xl text-sm bg-white focus:outline-none focus:ring-2 focus:ring-green-800/25 focus:border-green-800/50 shadow-sm transition-all"
           />
         </div>
@@ -79,7 +81,7 @@ export default function SearchPage() {
           className="px-5 py-3.5 rounded-xl text-white text-sm font-semibold disabled:opacity-40 transition-opacity hover:opacity-90 shadow-sm"
           style={{ background: "var(--togo-green)" }}
         >
-          {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : "Search"}
+          {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : t.search.searchBtn}
         </button>
       </form>
 
@@ -91,19 +93,16 @@ export default function SearchPage() {
 
       {total !== null && !loading && (
         <p className="text-sm text-slate-400 mb-5">
-          <span className="font-semibold text-slate-700">{total}</span> result{total !== 1 ? "s" : ""} for{" "}
-          <span className="font-medium text-slate-700">&ldquo;{lastQuery}&rdquo;</span>
+          {t.search.results(total, lastQuery)}
         </p>
       )}
 
-      {/* Skeleton loading */}
       {loading && (
         <div className="space-y-4">
           {Array.from({ length: 4 }).map((_, i) => <SkeletonCard key={i} />)}
         </div>
       )}
 
-      {/* Results */}
       {!loading && results.length > 0 && (
         <div className="space-y-4 animate-fade-in-up">
           {results.map((r) => (
@@ -139,7 +138,7 @@ export default function SearchPage() {
                     className="w-1.5 h-1.5 rounded-full inline-block"
                     style={{ background: `hsl(${Math.round(r.score * 120)}, 60%, 42%)` }}
                   />
-                  {(r.score * 100).toFixed(1)}% match
+                  {(r.score * 100).toFixed(1)}% {t.search.match}
                 </span>
               </div>
             </div>
@@ -147,21 +146,19 @@ export default function SearchPage() {
         </div>
       )}
 
-      {/* Empty state */}
       {searched && results.length === 0 && !loading && (
         <div className="text-center py-16 animate-fade-in-up">
           <div className="w-12 h-12 rounded-xl bg-slate-100 flex items-center justify-center mx-auto mb-4">
             <Search className="w-5 h-5 text-slate-400" />
           </div>
-          <p className="text-slate-600 font-medium mb-1">No results found</p>
-          <p className="text-slate-400 text-sm">Try a different search term or a broader query</p>
+          <p className="text-slate-600 font-medium mb-1">{t.search.noResults}</p>
+          <p className="text-slate-400 text-sm">{t.search.noResultsHint}</p>
         </div>
       )}
 
-      {/* Initial state */}
       {!searched && !loading && !error && (
         <div className="text-center py-16 text-slate-400 text-sm">
-          Type a query above to search the corpus
+          {t.search.initialHint}
         </div>
       )}
     </div>

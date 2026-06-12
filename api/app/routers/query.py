@@ -108,7 +108,7 @@ def _stream_gemini(question: str, chunks: list[RetrievedChunk]):
         contents=prompt,
         config=types.GenerateContentConfig(
             system_instruction=system_instruction,
-            max_output_tokens=1000,
+            max_output_tokens=2048,
         ),
     ):
         if chunk.text:

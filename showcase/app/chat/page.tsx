@@ -1,8 +1,11 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import { queryRAGStream, type QuerySource } from "@/lib/api";
 import { Send, ExternalLink, Bot, User } from "lucide-react";
+import { useLanguage } from "@/contexts/language";
 
 interface Message {
   role: "user" | "assistant";
@@ -11,13 +14,6 @@ interface Message {
   latency_ms?: number;
   streaming?: boolean;
 }
-
-const SUGGESTED = [
-  { emoji: "⚖️", text: "Quelles sont les procédures pour créer une entreprise au Togo ?" },
-  { emoji: "👷", text: "Quels sont les droits des travailleurs selon le code du travail togolais ?" },
-  { emoji: "🎓", text: "Comment fonctionne le système éducatif au Togo ?" },
-  { emoji: "💰", text: "Quel est le budget de l'État togolais ?" },
-];
 
 function StreamingCursor() {
   return (
@@ -28,25 +24,8 @@ function StreamingCursor() {
   );
 }
 
-function TypingIndicator() {
-  return (
-    <div className="flex gap-3">
-      <div
-        className="w-7 h-7 rounded-full flex-shrink-0 flex items-center justify-center"
-        style={{ background: "var(--togo-green)" }}
-      >
-        <Bot className="w-4 h-4 text-white" />
-      </div>
-      <div className="bg-white border border-slate-200 rounded-2xl rounded-bl-md px-4 py-3.5 flex items-center gap-1.5 shadow-sm">
-        <span className="typing-dot w-1.5 h-1.5 rounded-full bg-slate-400" />
-        <span className="typing-dot w-1.5 h-1.5 rounded-full bg-slate-400" />
-        <span className="typing-dot w-1.5 h-1.5 rounded-full bg-slate-400" />
-      </div>
-    </div>
-  );
-}
-
 export default function ChatPage() {
+  const { t } = useLanguage();
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
@@ -113,7 +92,7 @@ export default function ChatPage() {
         if (last?.role === "assistant" && last.streaming) {
           return [
             ...prev.slice(0, -1),
-            { role: "assistant", content: "Erreur de connexion à l'API. Est-elle démarrée ?" },
+            { role: "assistant", content: t.chat.error },
           ];
         }
         return prev;
@@ -144,14 +123,14 @@ export default function ChatPage() {
             >
               <Bot className="w-7 h-7 text-white" />
             </div>
-            <h1 className="text-2xl font-bold text-slate-900 mb-2">Ask TogoLM</h1>
+            <h1 className="text-2xl font-bold text-slate-900 mb-2">{t.chat.title}</h1>
             <p className="text-slate-500 text-sm max-w-sm mx-auto leading-relaxed">
-              Ask anything about Togo — laws, economy, education, government. Answers are grounded in official Togolese documents.
+              {t.chat.subtitle}
             </p>
           </div>
 
           <div className="grid sm:grid-cols-2 gap-3 w-full max-w-xl stagger">
-            {SUGGESTED.map(({ emoji, text }) => (
+            {t.chat.suggested.map(({ emoji, text }) => (
               <button
                 key={text}
                 onClick={() => send(text)}
@@ -185,7 +164,6 @@ export default function ChatPage() {
               )}
 
               <div className={`max-w-[82%] ${m.role === "user" ? "order-first" : ""}`}>
-                {/* Show typing indicator only while waiting for the first token */}
                 {m.role === "assistant" && m.streaming && m.content === "" ? (
                   <div className="bg-white border border-slate-200 rounded-2xl rounded-bl-md px-4 py-3.5 flex items-center gap-1.5 shadow-sm">
                     <span className="typing-dot w-1.5 h-1.5 rounded-full bg-slate-400" />
@@ -201,14 +179,30 @@ export default function ChatPage() {
                     }`}
                     style={m.role === "user" ? { background: "var(--togo-green)" } : {}}
                   >
-                    {m.content}
-                    {m.streaming && m.content !== "" && <StreamingCursor />}
+                    {m.role === "user" ? (
+                      m.content
+                    ) : (
+                      <div className="prose prose-sm prose-slate max-w-none
+                        prose-p:my-1 prose-p:leading-relaxed
+                        prose-ul:my-1 prose-ul:pl-4
+                        prose-ol:my-1 prose-ol:pl-4
+                        prose-li:my-0.5
+                        prose-strong:font-semibold prose-strong:text-slate-900
+                        prose-a:text-green-700 prose-a:no-underline hover:prose-a:underline
+                        prose-headings:font-semibold prose-headings:text-slate-900 prose-headings:mt-3 prose-headings:mb-1
+                        prose-code:text-xs prose-code:bg-slate-100 prose-code:px-1 prose-code:rounded">
+                        <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                          {m.content}
+                        </ReactMarkdown>
+                        {m.streaming && <StreamingCursor />}
+                      </div>
+                    )}
                   </div>
                 )}
 
                 {m.sources && m.sources.length > 0 && (
                   <div className="mt-2 space-y-1 pl-1">
-                    <p className="text-xs text-slate-400 font-medium mb-1.5">Sources</p>
+                    <p className="text-xs text-slate-400 font-medium mb-1.5">{t.chat.sources}</p>
                     {m.sources.slice(0, 3).map((s, j) => (
                       <div key={j} className="flex items-center gap-1.5 text-xs text-slate-400">
                         <span className="text-slate-300">↳</span>
@@ -255,7 +249,7 @@ export default function ChatPage() {
           ref={inputRef}
           value={input}
           onChange={(e) => setInput(e.target.value)}
-          placeholder="Ask about Togolese laws, economy, education…"
+          placeholder={t.chat.placeholder}
           className="flex-1 px-4 py-3.5 border border-slate-200 rounded-2xl text-sm bg-white focus:outline-none focus:ring-2 focus:ring-green-800/25 focus:border-green-800/50 shadow-sm transition-all"
         />
         <button
