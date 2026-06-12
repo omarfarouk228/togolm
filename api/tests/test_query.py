@@ -2,17 +2,29 @@
 Unit tests for the /query and /query/stream endpoints.
 
 DB and Gemini calls are mocked — no external services needed.
+Rate limiting is bypassed via dependency_overrides so the shared CI Redis
+quota (20 anon req/day) is not exhausted by these integration tests.
+Rate limiting behaviour is covered separately in test_rate_limit.py.
 """
 
 import json
 from unittest.mock import patch
 
+import pytest
 from fastapi.testclient import TestClient
 
 from api.app.main import app
+from api.app.rate_limit import check_rate_limit
 from api.app.services.rag import RetrievedChunk
 
 client = TestClient(app)
+
+
+@pytest.fixture(scope="module", autouse=True)
+def disable_rate_limit():
+    app.dependency_overrides[check_rate_limit] = lambda: None
+    yield
+    app.dependency_overrides.pop(check_rate_limit, None)
 
 FAKE_CHUNK = RetrievedChunk(
     title="Constitution du Togo",
