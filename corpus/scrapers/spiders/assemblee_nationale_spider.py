@@ -22,10 +22,29 @@ class AssembleeNationaleSpider(BaseTogoSpider):
     language = "fr"
 
     start_urls = [
+        # ── Main pages ────────────────────────────────────────────────────────
         "https://www.assemblee-nationale.tg/",
         "https://www.assemblee-nationale.tg/lois/",
         "https://www.assemblee-nationale.tg/actualites/",
         "https://www.assemblee-nationale.tg/communiques/",
+        # ── Additional sections (were missing → only 8 docs) ─────────────────
+        "https://www.assemblee-nationale.tg/textes-adoptes/",
+        "https://www.assemblee-nationale.tg/ordonnances/",
+        "https://www.assemblee-nationale.tg/resolutions/",
+        "https://www.assemblee-nationale.tg/commissions/",
+        "https://www.assemblee-nationale.tg/debats/",
+        "https://www.assemblee-nationale.tg/sessions/",
+        "https://www.assemblee-nationale.tg/discours/",
+        "https://www.assemblee-nationale.tg/news/",
+        "https://www.assemblee-nationale.tg/publications/",
+        "https://www.assemblee-nationale.tg/rapports/",
+        "https://www.assemblee-nationale.tg/agenda/",
+        # ── WordPress sitemaps ────────────────────────────────────────────────
+        "https://www.assemblee-nationale.tg/wp-sitemap.xml",
+        "https://www.assemblee-nationale.tg/post-sitemap.xml",
+        "https://www.assemblee-nationale.tg/wp-sitemap-posts-post-1.xml",
+        "https://www.assemblee-nationale.tg/sitemap.xml",
+        "https://www.assemblee-nationale.tg/sitemap_index.xml",
     ]
 
     content_path_keywords = [
@@ -47,8 +66,30 @@ class AssembleeNationaleSpider(BaseTogoSpider):
     denied_paths = ["/login", "/admin", "/search", "/api", "/wp-admin"]
 
     def parse(self, response):
-        yield from self._follow_content_links(response)
-        yield from self._follow_navigation(response)
+        ct = response.headers.get("Content-Type", b"").decode().lower()
+        if "xml" in ct or response.url.endswith(".xml"):
+            yield from self._parse_sitemap(response)
+        else:
+            yield from self._follow_content_links(response)
+            yield from self._follow_navigation(response)
+
+    def _parse_sitemap(self, response):
+        """Extract article/document URLs from a WordPress sitemap."""
+        response.selector.remove_namespaces()
+        for loc in response.xpath("//loc/text()").getall():
+            if loc.endswith(".xml"):
+                yield scrapy.Request(loc, callback=self.parse)
+            elif self._is_legal_document_url(loc):
+                yield scrapy.Request(loc, callback=self.parse_document, priority=10)
+            elif self._is_article_url(loc):
+                yield scrapy.Request(loc, callback=self.parse_article, priority=8)
+            elif "assemblee-nationale.tg" in loc and not self._is_excluded(loc):
+                # Generic page — try to extract if it has content
+                yield scrapy.Request(loc, callback=self.parse_article, priority=5)
+
+    def _is_excluded(self, url: str) -> bool:
+        path = url.split("assemblee-nationale.tg")[-1].lower()
+        return any(path.startswith(p) for p in self.denied_paths)
 
     def _follow_navigation(self, response):
         nav_links = response.css(
@@ -187,9 +228,11 @@ class AssembleeNationaleSpider(BaseTogoSpider):
         path = url.split("assemblee-nationale.tg")[-1].lower()
         if any(path.startswith(p) for p in self.denied_paths):
             return False
+        # Accept if path contains a known keyword OR has at least 2 path segments
+        # (relaxed from original AND condition — was too strict, causing 8 docs only)
         has_keyword = any(kw in path for kw in self.content_path_keywords)
-        has_slug = len(path.strip("/").split("/")) >= 2
-        return has_keyword and has_slug
+        has_slug = len(path.strip("/").split("/")) >= 2 and len(path.strip("/")) > 5
+        return has_keyword or has_slug
 
     def _should_follow(self, url: str) -> bool:
         if "assemblee-nationale.tg" not in url:

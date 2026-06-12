@@ -50,3 +50,6 @@ showcase/.env*
 logs/
 
 extras/
+
+# Project planning docs (internal only)
+PROJECT.md

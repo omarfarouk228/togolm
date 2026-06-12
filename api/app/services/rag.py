@@ -162,7 +162,11 @@ def _fulltext_search(
     ]
 
 
-def build_answer(question: str, chunks: list[RetrievedChunk]) -> str:
+def build_answer(
+    question: str,
+    chunks: list[RetrievedChunk],
+    history: list[dict] | None = None,
+) -> str:
     """
     Assemble an answer from retrieved chunks.
     Without a generation model, we surface the most relevant passage.
@@ -173,7 +177,7 @@ def build_answer(question: str, chunks: list[RetrievedChunk]) -> str:
 
     if os.getenv("GEMINI_API_KEY"):
         try:
-            return _generate_with_gemini(question, chunks)
+            return _generate_with_gemini(question, chunks, history or [])
         except Exception:
             pass  # Fall through to extractive answer
 
@@ -183,7 +187,11 @@ def build_answer(question: str, chunks: list[RetrievedChunk]) -> str:
     return f"{excerpt}\n\n[Source: {top.source}]"
 
 
-def _generate_with_gemini(question: str, chunks: list[RetrievedChunk]) -> str:
+def _generate_with_gemini(
+    question: str,
+    chunks: list[RetrievedChunk],
+    history: list[dict] | None = None,
+) -> str:
     from google import genai
     from google.genai import types
 
@@ -203,7 +211,15 @@ mes connaissances générales et non sur le corpus TogoLM."
 3. Réponds toujours dans la langue de la question (français par défaut).
 4. Ne réponds jamais "je n'ai pas suffisamment d'informations" sans fournir une réponse utile."""
 
-    prompt = f"""CONTEXTE DU CORPUS TOGOLM :
+    history_block = ""
+    if history:
+        lines = []
+        for m in history[-6:]:
+            role = "Utilisateur" if m.get("role") == "user" else "Assistant"
+            lines.append(f"{role}: {m.get('content', '')[:400]}")
+        history_block = "HISTORIQUE DE LA CONVERSATION:\n" + "\n".join(lines) + "\n\n"
+
+    prompt = f"""{history_block}CONTEXTE DU CORPUS TOGOLM :
 {context}
 
 QUESTION : {question}
@@ -215,7 +231,7 @@ RÉPONSE :"""
         contents=prompt,
         config=types.GenerateContentConfig(
             system_instruction=system_instruction,
-            max_output_tokens=1000,
+            max_output_tokens=2048,
         ),
     )
     return response.text

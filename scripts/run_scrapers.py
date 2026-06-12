@@ -48,6 +48,11 @@ ALL_SPIDERS = [
     # Juridique
     "journal_officiel",
     "otr",
+    "legal_pdf",  # PDF extraction from legitogo.gouv.tg and otr.tg
+    # International organisations (World Bank, IMF, AfDB, UNDP…)
+    "international",
+    # Beta sources (ul.tg, api.tg, ceet.tg, cour-constitutionnelle.tg, inam.tg)
+    "beta_sources",
     # Presse
     "togofirst",
     "icilome",
@@ -62,7 +67,7 @@ ALL_SPIDERS = [
 ]
 
 # Spiders that are permanently or temporarily broken (skip by default)
-# assemblee_nationale → Cloudflare bot protection + expired SSL cert on www.
+# assemblee_nationale → Cloudflare bot protection / incompatible site structure
 # mef               → DNS resolution failure (mef.gouv.tg unreachable via Python)
 # atp               → DNS resolution failure (site unreachable)
 # haac              → DNS resolution failure (site unreachable)

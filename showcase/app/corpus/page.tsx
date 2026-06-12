@@ -2,8 +2,11 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { ExternalLink, FileText, Layers, ChevronLeft, ChevronRight, Filter } from "lucide-react";
+import { useLanguage } from "@/contexts/language";
+import { RateLimitBanner } from "@/components/rate-limit-banner";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
+const BASE_HEADERS: HeadersInit = { "ngrok-skip-browser-warning": "true" };
 
 interface DocumentSummary {
   id: string;
@@ -35,18 +38,9 @@ const CATEGORIES = [
   "health",
   "politics",
   "press",
-];
+] as const;
 
-const CATEGORY_LABELS: Record<string, string> = {
-  administrative: "Administrative",
-  legal: "Legal",
-  education: "Education",
-  economy: "Economy",
-  agriculture: "Agriculture",
-  health: "Health",
-  politics: "Politics",
-  press: "Press",
-};
+type Category = (typeof CATEGORIES)[number];
 
 const CATEGORY_COLORS: Record<string, string> = {
   administrative: "#006a4e",
@@ -60,7 +54,9 @@ const CATEGORY_COLORS: Record<string, string> = {
 };
 
 function DocCard({ doc }: { doc: DocumentSummary }) {
+  const { t } = useLanguage();
   const color = CATEGORY_COLORS[doc.category ?? ""] ?? "#64748b";
+
   return (
     <div className="bg-white rounded-2xl border border-slate-200 p-5 card-hover flex flex-col gap-3">
       <div className="flex items-start justify-between gap-2">
@@ -72,7 +68,7 @@ function DocCard({ doc }: { doc: DocumentSummary }) {
             <FileText className="w-4 h-4" style={{ color }} />
           </div>
           <h2 className="text-sm font-semibold text-slate-900 leading-snug line-clamp-2">
-            {doc.title ?? "Untitled"}
+            {doc.title ?? t.corpus.untitled}
           </h2>
         </div>
         {doc.url && (
@@ -96,7 +92,7 @@ function DocCard({ doc }: { doc: DocumentSummary }) {
             className="px-2 py-0.5 rounded-md text-white font-medium"
             style={{ background: color }}
           >
-            {CATEGORY_LABELS[doc.category] ?? doc.category}
+            {t.categories[doc.category as Category] ?? doc.category}
           </span>
         )}
         {doc.subcategory && (
@@ -108,12 +104,12 @@ function DocCard({ doc }: { doc: DocumentSummary }) {
 
       <div className="flex items-center gap-3 text-xs text-slate-400">
         {doc.word_count != null && (
-          <span>{doc.word_count.toLocaleString()} words</span>
+          <span>{doc.word_count.toLocaleString()} {t.corpus.words}</span>
         )}
         {doc.chunk_count > 0 && (
           <span className="flex items-center gap-1">
             <Layers className="w-3 h-3" />
-            {doc.chunk_count} chunks
+            {doc.chunk_count} {t.corpus.chunks}
           </span>
         )}
         {doc.published_at && (
@@ -147,12 +143,14 @@ function SkeletonCard() {
 }
 
 export default function CorpusPage() {
+  const { t } = useLanguage();
   const [docs, setDocs] = useState<DocumentSummary[]>([]);
   const [total, setTotal] = useState(0);
   const [pages, setPages] = useState(1);
   const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [rateLimited, setRateLimited] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [selectedSource, setSelectedSource] = useState<string | null>(null);
   const [sources, setSources] = useState<string[]>([]);
@@ -162,31 +160,44 @@ export default function CorpusPage() {
   const fetchDocs = useCallback(async () => {
     setLoading(true);
     setError(null);
+    setRateLimited(false);
     try {
       const params = new URLSearchParams({ page: String(page), page_size: String(PAGE_SIZE) });
       if (selectedCategory) params.set("category", selectedCategory);
       if (selectedSource) params.set("source", selectedSource);
 
-      const res = await fetch(`${API_BASE}/v1/documents?${params}`, { cache: "no-store" });
-      if (!res.ok) throw new Error("Failed");
+      const key = localStorage.getItem("togolm-api-key") ?? "";
+      const res = await fetch(`${API_BASE}/v1/documents?${params}`, {
+        headers: { ...BASE_HEADERS, ...(key ? { "X-API-Key": key } : {}) },
+        cache: "no-store",
+      });
+      if (!res.ok) {
+        if (res.status === 429) throw new Error("rate_limited");
+        throw new Error(`HTTP ${res.status}`);
+      }
       const data: DocumentListResponse = await res.json();
       setDocs(data.documents);
       setTotal(data.total);
       setPages(data.pages);
-    } catch {
-      setError("Cannot reach the API — start with: uv run uvicorn api.app.main:app --port 8000");
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "";
+      if (msg === "rate_limited") {
+        setRateLimited(true);
+      } else {
+        console.error("[Corpus] fetch failed:", msg, "API_BASE:", API_BASE);
+        setError(`${t.corpus.error}${msg ? ` (${msg})` : ""}`);
+      }
     } finally {
       setLoading(false);
     }
-  }, [page, selectedCategory, selectedSource]);
+  }, [page, selectedCategory, selectedSource, t.corpus.error]);
 
   useEffect(() => {
     fetchDocs();
   }, [fetchDocs]);
 
-  // Collect available sources from stats once
   useEffect(() => {
-    fetch(`${API_BASE}/v1/stats`, { cache: "no-store" })
+    fetch(`${API_BASE}/v1/stats`, { headers: BASE_HEADERS, cache: "no-store" })
       .then((r) => r.json())
       .then((d) => setSources((d.sources ?? []).map((s: { source: string }) => s.source)))
       .catch(() => {});
@@ -206,9 +217,9 @@ export default function CorpusPage() {
     <div className="max-w-6xl mx-auto px-4 py-10">
       {/* Header */}
       <div className="mb-8">
-        <h1 className="text-3xl font-bold tracking-tight mb-2">Corpus</h1>
+        <h1 className="text-3xl font-bold tracking-tight mb-2">{t.corpus.title}</h1>
         <p className="text-sm text-slate-500">
-          Browse all {total > 0 ? total.toLocaleString() : "…"} documents indexed in the TogoLM corpus.
+          {t.corpus.subtitle(total > 0 ? total : "…")}
         </p>
       </div>
 
@@ -224,7 +235,7 @@ export default function CorpusPage() {
                 : "bg-white border border-slate-200 text-slate-600 hover:bg-slate-50"
             }`}
           >
-            All
+            {t.corpus.all}
           </button>
           {CATEGORIES.map((cat) => (
             <button
@@ -237,7 +248,7 @@ export default function CorpusPage() {
               }`}
               style={selectedCategory === cat ? { background: CATEGORY_COLORS[cat] } : {}}
             >
-              {CATEGORY_LABELS[cat]}
+              {t.categories[cat]}
             </button>
           ))}
         </div>
@@ -251,7 +262,7 @@ export default function CorpusPage() {
               onChange={(e) => setSource(e.target.value || null)}
               className="text-xs border border-slate-200 rounded-lg px-2.5 py-1.5 bg-white text-slate-700 focus:outline-none focus:ring-2 focus:ring-green-800/20"
             >
-              <option value="">All sources</option>
+              <option value="">{t.corpus.allSources}</option>
               {sources.map((s) => (
                 <option key={s} value={s}>{s}</option>
               ))}
@@ -263,13 +274,13 @@ export default function CorpusPage() {
       {/* Active filters summary */}
       {(selectedCategory || selectedSource) && (
         <div className="flex items-center gap-2 mb-5 text-xs text-slate-500">
-          <span>Filtering by:</span>
+          <span>{t.corpus.filteringBy}</span>
           {selectedCategory && (
             <span
               className="px-2 py-0.5 rounded-md text-white"
               style={{ background: CATEGORY_COLORS[selectedCategory] }}
             >
-              {CATEGORY_LABELS[selectedCategory]}
+              {t.categories[selectedCategory as Category] ?? selectedCategory}
             </span>
           )}
           {selectedSource && (
@@ -281,8 +292,15 @@ export default function CorpusPage() {
             onClick={() => { setCategory(null); setSource(null); }}
             className="text-slate-400 hover:text-slate-700 underline transition-colors"
           >
-            Clear
+            {t.corpus.clear}
           </button>
+        </div>
+      )}
+
+      {/* Rate limit banner */}
+      {rateLimited && (
+        <div className="mb-6">
+          <RateLimitBanner />
         </div>
       )}
 
@@ -300,7 +318,7 @@ export default function CorpusPage() {
         </div>
       ) : docs.length === 0 ? (
         <div className="text-center py-20 text-slate-400 text-sm">
-          No documents found for this filter.
+          {t.corpus.noDocuments}
         </div>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 animate-fade-in-up">
@@ -316,11 +334,11 @@ export default function CorpusPage() {
             disabled={page === 1}
             className="flex items-center gap-1.5 px-4 py-2 text-sm border border-slate-200 rounded-xl bg-white hover:bg-slate-50 disabled:opacity-40 transition-all"
           >
-            <ChevronLeft className="w-4 h-4" /> Previous
+            <ChevronLeft className="w-4 h-4" /> {t.corpus.previous}
           </button>
 
           <span className="text-sm text-slate-500 tabular-nums">
-            Page {page} / {pages} &nbsp;·&nbsp; {total.toLocaleString()} docs
+            {t.corpus.page(page, pages)} &nbsp;·&nbsp; {total.toLocaleString()} {t.corpus.docs}
           </span>
 
           <button
@@ -328,7 +346,7 @@ export default function CorpusPage() {
             disabled={page === pages}
             className="flex items-center gap-1.5 px-4 py-2 text-sm border border-slate-200 rounded-xl bg-white hover:bg-slate-50 disabled:opacity-40 transition-all"
           >
-            Next <ChevronRight className="w-4 h-4" />
+            {t.corpus.next} <ChevronRight className="w-4 h-4" />
           </button>
         </div>
       )}
