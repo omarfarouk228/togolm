@@ -28,14 +28,14 @@ jobs:
             git pull origin main
 
             # Build and restart only the api service (zero-downtime)
-            docker compose build api
-            docker compose up -d --no-deps api
+            docker compose -f docker-compose.prod.yml build api
+            docker compose -f docker-compose.prod.yml up -d --no-deps api
 
-            # Wait for health check
-            timeout 60 bash -c 'until curl -sf http://localhost:8000/health; do sleep 2; done'
+            # Wait for health check (via nginx on port 80)
+            timeout 90 bash -c 'until curl -sf http://localhost/health; do sleep 3; done'
             echo "API is healthy."
 
-            # Run DB migrations if needed (idempotent init.sql)
-            # docker compose exec -T db psql -U $POSTGRES_USER -d $POSTGRES_DB -f /tmp/init.sql
+            # Optionally restart nginx to pick up any config changes
+            docker compose -f docker-compose.prod.yml restart nginx
 
             echo "Deployment complete."
