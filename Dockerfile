@@ -22,7 +22,7 @@ RUN pip install --no-cache-dir uv && \
     uv pip install --system --no-cache \
         fastapi \
         "uvicorn[standard]" \
-        pydantic \
+        "pydantic[email]" \
         python-dotenv \
         psycopg2-binary \
         pgvector \
@@ -30,6 +30,7 @@ RUN pip install --no-cache-dir uv && \
         sentence-transformers \
         "google-genai>=2.3.0" \
         redis \
+        celery \
         tqdm
 
 # Pre-download the embedding model (bakes it into the image so cold starts
