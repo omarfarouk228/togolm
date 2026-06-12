@@ -55,8 +55,7 @@ export const translations = {
       next: "Suivant",
       page: (current: number, total: number) => `Page ${current} / ${total}`,
       docs: "docs",
-      error:
-        "Impossible d'atteindre l'API — démarrer avec : uv run uvicorn api.app.main:app --port 8000",
+      error: "Impossible de joindre l'API TogoLM.",
       untitled: "Sans titre",
     },
     search: {
@@ -69,7 +68,7 @@ export const translations = {
       noResults: "Aucun résultat trouvé",
       noResultsHint: "Essayez un terme différent ou une requête plus large",
       initialHint: "Saisissez une requête pour chercher dans le corpus",
-      error: "Recherche échouée — l'API est-elle démarrée ?",
+      error: "Recherche échouée — service temporairement indisponible.",
       match: "correspondance",
     },
     chat: {
@@ -78,7 +77,7 @@ export const translations = {
         "Posez n'importe quelle question sur le Togo — lois, économie, éducation, gouvernement. Les réponses s'appuient sur des documents officiels togolais.",
       placeholder: "Posez une question sur les lois, l'économie, l'éducation…",
       sources: "Sources",
-      error: "Erreur de connexion à l'API. Est-elle démarrée ?",
+      error: "Erreur de connexion — service temporairement indisponible.",
       suggested: [
         { emoji: "⚖️", text: "Quelles sont les procédures pour créer une entreprise au Togo ?" },
         { emoji: "👷", text: "Quels sont les droits des travailleurs selon le code du travail togolais ?" },
@@ -152,8 +151,7 @@ export const translations = {
       next: "Next",
       page: (current: number, total: number) => `Page ${current} / ${total}`,
       docs: "docs",
-      error:
-        "Cannot reach the API — start with: uv run uvicorn api.app.main:app --port 8000",
+      error: "Cannot reach the TogoLM API.",
       untitled: "Untitled",
     },
     search: {
@@ -166,7 +164,7 @@ export const translations = {
       noResults: "No results found",
       noResultsHint: "Try a different search term or a broader query",
       initialHint: "Type a query above to search the corpus",
-      error: "Search failed — is the API running?",
+      error: "Search failed — service temporarily unavailable.",
       match: "match",
     },
     chat: {
@@ -175,7 +173,7 @@ export const translations = {
         "Ask anything about Togo — laws, economy, education, government. Answers are grounded in official Togolese documents.",
       placeholder: "Ask about Togolese laws, economy, education…",
       sources: "Sources",
-      error: "Connection error. Is the API running?",
+      error: "Connection error — service temporarily unavailable.",
       suggested: [
         { emoji: "⚖️", text: "What are the procedures to register a business in Togo?" },
         { emoji: "👷", text: "What are workers' rights under the Togolese labor code?" },
