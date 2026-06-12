@@ -17,11 +17,17 @@ from api.app.services.rag import RetrievedChunk, build_answer, retrieve
 router = APIRouter(tags=["Query"])
 
 
+class HistoryMessage(BaseModel):
+    role: str  # "user" or "assistant"
+    content: str
+
+
 class QueryRequest(BaseModel):
     question: str = Field(..., min_length=3, max_length=1000)
     category: str | None = None
     language: str = "fr"
     max_tokens: int = Field(500, ge=50, le=2000)
+    history: list[HistoryMessage] = []
 
 
 class Source(BaseModel):
@@ -48,21 +54,62 @@ class EmbedResponse(BaseModel):
     token_count: int
 
 
+def rewrite_question_with_history(question: str, history: list[HistoryMessage]) -> str:
+    """Rewrite a follow-up question as a standalone search query.
+
+    Resolves all pronouns and implicit references using the conversation history.
+    Falls back to the original question if Gemini is unavailable or the call fails.
+    """
+    if not history or not os.getenv("GEMINI_API_KEY"):
+        return question
+
+    from google import genai
+    from google.genai import types
+
+    client = genai.Client(api_key=os.environ["GEMINI_API_KEY"])
+    history_text = "\n".join(
+        f"{'Utilisateur' if m.role == 'user' else 'Assistant'}: {m.content[:300]}"
+        for m in history[-4:]
+    )
+    prompt = (
+        f"Historique de conversation:\n{history_text}\n\n"
+        f"Nouvelle question: {question}\n\n"
+        "Reformule cette question en une requête de recherche autonome et complète, "
+        "en remplaçant tous les pronoms et références implicites par les entités explicites du contexte. "
+        "Réponds UNIQUEMENT avec la requête reformulée, sans guillemets ni explication."
+    )
+    try:
+        response = client.models.generate_content(
+            model="gemini-2.5-flash",
+            contents=prompt,
+            config=types.GenerateContentConfig(max_output_tokens=150),
+        )
+        rewritten = (response.text or "").strip()
+        return rewritten if rewritten else question
+    except Exception:
+        return question
+
+
 @router.post("/query", response_model=QueryResponse)
 async def query_corpus(request: QueryRequest):
     """Query the Togolese corpus via RAG and return an answer with sources."""
     t0 = time.monotonic()
 
+    search_question = request.question
+    if request.history:
+        search_question = rewrite_question_with_history(request.question, request.history)
+
     try:
         chunks = retrieve(
-            question=request.question,
+            question=search_question,
             category=request.category,
             top_k=5,
         )
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Retrieval error: {e}")
 
-    answer = build_answer(request.question, chunks)
+    history_dicts = [{"role": m.role, "content": m.content} for m in request.history]
+    answer = build_answer(request.question, chunks, history=history_dicts)
     latency_ms = int((time.monotonic() - t0) * 1000)
 
     return QueryResponse(
@@ -73,13 +120,12 @@ async def query_corpus(request: QueryRequest):
     )
 
 
-def _stream_gemini(question: str, chunks: list[RetrievedChunk]):
-    """Yield SSE data lines from Gemini streaming generation.
-
-    Uses the same system instruction as rag._generate_with_gemini so that
-    Gemini falls back to general knowledge when the corpus context is thin —
-    instead of returning a useless "the context does not contain…" message.
-    """
+def _stream_gemini(
+    question: str,
+    chunks: list[RetrievedChunk],
+    history: list[HistoryMessage] | None = None,
+):
+    """Yield SSE data lines from Gemini streaming generation."""
     from google import genai
     from google.genai import types
 
@@ -101,7 +147,21 @@ def _stream_gemini(question: str, chunks: list[RetrievedChunk]):
     )
 
     corpus_block = context if context else "(aucun document pertinent trouvé dans le corpus)"
-    prompt = f"CONTEXTE DU CORPUS TOGOLM :\n{corpus_block}\n\nQUESTION : {question}\n\nRÉPONSE :"
+
+    history_block = ""
+    if history:
+        lines = []
+        for m in history[-6:]:
+            role = "Utilisateur" if m.role == "user" else "Assistant"
+            lines.append(f"{role}: {m.content[:400]}")
+        history_block = "HISTORIQUE DE LA CONVERSATION:\n" + "\n".join(lines) + "\n\n"
+
+    prompt = (
+        f"{history_block}"
+        f"CONTEXTE DU CORPUS TOGOLM :\n{corpus_block}\n\n"
+        f"QUESTION : {question}\n\n"
+        "RÉPONSE :"
+    )
 
     for chunk in client.models.generate_content_stream(
         model="gemini-2.5-flash",
@@ -137,8 +197,14 @@ def stream_query(request: QueryRequest):
     def generate():
         t0 = time.monotonic()
 
+        # Rewrite the question using conversation history so the vector search
+        # operates on a standalone, fully-resolved query instead of a pronoun-laden follow-up.
+        search_question = request.question
+        if request.history:
+            search_question = rewrite_question_with_history(request.question, request.history)
+
         try:
-            chunks = retrieve(question=request.question, category=request.category, top_k=5)
+            chunks = retrieve(question=search_question, category=request.category, top_k=5)
         except Exception as e:
             yield f"data: {json.dumps({'type': 'error', 'message': str(e)})}\n\n"
             yield "data: [DONE]\n\n"
@@ -150,10 +216,8 @@ def stream_query(request: QueryRequest):
         use_gemini = bool(gemini_key) and len(gemini_key) > 10
 
         if use_gemini:
-            # Always call Gemini, even with empty chunks — the system instruction
-            # tells it to fall back to general knowledge when context is thin.
             try:
-                yield from _stream_gemini(request.question, chunks)
+                yield from _stream_gemini(request.question, chunks, request.history or [])
             except Exception:
                 if chunks:
                     yield from _extractive_stream(chunks)

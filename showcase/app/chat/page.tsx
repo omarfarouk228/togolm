@@ -3,8 +3,8 @@
 import { useState, useRef, useEffect } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
-import { queryRAGStream, type QuerySource } from "@/lib/api";
-import { Send, ExternalLink, Bot, User, Key } from "lucide-react";
+import { queryRAGStream, type QuerySource, type HistoryMessage } from "@/lib/api";
+import { Send, ExternalLink, Bot, User } from "lucide-react";
 import { useLanguage } from "@/contexts/language";
 import { RateLimitBanner } from "@/components/rate-limit-banner";
 
@@ -32,41 +32,26 @@ export default function ChatPage() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
-  const [apiKey, setApiKey] = useState("");
-  const [showKeyInput, setShowKeyInput] = useState(false);
   const [rateLimited, setRateLimited] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const abortRef = useRef<AbortController | null>(null);
 
   useEffect(() => {
-    const stored = localStorage.getItem(API_KEY_STORAGE);
-    if (stored) setApiKey(stored);
-  }, []);
-
-  useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, loading]);
-
-  function handleApiKeyChange(value: string) {
-    setApiKey(value);
-    if (value) {
-      localStorage.setItem(API_KEY_STORAGE, value);
-    } else {
-      localStorage.removeItem(API_KEY_STORAGE);
-    }
-  }
-
-  function clearApiKey() {
-    setApiKey("");
-    localStorage.removeItem(API_KEY_STORAGE);
-  }
 
   async function send(question: string) {
     if (!question.trim() || loading) return;
     const q = question.trim();
     setInput("");
     setRateLimited(false);
+
+    // Capture completed history before adding the new exchange to state
+    const history: HistoryMessage[] = messages
+      .filter((m) => m.content && !m.streaming)
+      .slice(-6)
+      .map((m) => ({ role: m.role, content: m.content }));
 
     setMessages((prev) => [
       ...prev,
@@ -78,8 +63,10 @@ export default function ChatPage() {
     const ctrl = new AbortController();
     abortRef.current = ctrl;
 
+    const apiKey = localStorage.getItem(API_KEY_STORAGE) || undefined;
+
     try {
-      for await (const event of queryRAGStream(q, ctrl.signal, apiKey || undefined)) {
+      for await (const event of queryRAGStream(q, ctrl.signal, apiKey, history)) {
         if (event.type === "chunk") {
           setMessages((prev) => {
             const last = prev[prev.length - 1];
@@ -288,41 +275,7 @@ export default function ChatPage() {
 
       {/* Sticky input area */}
       <div className="sticky bottom-4 space-y-2">
-        {/* API key panel */}
-        {showKeyInput && (
-          <div className="bg-white border border-slate-200 rounded-2xl px-4 py-3 flex items-center gap-2.5 shadow-sm">
-            <Key className="w-3.5 h-3.5 text-slate-400 flex-shrink-0" />
-            <input
-              type="password"
-              value={apiKey}
-              onChange={(e) => handleApiKeyChange(e.target.value)}
-              placeholder="tgolm_..."
-              className="flex-1 text-xs font-mono bg-transparent focus:outline-none text-slate-700 placeholder-slate-300"
-            />
-            {apiKey ? (
-              <button
-                type="button"
-                onClick={clearApiKey}
-                className="text-xs text-slate-400 hover:text-slate-600 transition-colors px-2 py-0.5 rounded-md hover:bg-slate-100"
-              >
-                {lang === "fr" ? "Supprimer" : "Clear"}
-              </button>
-            ) : (
-              <a
-                href="/developers"
-                className="text-xs font-medium hover:opacity-80 transition-opacity whitespace-nowrap"
-                style={{ color: "var(--togo-green)" }}
-              >
-                {lang === "fr" ? "Obtenir une clé →" : "Get a key →"}
-              </a>
-            )}
-          </div>
-        )}
-
-        {/* Rate limit banner */}
         {rateLimited && <RateLimitBanner />}
-
-        {/* Input form */}
         <form
           onSubmit={(e) => { e.preventDefault(); send(input); }}
           className="flex gap-2"
@@ -334,20 +287,6 @@ export default function ChatPage() {
             placeholder={t.chat.placeholder}
             className="flex-1 px-4 py-3.5 border border-slate-200 rounded-2xl text-sm bg-white focus:outline-none focus:ring-2 focus:ring-green-800/25 focus:border-green-800/50 shadow-sm transition-all"
           />
-          <button
-            type="button"
-            onClick={() => setShowKeyInput((v) => !v)}
-            title={lang === "fr" ? "Clé API" : "API Key"}
-            className={`px-3.5 py-3.5 rounded-2xl border transition-all shadow-sm ${
-              apiKey
-                ? "border-green-200 bg-green-50 text-green-700 hover:bg-green-100"
-                : showKeyInput
-                ? "border-slate-300 bg-slate-100 text-slate-600"
-                : "border-slate-200 bg-white text-slate-400 hover:bg-slate-50 hover:text-slate-600"
-            }`}
-          >
-            <Key className="w-4 h-4" />
-          </button>
           <button
             type="submit"
             disabled={loading || !input.trim()}

@@ -166,7 +166,11 @@ export default function CorpusPage() {
       if (selectedCategory) params.set("category", selectedCategory);
       if (selectedSource) params.set("source", selectedSource);
 
-      const res = await fetch(`${API_BASE}/v1/documents?${params}`, { headers: BASE_HEADERS, cache: "no-store" });
+      const key = localStorage.getItem("togolm-api-key") ?? "";
+      const res = await fetch(`${API_BASE}/v1/documents?${params}`, {
+        headers: { ...BASE_HEADERS, ...(key ? { "X-API-Key": key } : {}) },
+        cache: "no-store",
+      });
       if (!res.ok) {
         if (res.status === 429) throw new Error("rate_limited");
         throw new Error(`HTTP ${res.status}`);

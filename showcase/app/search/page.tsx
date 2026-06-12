@@ -46,7 +46,8 @@ export default function SearchPage() {
     setRateLimited(false);
     setSearched(false);
     try {
-      const data = await searchCorpus(q);
+      const key = localStorage.getItem("togolm-api-key") ?? "";
+      const data = await searchCorpus(q, undefined, key || undefined);
       setResults(data.results);
       setTotal(data.total);
       setLastQuery(q);

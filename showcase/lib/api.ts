@@ -56,11 +56,11 @@ export async function fetchStats(): Promise<CorpusStats> {
   return res.json();
 }
 
-export async function searchCorpus(q: string, source?: string): Promise<SearchResponse> {
+export async function searchCorpus(q: string, source?: string, apiKey?: string): Promise<SearchResponse> {
   const params = new URLSearchParams({ q });
   if (source) params.set("source", source);
   const res = await fetch(`${API_BASE}/v1/search?${params}`, {
-    headers: BASE_HEADERS,
+    headers: { ...BASE_HEADERS, ...(apiKey ? { "X-API-Key": apiKey } : {}) },
     cache: "no-store",
   });
   await checkResponse(res);
@@ -125,6 +125,11 @@ export async function queryRAG(question: string): Promise<QueryResponse> {
   return res.json();
 }
 
+export interface HistoryMessage {
+  role: "user" | "assistant";
+  content: string;
+}
+
 export type StreamEvent =
   | { type: "chunk"; text: string }
   | { type: "sources"; sources: QuerySource[]; latency_ms: number }
@@ -134,7 +139,15 @@ export async function* queryRAGStream(
   question: string,
   signal?: AbortSignal,
   apiKey?: string,
+  history?: HistoryMessage[],
 ): AsyncGenerator<StreamEvent> {
+  const body: Record<string, unknown> = { question };
+  if (history && history.length > 0) {
+    body.history = history.map((m) => ({
+      role: m.role,
+      content: m.content.slice(0, 500),
+    }));
+  }
   const res = await fetch(`${API_BASE}/v1/query/stream`, {
     method: "POST",
     headers: {
@@ -142,7 +155,7 @@ export async function* queryRAGStream(
       "Content-Type": "application/json",
       ...(apiKey ? { "X-API-Key": apiKey } : {}),
     },
-    body: JSON.stringify({ question }),
+    body: JSON.stringify(body),
     cache: "no-store",
     signal,
   });
