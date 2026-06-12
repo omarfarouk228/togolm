@@ -169,8 +169,8 @@ class InternationalSpider(BaseTogoSpider):
     """Fetch Togo country pages from major international institutions."""
 
     name = "international"
-    source = "international"   # overridden per page via meta
-    category = "economy"       # overridden per page via meta
+    source = "international"  # overridden per page via meta
+    category = "economy"  # overridden per page via meta
     language = "fr"
 
     custom_settings = {
@@ -181,8 +181,7 @@ class InternationalSpider(BaseTogoSpider):
             "Accept": "text/html,application/xhtml+xml,*/*;q=0.8",
             "Accept-Language": "fr-FR,fr;q=0.9,en;q=0.8",
             "User-Agent": (
-                "Mozilla/5.0 (compatible; TogoLM/1.0; "
-                "+https://github.com/omarfarouk228/togolm)"
+                "Mozilla/5.0 (compatible; TogoLM/1.0; +https://github.com/omarfarouk228/togolm)"
             ),
         },
     }
@@ -225,10 +224,7 @@ class InternationalSpider(BaseTogoSpider):
         if len(words) < 80:
             return
 
-        title = (
-            response.css("h1::text").get("").strip()
-            or page_meta["title"]
-        )
+        title = response.css("h1::text").get("").strip() or page_meta["title"]
 
         yield self.make_document(
             response=response,
@@ -258,17 +254,13 @@ class InternationalSpider(BaseTogoSpider):
                 )
 
     def _parse_bceao_doc(self, response):
-        title = (
-            response.css("h1::text").get("").strip()
-            or response.css("h2::text").get("").strip()
-        )
+        title = response.css("h1::text").get("").strip() or response.css("h2::text").get("").strip()
         if not title:
             return
 
-        content_html = (
-            response.css(".field-body, article, main .container").get("")
-            or response.css("main").get("")
-        )
+        content_html = response.css(".field-body, article, main .container").get(
+            ""
+        ) or response.css("main").get("")
         if not content_html:
             return
 

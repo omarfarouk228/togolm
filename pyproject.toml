@@ -18,7 +18,7 @@ dependencies = [
     # API
     "fastapi>=0.111",
     "uvicorn[standard]>=0.30",
-    "pydantic>=2.7",
+    "pydantic[email]>=2.7",
     "python-dotenv>=1.0",
     # AI
     "google-genai>=2.3.0",

@@ -48,7 +48,7 @@ ALL_SPIDERS = [
     # Juridique
     "journal_officiel",
     "otr",
-    "legal_pdf",          # PDF extraction from legitogo.gouv.tg and otr.tg
+    "legal_pdf",  # PDF extraction from legitogo.gouv.tg and otr.tg
     # International organisations (World Bank, IMF, AfDB, UNDP…)
     "international",
     # Beta sources (ul.tg, api.tg, ceet.tg, cour-constitutionnelle.tg, inam.tg)
