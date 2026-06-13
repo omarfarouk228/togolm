@@ -118,6 +118,7 @@ def _stream_without_corpus(question: str, history: list):
         msg = "Bonjour ! Je suis TogoLM, spécialisé dans les connaissances togolaises."
         yield f"data: {json.dumps({'type': 'chunk', 'text': msg})}\n\n"
 
+
 router = APIRouter(tags=["Query"])
 
 
@@ -202,7 +203,9 @@ async def query_corpus(request: QueryRequest):
     if _is_off_topic(request.question):
         answer = _answer_without_corpus(request.question, request.history)
         latency_ms = int((time.monotonic() - t0) * 1000)
-        return QueryResponse(answer=answer, sources=[], model="togolm-rag-v1", latency_ms=latency_ms)
+        return QueryResponse(
+            answer=answer, sources=[], model="togolm-rag-v1", latency_ms=latency_ms
+        )
 
     search_question = request.question
     if request.history:
