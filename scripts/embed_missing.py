@@ -154,7 +154,7 @@ def main():
             tqdm.write(f"  [ERROR] {source} doc {doc_id}: {e}")
 
     elapsed = time.time() - start
-    print(f"\nDone in {elapsed/60:.1f} min")
+    print(f"\nDone in {elapsed / 60:.1f} min")
     print(f"   Docs processed : {len(docs):,}")
     print(f"   Chunks created : {total_chunks:,}")
     print(f"   Errors         : {errors}")
