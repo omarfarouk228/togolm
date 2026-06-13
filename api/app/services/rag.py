@@ -40,7 +40,7 @@ def retrieve(
     question: str,
     category: str | None = None,
     top_k: int = 5,
-    min_score: float = 0.3,
+    min_score: float = 0.45,
 ) -> list[RetrievedChunk]:
     """
     Embed the question and return the top-k most relevant chunks.
@@ -79,6 +79,7 @@ def _chunk_vector_search(
         JOIN documents d ON d.id = c.document_id
         WHERE c.embedding IS NOT NULL
           AND d.status = 'active'
+          AND length(trim(coalesce(d.title, ''))) > 15
     """
     params: list = [query_vector]
 
@@ -87,23 +88,34 @@ def _chunk_vector_search(
         params.append(category)
 
     base_sql += " ORDER BY c.embedding <=> %s::vector LIMIT %s"
-    params += [query_vector, top_k]
+    params += [query_vector, top_k * 2]
 
     cur.execute(base_sql, params)
     rows = cur.fetchall()
 
-    return [
-        RetrievedChunk(
-            title=row[0] or "",
-            url=row[1],
-            source=row[2] or "",
-            category=row[3] or "",
-            content=row[4] or "",
-            score=float(row[5]),
+    seen_urls: set[str] = set()
+    results: list[RetrievedChunk] = []
+    for row in rows:
+        score = float(row[5])
+        if score < min_score:
+            continue
+        url = row[1] or ""
+        if url in seen_urls:
+            continue
+        seen_urls.add(url)
+        results.append(
+            RetrievedChunk(
+                title=row[0] or "",
+                url=url,
+                source=row[2] or "",
+                category=row[3] or "",
+                content=row[4] or "",
+                score=score,
+            )
         )
-        for row in rows
-        if float(row[5]) >= min_score
-    ]
+        if len(results) >= top_k:
+            break
+    return results
 
 
 def _fulltext_search(
@@ -203,13 +215,14 @@ def _generate_with_gemini(
 Tu maîtrises la législation, l'économie, l'éducation, l'histoire et l'actualité du Togo.
 
 Règles de réponse :
-1. Si le contexte du corpus contient les informations nécessaires, base ta réponse dessus et
-indique les sources.
-2. Si le contexte est insuffisant ou hors-sujet, réponds quand même avec tes connaissances
-générales sur le Togo — en précisant en fin de réponse : "⚠️ Cette réponse est basée sur
-mes connaissances générales et non sur le corpus TogoLM."
-3. Réponds toujours dans la langue de la question (français par défaut).
-4. Ne réponds jamais "je n'ai pas suffisamment d'informations" sans fournir une réponse utile."""
+1. Si le contexte du corpus contient les informations nécessaires, base ta réponse dessus.
+2. Ne mets JAMAIS de citations inline dans le texte (pas de [source], pas de [domaine — titre]).
+   Les sources sont affichées séparément par l'interface.
+3. Si le contexte est insuffisant ou hors-sujet, réponds quand même avec tes connaissances
+générales sur le Togo — en ajoutant en fin de réponse : "ℹ️ Aucun document du corpus ne couvre
+directement ce sujet — cette réponse est basée sur mes connaissances générales."
+4. Réponds toujours dans la langue de la question (français par défaut).
+5. Ne réponds jamais "je n'ai pas suffisamment d'informations" sans fournir une réponse utile."""
 
     history_block = ""
     if history:

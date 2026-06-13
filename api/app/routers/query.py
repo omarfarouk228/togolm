@@ -6,6 +6,7 @@ POST /v1/embed        — Embedding endpoint
 
 import json
 import os
+import re
 import time
 
 from fastapi import APIRouter, HTTPException
@@ -13,6 +14,110 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
 from api.app.services.rag import RetrievedChunk, build_answer, retrieve
+
+_GREETINGS_RE = re.compile(
+    r"^\s*(hello|hi|hey|bonjour|salut|bonsoir|bonne\s*nuit|good\s*morning|good\s*evening|"
+    r"coucou|allo|allô|yo|ok|okay|merci|thanks|thank\s*you|au\s*revoir|bye|bonne\s*journée|"
+    r"bonne\s*soirée|slt|bjr|svp|s\'il\s*vous\s*plaît)\s*[!?.,]?\s*$",
+    re.IGNORECASE,
+)
+_MATH_RE = re.compile(r"^\s*[\d\s\+\-\*\/\^\(\)=.,]+\s*$")
+
+
+def _is_off_topic(question: str) -> bool:
+    """Return True for greetings, math expressions, or very short non-questions."""
+    q = question.strip()
+    if _GREETINGS_RE.match(q):
+        return True
+    if _MATH_RE.match(q):
+        return True
+    if len(q.split()) < 3:
+        return True
+    return False
+
+
+def _answer_without_corpus(question: str, history: list) -> str:
+    """Call Gemini directly without corpus context for off-topic questions."""
+    if not os.getenv("GEMINI_API_KEY"):
+        return (
+            "Bonjour ! Je suis TogoLM, spécialisé dans les connaissances togolaises. "
+            "Posez-moi une question sur le Togo — lois, économie, éducation, actualité…"
+        )
+    from google import genai
+    from google.genai import types
+
+    client = genai.Client(api_key=os.environ["GEMINI_API_KEY"])
+    system_instruction = (
+        "Tu es TogoLM, un assistant IA spécialisé dans les connaissances togolaises. "
+        "Réponds de façon utile et concise. "
+        "Si la question est hors de ta spécialité (salutation, calcul, question générale non liée au Togo), "
+        "réponds poliment et rappelle brièvement que tu es spécialisé sur le Togo."
+    )
+    history_block = ""
+    if history:
+        lines = [
+            f"{'Utilisateur' if m.role == 'user' else 'Assistant'}: {m.content[:300]}"
+            for m in history[-4:]
+        ]
+        history_block = "HISTORIQUE:\n" + "\n".join(lines) + "\n\n"
+    try:
+        response = client.models.generate_content(
+            model="gemini-2.5-flash",
+            contents=f"{history_block}Question: {question}",
+            config=types.GenerateContentConfig(
+                system_instruction=system_instruction,
+                max_output_tokens=300,
+            ),
+        )
+        return response.text or ""
+    except Exception:
+        return (
+            "Bonjour ! Je suis TogoLM, spécialisé dans les connaissances togolaises. "
+            "Posez-moi une question sur le Togo !"
+        )
+
+
+def _stream_without_corpus(question: str, history: list):
+    """Stream a Gemini response without corpus context for off-topic questions."""
+    if not os.getenv("GEMINI_API_KEY"):
+        msg = (
+            "Bonjour ! Je suis TogoLM, spécialisé dans les connaissances togolaises. "
+            "Posez-moi une question sur le Togo — lois, économie, éducation, actualité…"
+        )
+        yield f"data: {json.dumps({'type': 'chunk', 'text': msg})}\n\n"
+        return
+    from google import genai
+    from google.genai import types
+
+    client = genai.Client(api_key=os.environ["GEMINI_API_KEY"])
+    system_instruction = (
+        "Tu es TogoLM, un assistant IA spécialisé dans les connaissances togolaises. "
+        "Réponds de façon utile et concise. "
+        "Si la question est hors de ta spécialité (salutation, calcul, question générale non liée au Togo), "
+        "réponds poliment et rappelle brièvement que tu es spécialisé sur le Togo."
+    )
+    history_block = ""
+    if history:
+        lines = [
+            f"{'Utilisateur' if m.role == 'user' else 'Assistant'}: {m.content[:300]}"
+            for m in history[-4:]
+        ]
+        history_block = "HISTORIQUE:\n" + "\n".join(lines) + "\n\n"
+    try:
+        for chunk in client.models.generate_content_stream(
+            model="gemini-2.5-flash",
+            contents=f"{history_block}Question: {question}",
+            config=types.GenerateContentConfig(
+                system_instruction=system_instruction,
+                max_output_tokens=300,
+            ),
+        ):
+            if chunk.text:
+                yield f"data: {json.dumps({'type': 'chunk', 'text': chunk.text})}\n\n"
+    except Exception:
+        msg = "Bonjour ! Je suis TogoLM, spécialisé dans les connaissances togolaises."
+        yield f"data: {json.dumps({'type': 'chunk', 'text': msg})}\n\n"
+
 
 router = APIRouter(tags=["Query"])
 
@@ -95,6 +200,13 @@ async def query_corpus(request: QueryRequest):
     """Query the Togolese corpus via RAG and return an answer with sources."""
     t0 = time.monotonic()
 
+    if _is_off_topic(request.question):
+        answer = _answer_without_corpus(request.question, request.history)
+        latency_ms = int((time.monotonic() - t0) * 1000)
+        return QueryResponse(
+            answer=answer, sources=[], model="togolm-rag-v1", latency_ms=latency_ms
+        )
+
     search_question = request.question
     if request.history:
         search_question = rewrite_question_with_history(request.question, request.history)
@@ -136,12 +248,14 @@ def _stream_gemini(
         "Tu es TogoLM, un assistant IA expert des connaissances togolaises.\n"
         "Tu maîtrises la législation, l'économie, l'éducation, l'histoire et l'actualité du Togo.\n\n"
         "Règles de réponse :\n"
-        "1. Si le contexte du corpus contient les informations nécessaires, base ta réponse dessus et indique les sources.\n"
-        "2. Si le contexte est insuffisant ou hors-sujet, réponds quand même avec tes connaissances générales sur le Togo "
-        "— en précisant en fin de réponse : "
-        '"⚠️ Cette réponse est basée sur mes connaissances générales et non sur le corpus TogoLM."\n'
-        "3. Réponds toujours dans la langue de la question (français par défaut).\n"
-        "4. Ne réponds jamais \"je n'ai pas suffisamment d'informations\" sans fournir une réponse utile."
+        "1. Si le contexte du corpus contient les informations nécessaires, base ta réponse dessus.\n"
+        "2. Ne mets JAMAIS de citations inline dans le texte (pas de [source], pas de [domaine — titre]). "
+        "Les sources sont affichées séparément par l'interface.\n"
+        "3. Si le contexte est insuffisant ou hors-sujet, réponds quand même avec tes connaissances générales sur le Togo "
+        "— en ajoutant en fin de réponse : "
+        '"ℹ️ Aucun document du corpus ne couvre directement ce sujet — cette réponse est basée sur mes connaissances générales."\n'
+        "4. Réponds toujours dans la langue de la question (français par défaut).\n"
+        "5. Ne réponds jamais \"je n'ai pas suffisamment d'informations\" sans fournir une réponse utile."
     )
 
     corpus_block = context if context else "(aucun document pertinent trouvé dans le corpus)"
@@ -195,6 +309,13 @@ def stream_query(request: QueryRequest):
     def generate():
         t0 = time.monotonic()
 
+        if _is_off_topic(request.question):
+            yield from _stream_without_corpus(request.question, request.history or [])
+            latency_ms = int((time.monotonic() - t0) * 1000)
+            yield f"data: {json.dumps({'type': 'sources', 'sources': [], 'latency_ms': latency_ms})}\n\n"
+            yield "data: [DONE]\n\n"
+            return
+
         # Rewrite the question using conversation history so the vector search
         # operates on a standalone, fully-resolved query instead of a pronoun-laden follow-up.
         search_question = request.question
@@ -220,13 +341,13 @@ def stream_query(request: QueryRequest):
                 if chunks:
                     yield from _extractive_stream(chunks)
                 else:
-                    no_result = "Aucune information pertinente trouvée dans le corpus TogoLM pour cette question."
+                    no_result = "Je n'ai pas trouvé de documents pertinents dans le corpus pour cette question."
                     yield f"data: {json.dumps({'type': 'chunk', 'text': no_result})}\n\n"
         elif chunks:
             yield from _extractive_stream(chunks)
         else:
             no_result = (
-                "Aucune information pertinente trouvée dans le corpus TogoLM pour cette question."
+                "Je n'ai pas trouvé de documents pertinents dans le corpus pour cette question."
             )
             yield f"data: {json.dumps({'type': 'chunk', 'text': no_result})}\n\n"
 

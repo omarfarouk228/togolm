@@ -16,7 +16,7 @@ TogoLM is an open-source AI knowledge layer for Togo — a complete pipeline fro
 
 | Layer | Description |
 |-------|-------------|
-| **Corpus** | 50 000+ structured Togolese documents — laws, government data, press, education |
+| **Corpus** | 62 000+ structured Togolese documents — laws, government data, press, education |
 | **RAG Engine** | Retrieval-Augmented Generation over the Togolese corpus |
 | **Public API** | REST endpoints consumable by any developer or app |
 | **Fine-tuned LLM** | Mistral 7B adapted to the Togolese context (training in progress) |
@@ -112,7 +112,8 @@ uv run scrapy crawl service_public \
 
 Available spiders: `journal_officiel`, `presidence`, `assemblee_nationale`,
 `inseed`, `gouv_ministry`, `service_public`, `icilome`, `togofirst`,
-`republicoftogo`, `savoirnews`, `letogolais`, `otr`
+`togoactualite`, `lomeinfos`, `republicoftogo`, `savoirnews`, `letogolais`,
+`otr`, `wikipedia`, `cnss`, `legitogo`, `inam`, `international`
 
 ### 5 — Ingest into PostgreSQL
 
@@ -202,36 +203,44 @@ uv run python -m finetuning.dataset.formatter \
 
 ---
 
-## Corpus coverage (V1 target: 50 000 docs)
+## Corpus coverage (62 000+ docs — 30 sources)
 
-| Source | Category | Status |
-|--------|----------|--------|
-| jo.gouv.tg | Legal | ✅ Ingested |
-| presidence.gouv.tg | Politics | ✅ Ingested |
-| assemblee-nationale.tg | Legal | ✅ Ingested |
-| inseed.tg | Economy / Statistics | ✅ Ingested |
-| finances.gouv.tg | Economy | ✅ Ingested |
-| education.gouv.tg | Education | ✅ Ingested |
-| agriculture.gouv.tg | Agriculture | ✅ Ingested |
-| commerce.gouv.tg | Economy | ✅ Ingested |
-| environnement.gouv.tg | Agriculture | ✅ Ingested |
-| justice.gouv.tg | Legal | ✅ Ingested |
-| securite.gouv.tg | Politics | ✅ Ingested |
-| energie.gouv.tg | Economy | ✅ Ingested |
-| tourisme.gouv.tg | Economy | ✅ Ingested |
-| presidenceduconseil.gouv.tg | Politics | ✅ Ingested |
-| urbanisme.gouv.tg | Economy | ✅ Ingested |
-| service-public.gouv.tg | Administrative | ✅ Ingested |
-| otr.tg | Legal / Fiscal | ✅ Ingested |
-| icilome.com | Press | ✅ Ingested |
-| savoirnews.net | Press | ✅ Ingested |
-| republicoftogo.com | Press | ✅ Ingested |
-| togofirst.com | Press / Economy | 🔜 Crawling |
-| letogolais.com | Press | 🔜 Crawling |
-| sante.gouv.tg | Health | ⏭ React SPA — no sitemap |
-| travail.gouv.tg | Legal | ⏭ No site deployed |
-| infrastructure.gouv.tg | Economy | ⏭ SSL error |
-| plan.gouv.tg | Economy | ⏭ Unreachable |
+| Source | Category | Docs | Status |
+|--------|----------|-----:|--------|
+| icilome.com | Press | 22 387 | ✅ Ingested |
+| togoactualite.com | Press | 13 196 | ✅ Ingested |
+| togofirst.com | Press / Economy | 8 863 | ✅ Ingested |
+| lomeinfos.com | Press | 4 361 | ✅ Ingested |
+| jo.gouv.tg | Legal | 4 066 | ✅ Ingested |
+| fr.wikipedia.org | Encyclopedic | 1 839 | ✅ Ingested |
+| letogolais.com | Press | 1 377 | ✅ Ingested |
+| finances.gouv.tg | Economy | 1 027 | ✅ Ingested |
+| savoirnews.net | Press | 1 019 | ✅ Ingested |
+| commerce.gouv.tg | Economy | 580 | ✅ Ingested |
+| environnement.gouv.tg | Agriculture | 509 | ✅ Ingested |
+| agriculture.gouv.tg | Agriculture | 438 | ✅ Ingested |
+| tourisme.gouv.tg | Economy | 371 | ✅ Ingested |
+| otr.tg | Legal / Fiscal | 323 | ✅ Ingested |
+| presidenceduconseil.gouv.tg | Politics | 303 | ✅ Ingested |
+| education.gouv.tg | Education | 295 | ✅ Ingested |
+| urbanisme.gouv.tg | Economy | 228 | ✅ Ingested |
+| justice.gouv.tg | Legal | 214 | ✅ Ingested |
+| cnss.tg | Administrative | 192 | ✅ Ingested |
+| republicoftogo.com | Press | 152 | ✅ Ingested |
+| service-public.gouv.tg | Administrative | 141 | ✅ Ingested |
+| securite.gouv.tg | Politics | 98 | ✅ Ingested |
+| inseed.tg | Economy / Statistics | 96 | ✅ Ingested |
+| energie.gouv.tg | Economy | 54 | ✅ Ingested |
+| presidence.gouv.tg | Politics | 17 | ✅ Ingested |
+| legitogo.gouv.tg | Legal | 9 | ✅ Ingested |
+| assemblee-nationale.tg | Legal | 8 | ✅ Ingested |
+| inam.tg | Health | 3 | ✅ Ingested |
+| europa.eu | International | 1 | ✅ Ingested |
+| unicef.org | International | 1 | ✅ Ingested |
+| sante.gouv.tg | Health | — | ⏭ React SPA — no sitemap |
+| travail.gouv.tg | Legal | — | ⏭ No site deployed |
+| infrastructure.gouv.tg | Economy | — | ⏭ SSL error |
+| plan.gouv.tg | Economy | — | ⏭ Unreachable |
 
 ---
 
@@ -245,12 +254,23 @@ We welcome contributions — new corpus sources, scrapers, API improvements, tra
 
 ---
 
-## Model on Hugging Face
+## Models on Hugging Face
+
+| Model | Type | Link |
+|-------|------|------|
+| `togolm-7b-instruct-v1` | Fine-tuned LLM (Mistral 7B QLoRA) | [🤗 togolm/togolm-7b-instruct-v1](https://huggingface.co/togolm/togolm-7b-instruct-v1) |
+| `togolm-corpus-v1` | Training dataset (Q&A pairs) | [🤗 togolm/togolm-corpus-v1](https://huggingface.co/togolm/togolm-corpus-v1) |
 
 ```python
-# Coming soon — fine-tuning in progress
 from transformers import pipeline
+
 pipe = pipeline("text-generation", model="togolm/togolm-7b-instruct-v1")
+result = pipe(
+    "Comment créer une entreprise au Togo ?",
+    max_new_tokens=300,
+    temperature=0.7,
+)
+print(result[0]["generated_text"])
 ```
 
 ---

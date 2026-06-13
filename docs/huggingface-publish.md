@@ -4,18 +4,18 @@ This document tracks everything needed to publish the `togolm-7b-instruct-v1` mo
 
 ---
 
-## Current state (as of 2026-05-17)
+## Current state (as of 2026-06-13) — ✅ Published
 
 | Component | Status | Notes |
 |-----------|--------|-------|
-| Corpus (documents in DB) | ~183 + ingest in progress | Target: 5 000+ before generation |
-| Q&A pairs generated | 9 | Way too few — need 2 000+ minimum |
-| Dataset formatted | ✅ formatter.py ready | Needs data first |
-| Fine-tuning script | ✅ trainer.py ready | QLoRA on Mistral 7B v0.3 |
-| Colab notebook | ✅ train_colab.ipynb ready | Tested structure |
-| HF account / org | ❓ Needs `togolm` org on HF | Create at huggingface.co |
-| GEMINI_API_KEY | ❌ Placeholder | Required for dataset generation |
-| Model card (README) | ❌ Not written yet | Template below |
+| Corpus (documents in DB) | ✅ 62 168 docs — 30 sources | Production DB on VPS |
+| Q&A dataset | ✅ Published | [togolm/togolm-corpus-v1](https://huggingface.co/togolm/togolm-corpus-v1) |
+| Dataset formatted | ✅ Done | Alpaca format |
+| Fine-tuning script | ✅ Done | QLoRA on Mistral 7B v0.3 |
+| Colab notebook | ✅ Done | train_colab.ipynb |
+| HF account / org | ✅ `togolm` org active | huggingface.co/togolm |
+| Fine-tuned model | ✅ Published | [togolm/togolm-7b-instruct-v1](https://huggingface.co/togolm/togolm-7b-instruct-v1) |
+| Model card | ✅ Written | Included in HF repo |
 
 ---
 
@@ -311,17 +311,17 @@ Apache 2.0 — same as the base model.
 
 ---
 
-## Checklist before publishing
+## Checklist
 
-- [ ] ≥ 2 000 Q&A pairs generated and reviewed
-- [ ] Train/eval split done (90/10)
-- [ ] Training loss converged (eval loss < 1.5)
-- [ ] Manual evaluation passed (see Step 6)
-- [ ] LoRA adapters merged into full model
-- [ ] Model card written and complete
-- [ ] `togolm` HF organization created
-- [ ] Model tested with `pipeline()` from the HF Hub URL
-- [ ] README.md of this repo updated with the HF model link
+- [x] ≥ 2 000 Q&A pairs generated and reviewed
+- [x] Train/eval split done (90/10)
+- [x] Training loss converged (eval loss < 1.5)
+- [x] Manual evaluation passed (see Step 6)
+- [x] LoRA adapters merged into full model
+- [x] Model card written and complete
+- [x] `togolm` HF organization created
+- [x] Model tested with `pipeline()` from the HF Hub URL
+- [x] README.md of this repo updated with the HF model link
 
 ---
 
