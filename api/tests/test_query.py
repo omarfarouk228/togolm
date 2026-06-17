@@ -178,7 +178,7 @@ class TestStreamEndpoint:
 # Off-topic detection (_is_off_topic unit tests)
 # ---------------------------------------------------------------------------
 
-from api.app.routers.query import _is_off_topic, _contains_code  # noqa: E402
+from api.app.routers.query import _contains_code, _is_off_topic  # noqa: E402
 
 
 class TestOffTopicDetection:
