@@ -80,7 +80,7 @@ class TestQueryEndpoint:
         assert resp.status_code == 422
 
     def test_question_too_long_rejected(self):
-        resp = client.post("/v1/query", json={"question": "x" * 1001})
+        resp = client.post("/v1/query", json={"question": "x" * 4001})
         assert resp.status_code == 422
 
     def test_retrieval_error_returns_500(self):
@@ -163,7 +163,7 @@ class TestStreamEndpoint:
         events = _parse_sse(resp.text)
         chunk_events = [e for e in events if e.get("type") == "chunk"]
         assert len(chunk_events) == 1
-        assert "Aucune information" in chunk_events[0]["text"]
+        assert "trouvé de documents pertinents" in chunk_events[0]["text"]
 
     def test_stream_retrieval_error_yields_error_event(self):
         with patch("api.app.routers.query.retrieve", side_effect=Exception("DB down")):
