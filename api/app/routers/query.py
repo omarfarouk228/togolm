@@ -128,7 +128,7 @@ class HistoryMessage(BaseModel):
 
 
 class QueryRequest(BaseModel):
-    question: str = Field(..., min_length=3, max_length=1000)
+    question: str = Field(..., min_length=3, max_length=4000)
     category: str | None = None
     language: str = "fr"
     max_tokens: int = Field(500, ge=50, le=2000)
