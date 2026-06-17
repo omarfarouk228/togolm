@@ -34,7 +34,7 @@ export default function ChatPage() {
   const [loading, setLoading] = useState(false);
   const [rateLimited, setRateLimited] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
-  const inputRef = useRef<HTMLInputElement>(null);
+  const inputRef = useRef<HTMLTextAreaElement>(null);
   const abortRef = useRef<AbortController | null>(null);
 
   useEffect(() => {
@@ -278,19 +278,31 @@ export default function ChatPage() {
         {rateLimited && <RateLimitBanner />}
         <form
           onSubmit={(e) => { e.preventDefault(); send(input); }}
-          className="flex gap-2"
+          className="flex gap-2 items-end"
         >
-          <input
-            ref={inputRef}
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            placeholder={t.chat.placeholder}
-            className="flex-1 px-4 py-3.5 border border-slate-200 rounded-2xl text-sm bg-white focus:outline-none focus:ring-2 focus:ring-green-800/25 focus:border-green-800/50 shadow-sm transition-all"
-          />
+          <div className="flex-1 relative">
+            <textarea
+              ref={inputRef}
+              value={input}
+              onChange={(e) => setInput(e.target.value.slice(0, 4000))}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(input); }
+              }}
+              placeholder={t.chat.placeholder}
+              rows={1}
+              className="w-full px-4 py-3.5 border border-slate-200 rounded-2xl text-sm bg-white focus:outline-none focus:ring-2 focus:ring-green-800/25 focus:border-green-800/50 shadow-sm transition-all resize-none overflow-hidden"
+              style={{ minHeight: "52px", maxHeight: "200px", overflowY: input.length > 200 ? "auto" : "hidden" }}
+            />
+            {input.length > 3600 && (
+              <span className="absolute bottom-1.5 right-3 text-xs text-slate-400 pointer-events-none">
+                {input.length}/4000
+              </span>
+            )}
+          </div>
           <button
             type="submit"
             disabled={loading || !input.trim()}
-            className="px-4 py-3.5 rounded-2xl text-white disabled:opacity-40 transition-opacity hover:opacity-90 shadow-sm"
+            className="px-4 py-3.5 rounded-2xl text-white disabled:opacity-40 transition-opacity hover:opacity-90 shadow-sm shrink-0"
             style={{ background: "var(--togo-green)" }}
           >
             <Send className="w-4 h-4" />
