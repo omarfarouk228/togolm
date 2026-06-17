@@ -172,3 +172,98 @@ class TestStreamEndpoint:
         error_events = [e for e in events if e.get("type") == "error"]
         assert len(error_events) == 1
         assert "DB down" in error_events[0]["message"]
+
+
+# ---------------------------------------------------------------------------
+# Off-topic detection (_is_off_topic unit tests)
+# ---------------------------------------------------------------------------
+
+from api.app.routers.query import _is_off_topic, _contains_code  # noqa: E402
+
+
+class TestOffTopicDetection:
+    # ── should be flagged as off-topic ──────────────────────────────────────
+
+    def test_greeting_fr(self):
+        assert _is_off_topic("Bonjour !")
+
+    def test_greeting_en(self):
+        assert _is_off_topic("Hello")
+
+    def test_math_expression(self):
+        assert _is_off_topic("3 + 4 * 2")
+
+    def test_too_short(self):
+        assert _is_off_topic("ok merci")
+
+    def test_code_review_fr(self):
+        assert _is_off_topic("que penses-tu de ce code ? def foo(): pass")
+
+    def test_code_review_with_pasted_env_file(self):
+        env_block = (
+            "que penses-tu de ce code ?\n"
+            "SECRET_KEY=change_me\n"
+            "POSTGRES_USER=postgres\n"
+            "POSTGRES_DB=karaba\n"
+            "SMTP_HOST=mail.example.com\n"
+        )
+        assert _is_off_topic(env_block)
+
+    def test_code_review_analyse(self):
+        assert _is_off_topic("Analyse ce code s'il te plaît : def hello(): print('hi')")
+
+    def test_code_review_debug(self):
+        assert _is_off_topic("Debug ce script et dis-moi ce qui ne va pas")
+
+    def test_code_fence_in_message(self):
+        assert _is_off_topic("que penses-tu de ```python\nprint('hello')\n```")
+
+    def test_env_file_structural_detection(self):
+        env = "SECRET_KEY=abc\nPOSTGRES_USER=pg\nSTRIPE_SECRET_KEY=sk_test\nSMTP_HOST=mail.x.com"
+        assert _contains_code(env)
+
+    def test_python_syntax_structural_detection(self):
+        code = "from fastapi import APIRouter\nasync def handler():\n    pass"
+        assert _contains_code(code)
+
+    def test_recipe_fr(self):
+        assert _is_off_topic("Donne-moi une recette de poulet yassa")
+
+    def test_cooking_fr(self):
+        assert _is_off_topic("Comment cuisiner du riz avec des légumes ?")
+
+    def test_creative_writing_poem(self):
+        assert _is_off_topic("Écris-moi un poème sur la nature")
+
+    def test_creative_writing_story(self):
+        assert _is_off_topic("Écris une histoire courte pour enfants")
+
+    def test_sports_score(self):
+        assert _is_off_topic("Quel est le score du match PSG-OM ?")
+
+    def test_programming_help(self):
+        assert _is_off_topic("Comment programmer une API REST en Python ?")
+
+    # ── should NOT be flagged (valid Togo questions) ─────────────────────────
+
+    def test_togo_constitution(self):
+        assert not _is_off_topic("Quel est le régime politique du Togo ?")
+
+    def test_code_du_travail_togo(self):
+        # "code" appears but in a Togo-legal context — must not be blocked
+        assert not _is_off_topic("Que dit le code du travail togolais sur les congés payés ?")
+
+    def test_togo_economy(self):
+        assert not _is_off_topic("Comment fonctionne le port autonome de Lomé ?")
+
+    def test_togo_education(self):
+        assert not _is_off_topic("Quels sont les diplômes reconnus par l'État togolais ?")
+
+    def test_togo_mobile_money(self):
+        assert not _is_off_topic("Comment utiliser Flooz pour les paiements au Togo ?")
+
+    def test_togo_agriculture(self):
+        assert not _is_off_topic("Quelles sont les principales cultures vivrières au Togo ?")
+
+    def test_togo_history(self):
+        assert not _is_off_topic("Quand le Togo a-t-il obtenu son indépendance ?")

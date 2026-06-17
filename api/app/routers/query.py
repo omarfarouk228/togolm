@@ -23,15 +23,65 @@ _GREETINGS_RE = re.compile(
 )
 _MATH_RE = re.compile(r"^\s*[\d\s\+\-\*\/\^\(\)=.,]+\s*$")
 
+# Structural code detection
+_ENV_LINE_RE = re.compile(r"^[A-Z][A-Z0-9_]{2,}=", re.MULTILINE)
+_CODE_FENCE_RE = re.compile(r"```|\"\"\"")
+_CODE_SYNTAX_RE = re.compile(
+    r"\bdef \w+\s*\(|\bclass \w+[\s:(]|@router\.|@app\."
+    r"|from \w+ import |\basync def \b|\bSELECT\b.{1,60}\bFROM\b"
+    r"|\b(?:const|let|var)\s+\w+\s*=|#include\s*<",
+    re.IGNORECASE,
+)
+
+# Intent-based detection for common off-topic categories
+_OFF_TOPIC_INTENT_RE = re.compile(
+    r"(?:"
+    # code review / debug
+    r"(?:penses?-tu|ton avis)\s+(?:sur|de)\s+(?:ce\s+)?(?:code|script|config(?:uration)?|\.env)\b"
+    r"|(?:penses?-tu|what do you think)\s+(?:de|of|about)\s+(?:this|ce|mon|le)\s+(?:code|script|programme)\b"
+    r"|(?:analyse[rz]?|review|audite[rz]?|debug(?:gue)?|corrige[rz]?)\s+(?:ce|mon|le|cet?)\s+(?:code|script|programme|fichier)"
+    r"|que fait\s+(?:ce|mon|le)\s+code\b"
+    r"|explique[rz]?\s+(?:ce|mon|le)\s+(?:code|script)\b"
+    # cooking / recipes
+    r"|\brecette\s+de\b"
+    r"|\bcomment\s+cuisiner\b"
+    r"|\bcomment\s+pr[eé]parer\s+(?:un|une|le|la|du|des)\b"
+    # creative writing unrelated to Togo
+    r"|\b[eé]cri[rst][\s-]+(?:moi[\s-]+)?(?:une?\s+)?(?:histoire|po[eè]me|roman|chanson|blague|haïku)\b"
+    r"|write\s+(?:me\s+)?(?:a|an)\s+(?:story|poem|song|joke|novel)\b"
+    # sports scores
+    r"|\b(?:score|r[eé]sultat)\s+du\s+match\b"
+    # general programming help (not Togo-specific)
+    r"|\bcomment\s+(?:coder|programmer|d[eé]bugger)\b"
+    r")",
+    re.IGNORECASE,
+)
+
+
+def _contains_code(q: str) -> bool:
+    """Return True when the message body looks like shared source code."""
+    if len(_ENV_LINE_RE.findall(q)) >= 3:
+        return True
+    if _CODE_FENCE_RE.search(q):
+        return True
+    if len(_CODE_SYNTAX_RE.findall(q)) >= 2:
+        return True
+    return False
+
 
 def _is_off_topic(question: str) -> bool:
-    """Return True for greetings, math expressions, or very short non-questions."""
+    """Return True for messages outside TogoLM's domain: greetings, math,
+    code dumps, code-review requests, recipes, creative writing, sports."""
     q = question.strip()
     if _GREETINGS_RE.match(q):
         return True
     if _MATH_RE.match(q):
         return True
     if len(q.split()) < 3:
+        return True
+    if _OFF_TOPIC_INTENT_RE.search(q):
+        return True
+    if _contains_code(q):
         return True
     return False
 
