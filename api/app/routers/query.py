@@ -28,9 +28,10 @@ _ENV_LINE_RE = re.compile(r"^[A-Z][A-Z0-9_]{2,}=", re.MULTILINE)
 _CODE_FENCE_RE = re.compile(r"```|\"\"\"")
 _CODE_SYNTAX_RE = re.compile(
     r"\bdef \w+\s*\(|\bclass \w+[\s:(]|@router\.|@app\."
-    r"|from \w+ import |\basync def \b|\bSELECT\b.{1,60}\bFROM\b"
-    r"|\b(?:const|let|var)\s+\w+\s*=|#include\s*<",
-    re.IGNORECASE,
+    r"|from [\w.]+ import |\basync def \b|\bSELECT\b.{1,60}\bFROM\b"
+    r"|\b(?:const|let|var)\s+\w+\s*=|#include\s*<"
+    r"|\bimport\s+\w[\w.]*(?:\s*,\s*\w[\w.]*)*\s*$",
+    re.IGNORECASE | re.MULTILINE,
 )
 
 # Intent-based detection for common off-topic categories
@@ -40,7 +41,10 @@ _OFF_TOPIC_INTENT_RE = re.compile(
     r"(?:penses?-tu|ton avis)\s+(?:sur|de)\s+(?:ce\s+)?(?:code|script|config(?:uration)?|\.env)\b"
     r"|(?:penses?-tu|what do you think)\s+(?:de|of|about)\s+(?:this|ce|mon|le)\s+(?:code|script|programme)\b"
     r"|(?:analyse[rz]?|review|audite[rz]?|debug(?:gue)?|corrige[rz]?)\s+(?:ce|mon|le|cet?)\s+(?:code|script|programme|fichier)"
-    r"|que fait\s+(?:ce|mon|le)\s+code\b"
+    r"|que fait\s+(?:ce|mon|le)\s+(?:code|script|programme)\b"
+    r"|(?:ce|mon|le)\s+(?:code|script|programme)\s+(?:fait|fais|faisait)\s+quoi\b"
+    r"|(?:c'est|c'est)\s+quoi\s+(?:ce|ton|ce\s+bout\s+de)\s+code\b"
+    r"|[àa]\s+quoi\s+(?:sert|correspond)\s+(?:ce|mon|le)\s+(?:code|script)\b"
     r"|explique[rz]?\s+(?:ce|mon|le)\s+(?:code|script)\b"
     # cooking / recipes
     r"|\brecette\s+de\b"
@@ -49,6 +53,10 @@ _OFF_TOPIC_INTENT_RE = re.compile(
     # creative writing unrelated to Togo
     r"|\b[eé]cri[rst][\s-]+(?:moi[\s-]+)?(?:une?\s+)?(?:histoire|po[eè]me|roman|chanson|blague|haïku)\b"
     r"|write\s+(?:me\s+)?(?:a|an)\s+(?:story|poem|song|joke|novel)\b"
+    # code generation requests
+    r"|\b[eé]cri[rst][\s-]+(?:moi[\s-]+)?(?:une?\s+)?(?:fonction|m[eé]thode|classe|script|programme|composant|requ[eê]te SQL)\b"
+    r"|\bg[eé]n[eè]re[rz]?\s+(?:un|une)\s+(?:code|script|fonction|classe|programme)\b"
+    r"|write\s+(?:me\s+)?(?:a|an)\s+(?:function|method|class|script|program|component|query)\b"
     # sports scores
     r"|\b(?:score|r[eé]sultat)\s+du\s+match\b"
     # general programming help (not Togo-specific)
@@ -98,10 +106,16 @@ def _answer_without_corpus(question: str, history: list) -> str:
 
     client = genai.Client(api_key=os.environ["GEMINI_API_KEY"])
     system_instruction = (
-        "Tu es TogoLM, un assistant IA spécialisé dans les connaissances togolaises. "
-        "Réponds de façon utile et concise. "
-        "Si la question est hors de ta spécialité (salutation, calcul, question générale non liée au Togo), "
-        "réponds poliment et rappelle brièvement que tu es spécialisé sur le Togo."
+        "Tu es TogoLM, un assistant IA exclusivement spécialisé dans les connaissances togolaises : "
+        "lois, économie, éducation, histoire, actualité et culture du Togo.\n\n"
+        "RÈGLES ABSOLUES — ne les enfreins jamais :\n"
+        "1. Ne génère JAMAIS de code (fonctions, scripts, programmes, classes, etc.).\n"
+        "2. Ne fais JAMAIS d'analyse, de revue ou de correction de code.\n"
+        "3. Ne rédige pas de contenu créatif sans lien avec le Togo (poèmes, histoires, traductions génériques).\n"
+        "4. Pour toute demande hors de ta spécialité, réponds UNIQUEMENT par une phrase courte du type : "
+        '"Je suis spécialisé dans les connaissances togolaises. '
+        'Posez-moi une question sur le Togo — lois, économie, éducation, histoire…"\n'
+        "5. Tu peux répondre brièvement aux salutations avant de rediriger."
     )
     history_block = ""
     if history:
@@ -116,7 +130,7 @@ def _answer_without_corpus(question: str, history: list) -> str:
             contents=f"{history_block}Question: {question}",
             config=types.GenerateContentConfig(
                 system_instruction=system_instruction,
-                max_output_tokens=300,
+                max_output_tokens=200,
             ),
         )
         return response.text or ""
@@ -141,10 +155,16 @@ def _stream_without_corpus(question: str, history: list):
 
     client = genai.Client(api_key=os.environ["GEMINI_API_KEY"])
     system_instruction = (
-        "Tu es TogoLM, un assistant IA spécialisé dans les connaissances togolaises. "
-        "Réponds de façon utile et concise. "
-        "Si la question est hors de ta spécialité (salutation, calcul, question générale non liée au Togo), "
-        "réponds poliment et rappelle brièvement que tu es spécialisé sur le Togo."
+        "Tu es TogoLM, un assistant IA exclusivement spécialisé dans les connaissances togolaises : "
+        "lois, économie, éducation, histoire, actualité et culture du Togo.\n\n"
+        "RÈGLES ABSOLUES — ne les enfreins jamais :\n"
+        "1. Ne génère JAMAIS de code (fonctions, scripts, programmes, classes, etc.).\n"
+        "2. Ne fais JAMAIS d'analyse, de revue ou de correction de code.\n"
+        "3. Ne rédige pas de contenu créatif sans lien avec le Togo (poèmes, histoires, traductions génériques).\n"
+        "4. Pour toute demande hors de ta spécialité, réponds UNIQUEMENT par une phrase courte du type : "
+        '"Je suis spécialisé dans les connaissances togolaises. '
+        'Posez-moi une question sur le Togo — lois, économie, éducation, histoire…"\n'
+        "5. Tu peux répondre brièvement aux salutations avant de rediriger."
     )
     history_block = ""
     if history:
@@ -159,7 +179,7 @@ def _stream_without_corpus(question: str, history: list):
             contents=f"{history_block}Question: {question}",
             config=types.GenerateContentConfig(
                 system_instruction=system_instruction,
-                max_output_tokens=300,
+                max_output_tokens=200,
             ),
         ):
             if chunk.text:
