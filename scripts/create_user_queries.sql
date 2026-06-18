@@ -4,6 +4,7 @@ CREATE TABLE IF NOT EXISTS user_queries (
     language      VARCHAR(10) DEFAULT 'fr',
     category      VARCHAR(100),
     is_off_topic  BOOLEAN DEFAULT FALSE,
+    chunks_found  INTEGER DEFAULT 0,
     latency_ms    INTEGER,
     api_key_prefix VARCHAR(20),
     created_at    TIMESTAMP DEFAULT NOW()
