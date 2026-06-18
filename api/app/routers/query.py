@@ -9,10 +9,12 @@ import os
 import re
 import time
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
+from api.app.auth import APIKeyRecord, get_api_key
+from api.app.db import get_conn
 from api.app.services.rag import RetrievedChunk, build_answer, retrieve
 
 _GREETINGS_RE = re.compile(
@@ -196,6 +198,41 @@ def _stream_without_corpus(question: str, history: list):
         yield f"data: {json.dumps({'type': 'chunk', 'text': msg})}\n\n"
 
 
+def _log_query(
+    question: str,
+    language: str,
+    category: str | None,
+    is_off_topic: bool,
+    latency_ms: int,
+    api_key: APIKeyRecord | str | None,
+) -> None:
+    """Persist a query log record — called in background, never raises."""
+    if isinstance(api_key, APIKeyRecord):
+        prefix = api_key.preview
+    elif isinstance(api_key, str):
+        prefix = api_key[:8] + "..." if len(api_key) > 8 else api_key
+    else:
+        prefix = None
+
+    try:
+        conn = get_conn()
+        try:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    INSERT INTO user_queries
+                        (question, language, category, is_off_topic, latency_ms, api_key_prefix)
+                    VALUES (%s, %s, %s, %s, %s, %s)
+                    """,
+                    (question, language, category, is_off_topic, latency_ms, prefix),
+                )
+            conn.commit()
+        finally:
+            conn.close()
+    except Exception:
+        pass  # logging must never break the main flow
+
+
 router = APIRouter(tags=["Query"])
 
 
@@ -273,13 +310,26 @@ def rewrite_question_with_history(question: str, history: list[HistoryMessage]) 
 
 
 @router.post("/query", response_model=QueryResponse)
-async def query_corpus(request: QueryRequest):
+async def query_corpus(
+    request: QueryRequest,
+    background_tasks: BackgroundTasks,
+    api_key: APIKeyRecord | str | None = Depends(get_api_key),
+):
     """Query the Togolese corpus via RAG and return an answer with sources."""
     t0 = time.monotonic()
 
     if _is_off_topic(request.question):
         answer = _answer_without_corpus(request.question, request.history)
         latency_ms = int((time.monotonic() - t0) * 1000)
+        background_tasks.add_task(
+            _log_query,
+            request.question,
+            request.language,
+            request.category,
+            True,
+            latency_ms,
+            api_key,
+        )
         return QueryResponse(
             answer=answer, sources=[], model="togolm-rag-v1", latency_ms=latency_ms
         )
@@ -301,6 +351,15 @@ async def query_corpus(request: QueryRequest):
     answer = build_answer(request.question, chunks, history=history_dicts)
     latency_ms = int((time.monotonic() - t0) * 1000)
 
+    background_tasks.add_task(
+        _log_query,
+        request.question,
+        request.language,
+        request.category,
+        False,
+        latency_ms,
+        api_key,
+    )
     return QueryResponse(
         answer=answer,
         sources=[Source(title=c.title, url=c.url, score=round(c.score, 4)) for c in chunks],
@@ -388,7 +447,10 @@ def _extractive_stream(chunks: list[RetrievedChunk]):
 
 
 @router.post("/query/stream")
-def stream_query(request: QueryRequest):
+def stream_query(
+    request: QueryRequest,
+    api_key: APIKeyRecord | str | None = Depends(get_api_key),
+):
     """Stream a RAG answer via Server-Sent Events.
 
     Events (newline-delimited JSON after 'data: '):
@@ -406,6 +468,9 @@ def stream_query(request: QueryRequest):
             latency_ms = int((time.monotonic() - t0) * 1000)
             yield f"data: {json.dumps({'type': 'sources', 'sources': [], 'latency_ms': latency_ms})}\n\n"
             yield "data: [DONE]\n\n"
+            _log_query(
+                request.question, request.language, request.category, True, latency_ms, api_key
+            )
             return
 
         # Rewrite the question using conversation history so the vector search
@@ -446,6 +511,7 @@ def stream_query(request: QueryRequest):
         latency_ms = int((time.monotonic() - t0) * 1000)
         yield f"data: {json.dumps({'type': 'sources', 'sources': sources, 'latency_ms': latency_ms})}\n\n"
         yield "data: [DONE]\n\n"
+        _log_query(request.question, request.language, request.category, False, latency_ms, api_key)
 
     return StreamingResponse(
         generate(),
