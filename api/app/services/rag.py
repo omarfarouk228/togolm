@@ -40,7 +40,7 @@ def retrieve(
     question: str,
     category: str | None = None,
     top_k: int = 5,
-    min_score: float = 0.45,
+    min_score: float = 0.55,
 ) -> list[RetrievedChunk]:
     """
     Embed the question and return the top-k most relevant chunks.
