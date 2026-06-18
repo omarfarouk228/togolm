@@ -368,7 +368,9 @@ def _stream_gemini(
             thinking_config=types.ThinkingConfig(thinking_budget=2048),
         ),
     ):
-        if not (chunk.candidates and chunk.candidates[0].content and chunk.candidates[0].content.parts):
+        if not (
+            chunk.candidates and chunk.candidates[0].content and chunk.candidates[0].content.parts
+        ):
             continue
         for part in chunk.candidates[0].content.parts:
             if getattr(part, "thought", False) and part.text:
