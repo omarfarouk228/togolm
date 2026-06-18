@@ -72,17 +72,19 @@ def list_documents(
     """List corpus documents with optional filtering and pagination."""
     offset = (page - 1) * page_size
 
-    sql_where = "WHERE d.status = 'active'"
+    where_clauses = ["d.status = 'active'"]
     params: list = []
     if source:
-        sql_where += " AND d.source = %s"
+        where_clauses.append("d.source = %s")
         params.append(source)
     if category:
-        sql_where += " AND d.category = %s"
+        where_clauses.append("d.category = %s")
         params.append(category)
     if language:
-        sql_where += " AND d.language = %s"
+        where_clauses.append("d.language = %s")
         params.append(language)
+
+    sql_where = "WHERE " + " AND ".join(where_clauses)
 
     conn = get_conn()
     try:
@@ -93,18 +95,30 @@ def list_documents(
             )
             total = cur.fetchone()[0]
 
+            # Paginate first (cheap), then count chunks only for the returned page.
+            # The old JOIN+GROUP BY scanned all chunks before applying LIMIT.
             cur.execute(
                 f"""
-                SELECT d.id, d.source, d.url, d.category, d.subcategory,
-                       d.title, d.language, d.published_at,
-                       array_length(string_to_array(d.clean_content, ' '), 1) AS word_count,
-                       COUNT(c.id) AS chunk_count
-                FROM documents d
-                LEFT JOIN chunks c ON c.document_id = d.id
-                {sql_where}
-                GROUP BY d.id
-                ORDER BY d.collected_at DESC
-                LIMIT %s OFFSET %s
+                WITH paged AS (
+                    SELECT d.id, d.source, d.url, d.category, d.subcategory,
+                           d.title, d.language, d.published_at, d.word_count,
+                           d.collected_at
+                    FROM documents d
+                    {sql_where}
+                    ORDER BY d.collected_at DESC
+                    LIMIT %s OFFSET %s
+                )
+                SELECT p.id, p.source, p.url, p.category, p.subcategory,
+                       p.title, p.language, p.published_at, p.word_count,
+                       COALESCE(cc.n, 0) AS chunk_count
+                FROM paged p
+                LEFT JOIN (
+                    SELECT document_id, COUNT(*) AS n
+                    FROM chunks
+                    WHERE document_id IN (SELECT id FROM paged)
+                    GROUP BY document_id
+                ) cc ON cc.document_id = p.id
+                ORDER BY p.collected_at DESC
                 """,
                 params + [page_size, offset],
             )

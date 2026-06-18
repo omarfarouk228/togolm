@@ -157,7 +157,8 @@ class TestStreamEndpoint:
         combined = " ".join(e["text"] for e in chunk_events)
         assert "assemblee-nationale.tg" in combined
 
-    def test_stream_no_results_message(self):
+    def test_stream_no_results_message(self, monkeypatch):
+        monkeypatch.delenv("GEMINI_API_KEY", raising=False)
         with patch("api.app.routers.query.retrieve", return_value=[]):
             resp = client.post("/v1/query/stream", json={"question": "Question sans résultat ?"})
         events = _parse_sse(resp.text)
