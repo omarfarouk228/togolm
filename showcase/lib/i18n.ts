@@ -79,8 +79,8 @@ export const translations = {
       sources: "Sources",
       error: "Erreur de connexion — service temporairement indisponible.",
       suggested: [
-        { emoji: "⚖️", text: "Quelles sont les procédures pour créer une entreprise au Togo ?" },
-        { emoji: "👷", text: "Quels sont les droits des travailleurs selon le code du travail togolais ?" },
+        { emoji: "📊", text: "Quels sont les résultats du dernier recensement général de la population du Togo (RGPH-5) ?" },
+        { emoji: "💼", text: "Comment le Togo soutient-il le développement des PME et le secteur privé ?" },
         { emoji: "🎓", text: "Comment fonctionne le système éducatif au Togo ?" },
         { emoji: "💰", text: "Quel est le budget de l'État togolais ?" },
       ],
@@ -175,8 +175,8 @@ export const translations = {
       sources: "Sources",
       error: "Connection error — service temporarily unavailable.",
       suggested: [
-        { emoji: "⚖️", text: "What are the procedures to register a business in Togo?" },
-        { emoji: "👷", text: "What are workers' rights under the Togolese labor code?" },
+        { emoji: "📊", text: "What are the results of Togo's latest general population census (RGPH-5)?" },
+        { emoji: "💼", text: "How does Togo support the development of SMEs and the private sector?" },
         { emoji: "🎓", text: "How does the education system work in Togo?" },
         { emoji: "💰", text: "What is the Togolese state budget?" },
       ],
