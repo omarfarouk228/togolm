@@ -113,8 +113,8 @@ def _answer_without_corpus(question: str, history: list) -> str:
         "2. Ne fais JAMAIS d'analyse, de revue ou de correction de code.\n"
         "3. Ne rédige pas de contenu créatif sans lien avec le Togo (poèmes, histoires, traductions génériques).\n"
         "4. Pour toute demande hors de ta spécialité, réponds UNIQUEMENT par une phrase courte du type : "
-        "\"Je suis spécialisé dans les connaissances togolaises. "
-        "Posez-moi une question sur le Togo — lois, économie, éducation, histoire…\"\n"
+        '"Je suis spécialisé dans les connaissances togolaises. '
+        'Posez-moi une question sur le Togo — lois, économie, éducation, histoire…"\n'
         "5. Tu peux répondre brièvement aux salutations avant de rediriger."
     )
     history_block = ""
@@ -162,8 +162,8 @@ def _stream_without_corpus(question: str, history: list):
         "2. Ne fais JAMAIS d'analyse, de revue ou de correction de code.\n"
         "3. Ne rédige pas de contenu créatif sans lien avec le Togo (poèmes, histoires, traductions génériques).\n"
         "4. Pour toute demande hors de ta spécialité, réponds UNIQUEMENT par une phrase courte du type : "
-        "\"Je suis spécialisé dans les connaissances togolaises. "
-        "Posez-moi une question sur le Togo — lois, économie, éducation, histoire…\"\n"
+        '"Je suis spécialisé dans les connaissances togolaises. '
+        'Posez-moi une question sur le Togo — lois, économie, éducation, histoire…"\n'
         "5. Tu peux répondre brièvement aux salutations avant de rediriger."
     )
     history_block = ""
