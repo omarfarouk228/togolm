@@ -331,8 +331,8 @@ def _stream_gemini(
         "connaissances générales sur le Togo en ajoutant en fin de réponse : "
         '"ℹ️ Aucun document du corpus ne couvre directement ce sujet — cette réponse est basée sur mes connaissances générales."\n'
         "4. Si la question ne porte PAS sur le Togo (autre pays, trivia mondial, sport étranger, etc.), "
-        "réponds UNIQUEMENT : \"Je suis spécialisé dans les connaissances togolaises. "
-        "Posez-moi une question sur le Togo — lois, économie, éducation, histoire…\"\n"
+        'réponds UNIQUEMENT : "Je suis spécialisé dans les connaissances togolaises. '
+        'Posez-moi une question sur le Togo — lois, économie, éducation, histoire…"\n'
         "5. Réponds toujours dans la langue de la question (français par défaut)."
     )
 
