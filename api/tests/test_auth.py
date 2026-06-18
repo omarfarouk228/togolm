@@ -2,7 +2,9 @@
 Unit tests for API key authentication (api.app.auth).
 
 These tests verify the X-API-Key header behaviour without hitting the DB.
-Routes are tested via /v1/categories (lightweight, no DB needed when mocked).
+Public endpoints (/v1/categories, /v1/stats) are exempt from auth — invalid
+key tests use /v1/documents which is rate-limited and auth-gated. The 401 is
+raised in the dependency before the handler runs, so no DB mock is needed.
 """
 
 from unittest.mock import patch
@@ -12,12 +14,6 @@ from fastapi.testclient import TestClient
 from api.app.main import app
 
 client = TestClient(app)
-
-# Patch the DB-hitting route so auth tests don't need a real PostgreSQL
-_CATEGORIES_PATCH = patch(
-    "api.app.routers.corpus.get_conn",
-    side_effect=Exception("Should not reach DB in auth tests"),
-)
 
 
 class TestAuthAnonymous:
@@ -42,12 +38,13 @@ class TestAuthWithKeys:
         assert resp.status_code == 200
 
     def test_invalid_key_returns_401(self, with_api_keys):
-        resp = client.get("/v1/categories", headers={"X-API-Key": "wrong-key"})
+        # /v1/categories is public; use /v1/documents which is auth-gated
+        resp = client.get("/v1/documents", headers={"X-API-Key": "wrong-key"})
         assert resp.status_code == 401
         assert "Invalid API key" in resp.json()["detail"]
 
     def test_empty_key_returns_401(self, with_api_keys):
-        resp = client.get("/v1/categories", headers={"X-API-Key": ""})
+        resp = client.get("/v1/documents", headers={"X-API-Key": ""})
         assert resp.status_code == 401
 
     def test_dev_mode_accepts_any_key(self, no_api_keys):
