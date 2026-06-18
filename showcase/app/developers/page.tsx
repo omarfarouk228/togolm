@@ -4,7 +4,7 @@ import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import {
   Copy, Check, Key, Zap, Shield, Code2,
-  ChevronLeft, ExternalLink,
+  ChevronLeft, Download,
 } from "lucide-react";
 import { registerAPIKey, type RegisterAPIKeyResponse } from "@/lib/api";
 import { useLanguage } from "@/contexts/language";
@@ -476,6 +476,134 @@ const ENDPOINTS: Endpoint[] = [
 ];
 
 // ---------------------------------------------------------------------------
+// Export helpers
+// ---------------------------------------------------------------------------
+
+function triggerDownload(filename: string, content: string, mime: string) {
+  const blob = new Blob([content], { type: mime });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+function buildPostmanCollection(): object {
+  const items = ENDPOINTS.map((ep) => {
+    const urlPath = ep.path.replace(/^\//, "").split("/");
+    const headers: { key: string; value: string; description?: string }[] = [
+      { key: "X-API-Key", value: "{{apiKey}}", description: "TogoLM API key" },
+    ];
+
+    const isPost = ep.method === "POST";
+    if (isPost) {
+      headers.push({ key: "Content-Type", value: "application/json" });
+    }
+
+    const bodyParams: Record<string, string | number | boolean> = {};
+    const queryParams: { key: string; value: string; disabled: boolean }[] = [];
+
+    ep.params?.forEach((p) => {
+      if (p.in === "body") {
+        bodyParams[p.name] = p.default ?? (p.type === "integer" ? 0 : "");
+      } else if (p.in === "query") {
+        queryParams.push({ key: p.name, value: p.default ?? "", disabled: !p.required });
+      }
+    });
+
+    const request: Record<string, unknown> = {
+      method: ep.method,
+      header: headers,
+      url: {
+        raw: `{{baseUrl}}/${urlPath.join("/")}`,
+        host: ["{{baseUrl}}"],
+        path: urlPath,
+        ...(queryParams.length > 0 ? { query: queryParams } : {}),
+      },
+      description: ep.description.en,
+    };
+
+    if (isPost && Object.keys(bodyParams).length > 0) {
+      request.body = {
+        mode: "raw",
+        raw: JSON.stringify(bodyParams, null, 2),
+        options: { raw: { language: "json" } },
+      };
+    }
+
+    return {
+      name: `${ep.method} ${ep.path}`,
+      request,
+      response: [],
+    };
+  });
+
+  return {
+    info: {
+      name: "TogoLM API v1",
+      description: "The first open-source AI API for Togo — RAG pipeline, semantic search, corpus data.",
+      schema: "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    },
+    variable: [
+      { key: "baseUrl", value: API_BASE, type: "string" },
+      { key: "apiKey",  value: "",        type: "string", description: "Your TogoLM API key (tgolm_...)" },
+    ],
+    item: items,
+  };
+}
+
+function ExportMenu({ compact = false }: { compact?: boolean }) {
+  const { lang } = useLanguage();
+  const [loading, setLoading] = useState(false);
+
+  function exportPostman() {
+    setLoading(true);
+    const collection = buildPostmanCollection();
+    triggerDownload(
+      "togolm_postman_collection.json",
+      JSON.stringify(collection, null, 2),
+      "application/json",
+    );
+    setLoading(false);
+  }
+
+  const label = lang === "fr" ? "Exporter la collection" : "Export collection";
+  const hint  = lang === "fr" ? "Compatible Postman / Bruno" : "Works with Postman / Bruno";
+
+  if (compact) {
+    return (
+      <button
+        onClick={exportPostman}
+        disabled={loading}
+        className="flex items-center gap-1.5 text-xs text-slate-400 hover:text-slate-700 transition-colors disabled:opacity-50"
+      >
+        <Download className="w-3 h-3" />
+        {label}
+        <span className="font-mono font-bold text-orange-500 text-[10px]">PM</span>
+      </button>
+    );
+  }
+
+  return (
+    <button
+      onClick={exportPostman}
+      disabled={loading}
+      className="inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-slate-200 bg-white text-sm text-slate-700 font-medium hover:border-slate-300 hover:bg-slate-50 transition-colors shadow-sm disabled:opacity-50"
+      title={hint}
+    >
+      {loading ? (
+        <span className="w-4 h-4 border-2 border-slate-300 border-t-slate-600 rounded-full animate-spin" />
+      ) : (
+        <Download className="w-4 h-4" />
+      )}
+      {label}
+      <span className="font-mono font-bold text-orange-500 text-xs">PM</span>
+    </button>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Sidebar
 // ---------------------------------------------------------------------------
 
@@ -542,15 +670,7 @@ function Sidebar({ active }: { active: string }) {
       </ul>
 
       <div className="mt-8 pt-6 border-t border-slate-100">
-        <a
-          href={`${API_BASE}/docs`}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="flex items-center gap-1.5 text-xs text-slate-400 hover:text-slate-700 transition-colors"
-        >
-          <ExternalLink className="w-3 h-3" />
-          OpenAPI / Swagger
-        </a>
+        <ExportMenu compact />
       </div>
     </nav>
   );
@@ -613,7 +733,7 @@ export default function DevelopersPage() {
               ? "Accès programmatique au corpus togolais — recherche sémantique, RAG en streaming, données publiques structurées."
               : "Programmatic access to Togo's knowledge corpus — semantic search, streaming RAG, structured public data."}
           </p>
-          <div className="flex flex-wrap gap-5 mt-5 text-sm text-slate-500">
+          <div className="flex flex-wrap items-center gap-5 mt-5 text-sm text-slate-500">
             {[
               { icon: <Key className="w-3.5 h-3.5" />,    text: lang === "fr" ? "Clé gratuite" : "Free API key" },
               { icon: <Zap className="w-3.5 h-3.5" />,    text: "200 req / day" },
@@ -625,6 +745,7 @@ export default function DevelopersPage() {
                 {text}
               </div>
             ))}
+            <ExportMenu />
           </div>
         </div>
       </section>

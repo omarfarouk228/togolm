@@ -4,7 +4,7 @@ import { useState, useRef, useEffect } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { queryRAGStream, type QuerySource, type HistoryMessage } from "@/lib/api";
-import { Send, ExternalLink, Bot, User } from "lucide-react";
+import { Send, ExternalLink, Bot, User, ChevronDown, Brain } from "lucide-react";
 import { useLanguage } from "@/contexts/language";
 import { RateLimitBanner } from "@/components/rate-limit-banner";
 
@@ -16,6 +16,8 @@ interface Message {
   sources?: QuerySource[];
   latency_ms?: number;
   streaming?: boolean;
+  thinking?: string;
+  thinkingDone?: boolean;
 }
 
 function StreamingCursor() {
@@ -24,6 +26,56 @@ function StreamingCursor() {
       className="inline-block w-0.5 h-3.5 ml-0.5 align-middle rounded-full animate-pulse"
       style={{ background: "var(--togo-green)" }}
     />
+  );
+}
+
+function ThinkingBlock({ text, done }: { text: string; done: boolean }) {
+  const [expanded, setExpanded] = useState(!done);
+  const scrollRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (done) setExpanded(false);
+  }, [done]);
+
+  useEffect(() => {
+    if (expanded && scrollRef.current) {
+      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+    }
+  }, [text, expanded]);
+
+  return (
+    <div className="mb-3">
+      <button
+        onClick={() => setExpanded((v) => !v)}
+        className="flex items-center gap-1.5 text-xs text-slate-400 hover:text-slate-600 transition-colors select-none"
+      >
+        <Brain className="w-3 h-3 flex-shrink-0" style={{ color: done ? "var(--togo-green)" : undefined }} />
+        <span className={done ? "text-slate-500" : "text-slate-400"}>
+          {done ? "Réflexion terminée" : "Réflexion en cours"}
+        </span>
+        {!done && (
+          <span className="flex gap-0.5 ml-0.5">
+            <span className="typing-dot w-1 h-1 rounded-full bg-slate-400" />
+            <span className="typing-dot w-1 h-1 rounded-full bg-slate-400" />
+            <span className="typing-dot w-1 h-1 rounded-full bg-slate-400" />
+          </span>
+        )}
+        <ChevronDown
+          className={`w-3 h-3 ml-0.5 transition-transform duration-200 ${expanded ? "rotate-180" : ""}`}
+        />
+      </button>
+      {expanded && (
+        <div
+          ref={scrollRef}
+          className="mt-1.5 text-xs text-slate-400 font-mono leading-relaxed bg-slate-50 border border-slate-100 rounded-xl px-3 py-2.5 max-h-36 overflow-y-auto whitespace-pre-wrap"
+        >
+          {text}
+          {!done && (
+            <span className="inline-block w-0.5 h-3 bg-slate-300 ml-0.5 align-middle animate-pulse" />
+          )}
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -67,13 +119,28 @@ export default function ChatPage() {
 
     try {
       for await (const event of queryRAGStream(q, ctrl.signal, apiKey, history)) {
-        if (event.type === "chunk") {
+        if (event.type === "thinking") {
           setMessages((prev) => {
             const last = prev[prev.length - 1];
             if (last?.role === "assistant") {
               return [
                 ...prev.slice(0, -1),
-                { ...last, content: last.content + event.text },
+                { ...last, thinking: (last.thinking ?? "") + event.text },
+              ];
+            }
+            return prev;
+          });
+        } else if (event.type === "chunk") {
+          setMessages((prev) => {
+            const last = prev[prev.length - 1];
+            if (last?.role === "assistant") {
+              return [
+                ...prev.slice(0, -1),
+                {
+                  ...last,
+                  content: last.content + event.text,
+                  thinkingDone: last.thinking !== undefined ? true : last.thinkingDone,
+                },
               ];
             }
             return prev;
@@ -197,7 +264,7 @@ export default function ChatPage() {
               )}
 
               <div className={`max-w-[82%] ${m.role === "user" ? "order-first" : ""}`}>
-                {m.role === "assistant" && m.streaming && m.content === "" ? (
+                {m.role === "assistant" && m.streaming && m.content === "" && !m.thinking ? (
                   <div className="bg-white border border-slate-200 rounded-2xl rounded-bl-md px-4 py-3.5 flex items-center gap-1.5 shadow-sm">
                     <span className="typing-dot w-1.5 h-1.5 rounded-full bg-slate-400" />
                     <span className="typing-dot w-1.5 h-1.5 rounded-full bg-slate-400" />
@@ -215,20 +282,25 @@ export default function ChatPage() {
                     {m.role === "user" ? (
                       m.content
                     ) : (
-                      <div className="prose prose-sm prose-slate max-w-none
-                        prose-p:my-1 prose-p:leading-relaxed
-                        prose-ul:my-1 prose-ul:pl-4
-                        prose-ol:my-1 prose-ol:pl-4
-                        prose-li:my-0.5
-                        prose-strong:font-semibold prose-strong:text-slate-900
-                        prose-a:text-green-700 prose-a:no-underline hover:prose-a:underline
-                        prose-headings:font-semibold prose-headings:text-slate-900 prose-headings:mt-3 prose-headings:mb-1
-                        prose-code:text-xs prose-code:bg-slate-100 prose-code:px-1 prose-code:rounded">
-                        <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                          {m.content}
-                        </ReactMarkdown>
-                        {m.streaming && <StreamingCursor />}
-                      </div>
+                      <>
+                        {m.thinking && (
+                          <ThinkingBlock text={m.thinking} done={!!m.thinkingDone} />
+                        )}
+                        <div className="prose prose-sm prose-slate max-w-none
+                          prose-p:my-1 prose-p:leading-relaxed
+                          prose-ul:my-1 prose-ul:pl-4
+                          prose-ol:my-1 prose-ol:pl-4
+                          prose-li:my-0.5
+                          prose-strong:font-semibold prose-strong:text-slate-900
+                          prose-a:text-green-700 prose-a:no-underline hover:prose-a:underline
+                          prose-headings:font-semibold prose-headings:text-slate-900 prose-headings:mt-3 prose-headings:mb-1
+                          prose-code:text-xs prose-code:bg-slate-100 prose-code:px-1 prose-code:rounded">
+                          <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                            {m.content}
+                          </ReactMarkdown>
+                          {m.streaming && m.content && <StreamingCursor />}
+                        </div>
+                      </>
                     )}
                   </div>
                 )}

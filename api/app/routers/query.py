@@ -186,6 +186,7 @@ def _stream_without_corpus(question: str, history: list):
             config=types.GenerateContentConfig(
                 system_instruction=system_instruction,
                 max_output_tokens=200,
+                thinking_config=types.ThinkingConfig(thinking_budget=0),
             ),
         ):
             if chunk.text:
@@ -313,7 +314,12 @@ def _stream_gemini(
     chunks: list[RetrievedChunk],
     history: list[HistoryMessage] | None = None,
 ):
-    """Yield SSE data lines from Gemini streaming generation."""
+    """Yield SSE data lines from Gemini streaming generation.
+
+    Emits three event types:
+      thinking — model reasoning tokens (thought=True parts)
+      chunk    — answer tokens
+    """
     from google import genai
     from google.genai import types
 
@@ -359,10 +365,16 @@ def _stream_gemini(
         config=types.GenerateContentConfig(
             system_instruction=system_instruction,
             max_output_tokens=2048,
+            thinking_config=types.ThinkingConfig(thinking_budget=2048),
         ),
     ):
-        if chunk.text:
-            yield f"data: {json.dumps({'type': 'chunk', 'text': chunk.text})}\n\n"
+        if not (chunk.candidates and chunk.candidates[0].content and chunk.candidates[0].content.parts):
+            continue
+        for part in chunk.candidates[0].content.parts:
+            if getattr(part, "thought", False) and part.text:
+                yield f"data: {json.dumps({'type': 'thinking', 'text': part.text})}\n\n"
+            elif part.text:
+                yield f"data: {json.dumps({'type': 'chunk', 'text': part.text})}\n\n"
 
 
 def _extractive_stream(chunks: list[RetrievedChunk]):
