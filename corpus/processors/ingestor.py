@@ -116,20 +116,22 @@ def embed_batch(texts: list[str]) -> list[list[float]]:
 
 def upsert_document(cur, doc: dict) -> str:
     """Insert or update a document row, return its UUID."""
+    clean = doc.get("clean_content", "")
     cur.execute(
         """
         INSERT INTO documents
             (source, url, category, subcategory, title,
-             raw_content, clean_content, language,
+             raw_content, clean_content, language, word_count,
              published_at, metadata, status)
         VALUES
             (%(source)s, %(url)s, %(category)s, %(subcategory)s, %(title)s,
-             %(raw_content)s, %(clean_content)s, %(language)s,
+             %(raw_content)s, %(clean_content)s, %(language)s, %(word_count)s,
              %(published_at)s, %(metadata)s, 'active')
         ON CONFLICT (url) DO UPDATE SET
             title         = EXCLUDED.title,
             raw_content   = EXCLUDED.raw_content,
             clean_content = EXCLUDED.clean_content,
+            word_count    = EXCLUDED.word_count,
             metadata      = EXCLUDED.metadata,
             updated_at    = NOW()
         RETURNING id
@@ -141,8 +143,9 @@ def upsert_document(cur, doc: dict) -> str:
             "subcategory": doc.get("subcategory", ""),
             "title": doc.get("title", ""),
             "raw_content": doc.get("raw_content", ""),
-            "clean_content": doc.get("clean_content", ""),
+            "clean_content": clean,
             "language": doc.get("language", "fr"),
+            "word_count": len(clean.split()) if clean else 0,
             "published_at": normalize_date(doc.get("published_at")),
             "metadata": json.dumps(doc.get("metadata", {})),
         },
