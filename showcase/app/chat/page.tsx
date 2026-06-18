@@ -233,10 +233,12 @@ export default function ChatPage() {
                   </div>
                 )}
 
-                {m.sources && m.sources.filter((s) => s.score >= 0.55).length > 0 && (
+                {m.sources &&
+                  m.sources.filter((s) => s.score >= 0.62).length > 0 &&
+                  !m.content?.toLowerCase().includes("aucun document du corpus") && (
                   <div className="mt-2 space-y-1 pl-1">
                     <p className="text-xs text-slate-400 font-medium mb-1.5">{t.chat.sources}</p>
-                    {m.sources.filter((s) => s.score >= 0.55).slice(0, 3).map((s, j) => (
+                    {m.sources.filter((s) => s.score >= 0.62).slice(0, 3).map((s, j) => (
                       <div key={j} className="flex items-center gap-1.5 text-xs text-slate-400">
                         <span className="text-slate-300">↳</span>
                         {s.url ? (
