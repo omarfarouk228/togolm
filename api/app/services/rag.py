@@ -218,7 +218,8 @@ Règles de réponse :
 1. Si le contexte du corpus contient les informations nécessaires, base ta réponse dessus.
 2. Ne mets JAMAIS de citations inline dans le texte (pas de [source], pas de [domaine — titre]).
    Les sources sont affichées séparément par l'interface.
-3. Si le contexte est insuffisant ou hors-sujet, réponds quand même avec tes connaissances générales sur le Togo.
+3. Si le contexte est insuffisant ou hors-sujet, réponds quand même avec tes
+   connaissances générales sur le Togo.
 4. Réponds toujours dans la langue de la question (français par défaut).
 5. Ne réponds jamais "je n'ai pas suffisamment d'informations" sans fournir une réponse utile."""
 
