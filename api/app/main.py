@@ -40,8 +40,8 @@ _security = [Depends(check_rate_limit)]
 
 app.include_router(admin.router, prefix="/v1")  # protected by X-Admin-Key, no rate limit
 app.include_router(auth.router, prefix="/v1")  # no rate limit on register/me
+app.include_router(corpus.router, prefix="/v1")  # public read-only stats, no rate limit
 app.include_router(query.router, prefix="/v1", dependencies=_security)
-app.include_router(corpus.router, prefix="/v1", dependencies=_security)
 app.include_router(documents.router, prefix="/v1", dependencies=_security)
 
 
