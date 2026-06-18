@@ -61,6 +61,12 @@ _OFF_TOPIC_INTENT_RE = re.compile(
     r"|\b(?:score|r[eé]sultat)\s+du\s+match\b"
     # general programming help (not Togo-specific)
     r"|\bcomment\s+(?:coder|programmer|d[eé]bugger)\b"
+    # general world knowledge (not Togo-specific)
+    r"|\bcombien\s+(?:de\s+)?(?:pays|villes|personnes|habitants|langues|continents)\s+"
+    r"(?:y[\s']a[- ]t[- ]il\s+)?(?:dans\s+le\s+monde|au\s+monde|sur\s+(?:terre|la\s+plan[eè]te))\b"
+    r"|\bqui\s+est\s+(?:le|la|l[''])\s*(?:pr[eé]sident|premier\s+ministre|roi|reine|chancelier)"
+    r"\s+(?:actuel(?:le)?\s+)?(?:de\s+(?:la\s+|l[''])?|du\s+|des\s+)(?!togo\b)\w+"
+    r"|\bquelle\s+est\s+la\s+capitale\s+de\s+(?:la\s+|l['']|du\s+|des\s+)?(?!togo\b)\w+"
     r")",
     re.IGNORECASE,
 )
@@ -321,11 +327,13 @@ def _stream_gemini(
         "1. Si le contexte du corpus contient les informations nécessaires, base ta réponse dessus.\n"
         "2. Ne mets JAMAIS de citations inline dans le texte (pas de [source], pas de [domaine — titre]). "
         "Les sources sont affichées séparément par l'interface.\n"
-        "3. Si le contexte est insuffisant ou hors-sujet, réponds quand même avec tes connaissances générales sur le Togo "
-        "— en ajoutant en fin de réponse : "
+        "3. Si la question porte sur le Togo mais que le corpus est insuffisant, réponds avec tes "
+        "connaissances générales sur le Togo en ajoutant en fin de réponse : "
         '"ℹ️ Aucun document du corpus ne couvre directement ce sujet — cette réponse est basée sur mes connaissances générales."\n'
-        "4. Réponds toujours dans la langue de la question (français par défaut).\n"
-        "5. Ne réponds jamais \"je n'ai pas suffisamment d'informations\" sans fournir une réponse utile."
+        "4. Si la question ne porte PAS sur le Togo (autre pays, trivia mondial, sport étranger, etc.), "
+        'réponds UNIQUEMENT : "Je suis spécialisé dans les connaissances togolaises. '
+        'Posez-moi une question sur le Togo — lois, économie, éducation, histoire…"\n'
+        "5. Réponds toujours dans la langue de la question (français par défaut)."
     )
 
     corpus_block = context if context else "(aucun document pertinent trouvé dans le corpus)"
