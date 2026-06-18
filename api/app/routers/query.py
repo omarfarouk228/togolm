@@ -203,6 +203,7 @@ def _log_query(
     language: str,
     category: str | None,
     is_off_topic: bool,
+    chunks_found: int,
     latency_ms: int,
     api_key: APIKeyRecord | str | None,
 ) -> None:
@@ -221,10 +222,10 @@ def _log_query(
                 cur.execute(
                     """
                     INSERT INTO user_queries
-                        (question, language, category, is_off_topic, latency_ms, api_key_prefix)
-                    VALUES (%s, %s, %s, %s, %s, %s)
+                        (question, language, category, is_off_topic, chunks_found, latency_ms, api_key_prefix)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s)
                     """,
-                    (question, language, category, is_off_topic, latency_ms, prefix),
+                    (question, language, category, is_off_topic, chunks_found, latency_ms, prefix),
                 )
             conn.commit()
         finally:
@@ -327,6 +328,7 @@ async def query_corpus(
             request.language,
             request.category,
             True,
+            0,
             latency_ms,
             api_key,
         )
@@ -357,6 +359,7 @@ async def query_corpus(
         request.language,
         request.category,
         False,
+        len(chunks),
         latency_ms,
         api_key,
     )
@@ -392,13 +395,9 @@ def _stream_gemini(
         "1. Si le contexte du corpus contient les informations nécessaires, base ta réponse dessus.\n"
         "2. Ne mets JAMAIS de citations inline dans le texte (pas de [source], pas de [domaine — titre]). "
         "Les sources sont affichées séparément par l'interface.\n"
-        "3. Si la question porte sur le Togo mais que le corpus est insuffisant, réponds avec tes "
-        "connaissances générales sur le Togo en ajoutant en fin de réponse : "
-        '"ℹ️ Aucun document du corpus ne couvre directement ce sujet — cette réponse est basée sur mes connaissances générales."\n'
-        "4. Si la question ne porte PAS sur le Togo (autre pays, trivia mondial, sport étranger, etc.), "
-        'réponds UNIQUEMENT : "Je suis spécialisé dans les connaissances togolaises. '
-        'Posez-moi une question sur le Togo — lois, économie, éducation, histoire…"\n'
-        "5. Réponds toujours dans la langue de la question (français par défaut)."
+        "3. Si le corpus est insuffisant ou hors-sujet, réponds quand même avec tes connaissances générales sur le Togo.\n"
+        "4. Réponds toujours dans la langue de la question (français par défaut).\n"
+        "5. Ne réponds jamais 'je n'ai pas suffisamment d'informations' sans fournir une réponse utile."
     )
 
     corpus_block = context if context else "(aucun document pertinent trouvé dans le corpus)"
@@ -469,7 +468,7 @@ def stream_query(
             yield f"data: {json.dumps({'type': 'sources', 'sources': [], 'latency_ms': latency_ms})}\n\n"
             yield "data: [DONE]\n\n"
             _log_query(
-                request.question, request.language, request.category, True, latency_ms, api_key
+                request.question, request.language, request.category, True, 0, latency_ms, api_key
             )
             return
 
@@ -511,7 +510,15 @@ def stream_query(
         latency_ms = int((time.monotonic() - t0) * 1000)
         yield f"data: {json.dumps({'type': 'sources', 'sources': sources, 'latency_ms': latency_ms})}\n\n"
         yield "data: [DONE]\n\n"
-        _log_query(request.question, request.language, request.category, False, latency_ms, api_key)
+        _log_query(
+            request.question,
+            request.language,
+            request.category,
+            False,
+            len(chunks),
+            latency_ms,
+            api_key,
+        )
 
     return StreamingResponse(
         generate(),
