@@ -132,6 +132,7 @@ export interface HistoryMessage {
 
 export type StreamEvent =
   | { type: "chunk"; text: string }
+  | { type: "thinking"; text: string }
   | { type: "sources"; sources: QuerySource[]; latency_ms: number }
   | { type: "error"; message: string };
 

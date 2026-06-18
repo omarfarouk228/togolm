@@ -1,2 +1,3 @@
 [variables]
 NEXT_PUBLIC_API_URL = "https://api.togolm.kofcorporation.com"
+NEXT_PUBLIC_GA_ID = "G-D3SBPB185P"
