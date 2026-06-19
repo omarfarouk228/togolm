@@ -28,11 +28,13 @@ PYTHON = str(_venv_python) if _venv_python.exists() else sys.executable
 WORKING_SPIDERS = [
     "service_public",
     "presidence",
+    "primature",  # presidenceduconseil.gouv.tg — full crawl, plus complet que sitemap
     "inseed",
     "gouv_ministry",
     "journal_officiel",
     "otr",
     "legal_pdf",
+    "droit_afrique",  # droit-afrique.com — textes juridiques Togo
     "international",
     "beta_sources",
     "togofirst",
@@ -43,6 +45,19 @@ WORKING_SPIDERS = [
     "wikipedia",
     "lomeinfos",
     "togoactualite",
+    # Nouvelles sources — actualités & institutions
+    "togo24",
+    "anpe",
+    "yas",
+    "moov_africa",
+    "edusup",
+    # Éducation supérieure
+    "univ_lome",
+    "campus_togo",
+    # Organisations régionales (BCEAO, OHADA, UEMOA)
+    "bceao",
+    "ohada",
+    "uemoa",
 ]
 
 NEWS_SPIDERS = [

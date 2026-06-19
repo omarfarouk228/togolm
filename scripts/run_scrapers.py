@@ -43,12 +43,14 @@ ALL_SPIDERS = [
     # Institutionnel & gouvernemental
     "service_public",
     "presidence",
+    "primature",  # presidenceduconseil.gouv.tg — full crawl, plus complet que sitemap
     "inseed",
     "gouv_ministry",
     # Juridique
     "journal_officiel",
     "otr",
     "legal_pdf",  # PDF extraction from legitogo.gouv.tg and otr.tg
+    "droit_afrique",  # droit-afrique.com — textes juridiques Togo
     # International organisations (World Bank, IMF, AfDB, UNDP…)
     "international",
     # Beta sources (ul.tg, api.tg, ceet.tg, cour-constitutionnelle.tg, inam.tg)
@@ -64,6 +66,19 @@ ALL_SPIDERS = [
     # Presse supplémentaire
     "lomeinfos",
     "togoactualite",
+    # Nouvelles sources — actualités & institutions
+    "togo24",
+    "anpe",
+    "yas",
+    "moov_africa",
+    "edusup",
+    # Éducation supérieure
+    "univ_lome",
+    "campus_togo",
+    # Organisations régionales (BCEAO, OHADA, UEMOA)
+    "bceao",
+    "ohada",
+    "uemoa",
 ]
 
 # Spiders that are permanently or temporarily broken (skip by default)

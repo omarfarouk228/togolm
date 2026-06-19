@@ -44,6 +44,15 @@ def upgrade() -> None:
         )
     """)
 
+    # If the table already existed before this migration, add missing columns.
+    op.execute("ALTER TABLE documents ADD COLUMN IF NOT EXISTS word_count INTEGER")
+    op.execute("""
+        ALTER TABLE documents ADD COLUMN IF NOT EXISTS fts_vector tsvector
+        GENERATED ALWAYS AS (
+            to_tsvector('french', coalesce(clean_content, '') || ' ' || coalesce(title, ''))
+        ) STORED
+    """)
+
     op.execute("""
         CREATE INDEX IF NOT EXISTS documents_embedding_idx
             ON documents USING ivfflat (embedding vector_cosine_ops)
