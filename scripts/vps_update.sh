@@ -24,7 +24,8 @@ echo "    App dir : ${APP_DIR}"
 echo "    Spiders : ${SPIDERS:-all}"
 echo ""
 
-ssh "${VPS_USER}@${VPS_IP}" APP_DIR="${APP_DIR}" SPIDERS="${SPIDERS}" bash << 'REMOTE'
+ssh "${VPS_USER}@${VPS_IP}" \
+  "APP_DIR=$(printf '%q' "${APP_DIR}") SPIDERS=$(printf '%q' "${SPIDERS}") bash -s" << 'REMOTE'
 set -e
 
 # ── Find the API container (supports plain Docker Compose and Coolify) ───
