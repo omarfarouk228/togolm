@@ -27,6 +27,7 @@ RUN pip install --no-cache-dir uv && \
         psycopg2-binary \
         pgvector \
         sqlalchemy \
+        alembic \
         sentence-transformers \
         "google-genai>=2.3.0" \
         redis \
@@ -43,8 +44,10 @@ SentenceTransformer('paraphrase-multilingual-MiniLM-L12-v2')"
 FROM deps AS production
 
 # Copy application code (excludes everything in .dockerignore)
-COPY api/     ./api/
-COPY corpus/  ./corpus/
+COPY api/      ./api/
+COPY corpus/   ./corpus/
+COPY alembic/  ./alembic/
+COPY alembic.ini ./alembic.ini
 
 # Non-root user for security
 RUN useradd --create-home --shell /bin/bash app
@@ -56,8 +59,4 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=15s --retries=3 \
 
 EXPOSE 8000
 
-CMD ["uvicorn", "api.app.main:app", \
-     "--host", "0.0.0.0", \
-     "--port", "8000", \
-     "--workers", "2", \
-     "--log-level", "info"]
+CMD ["sh", "-c", "alembic upgrade head && uvicorn api.app.main:app --host 0.0.0.0 --port 8000 --workers 2 --log-level info"]
