@@ -15,6 +15,7 @@ dependencies = [
     "psycopg2-binary>=2.9",
     "pgvector>=0.3",
     "sqlalchemy>=2.0",
+    "alembic>=1.13",
     # API
     "fastapi>=0.111",
     "uvicorn[standard]>=0.30",
