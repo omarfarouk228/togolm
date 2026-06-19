@@ -170,13 +170,34 @@ def list_queries(
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
     off_topic_only: bool = Query(False),
+    category: str | None = Query(None),
+    language: str | None = Query(None),
+    latency_min: int | None = Query(None),
+    latency_max: int | None = Query(None),
+    chunks_min: int | None = Query(None),
+    chunks_max: int | None = Query(None),
+    date_from: str | None = Query(None),
+    date_to: str | None = Query(None),
     authorization: str | None = Header(default=None),
     x_admin_key: str | None = Header(default=None),
 ):
     _auth(authorization, x_admin_key)
     conn = get_conn()
     try:
-        return service.list_queries(conn, page, page_size, off_topic_only)
+        return service.list_queries(
+            conn,
+            page,
+            page_size,
+            off_topic_only,
+            category,
+            language,
+            latency_min,
+            latency_max,
+            chunks_min,
+            chunks_max,
+            date_from,
+            date_to,
+        )
     finally:
         conn.close()
 
