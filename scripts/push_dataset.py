@@ -22,9 +22,17 @@ load_dotenv()
 DEFAULT_REPO = "togolm/togolm-corpus-v1"
 
 COLUMNS = [
-    "id", "source", "url", "category", "subcategory",
-    "title", "clean_content", "word_count", "language",
-    "published_at", "collected_at",
+    "id",
+    "source",
+    "url",
+    "category",
+    "subcategory",
+    "title",
+    "clean_content",
+    "word_count",
+    "language",
+    "published_at",
+    "collected_at",
 ]
 
 
@@ -40,7 +48,7 @@ def _get_conn():
 
 def _fetch_documents(conn) -> list[dict]:
     sql = f"""
-        SELECT {', '.join(COLUMNS)}
+        SELECT {", ".join(COLUMNS)}
         FROM documents
         WHERE status = 'active'
           AND clean_content IS NOT NULL

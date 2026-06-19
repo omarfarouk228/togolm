@@ -20,6 +20,7 @@ COPY pyproject.toml uv.lock* ./
 # Install uv for fast installs, then install all project dependencies.
 RUN pip install --no-cache-dir uv && \
     uv pip install --system --no-cache \
+        "PyJWT>=2.8" \
         fastapi \
         "uvicorn[standard]" \
         "pydantic[email]" \
