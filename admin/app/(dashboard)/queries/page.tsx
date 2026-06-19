@@ -6,16 +6,9 @@ import { getQueries, getQueryStats } from "@/lib/api";
 import { useT } from "@/lib/i18n";
 import { StatCard } from "@/components/stat-card";
 import { StatusBadge } from "@/components/status-badge";
-import { MessageSquare, AlertTriangle, Clock, ChevronLeft, ChevronRight, Loader2 } from "lucide-react";
+import { MessageSquare, AlertTriangle, Clock, ChevronLeft, ChevronRight } from "lucide-react";
+import { ShimmerStatCards, ShimmerTable } from "@/components/shimmer";
 import { format, parseISO } from "date-fns";
-
-function Spinner() {
-  return (
-    <div className="flex items-center justify-center py-16">
-      <Loader2 className="animate-spin text-green-500" size={28} />
-    </div>
-  );
-}
 
 function ErrorMsg({ msg }: { msg: string }) {
   return (
@@ -49,7 +42,7 @@ export default function QueriesPage() {
 
       {/* Stats */}
       {ls ? (
-        <Spinner />
+        <ShimmerStatCards count={3} />
       ) : es ? (
         <ErrorMsg msg={t("common.error")} />
       ) : (
@@ -96,7 +89,7 @@ export default function QueriesPage() {
 
       {/* Table */}
       {lq ? (
-        <Spinner />
+        <ShimmerTable rows={8} cols={5} />
       ) : eq ? (
         <ErrorMsg msg={t("common.error")} />
       ) : (

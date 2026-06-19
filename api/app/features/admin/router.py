@@ -37,7 +37,7 @@ from api.app.features.admin.schemas import (
     CreateKeyRequest,
     CreateKeyResponse,
     PatchKeyRequest,
-    QueryItem,
+    QueryListResponse,
     RecentDocument,
     SourceStat,
 )
@@ -165,7 +165,7 @@ def delete_key(
 # ── Queries ───────────────────────────────────────────────────────────────────
 
 
-@router.get("/admin/queries", response_model=list[QueryItem])
+@router.get("/admin/queries", response_model=QueryListResponse)
 def list_queries(
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),

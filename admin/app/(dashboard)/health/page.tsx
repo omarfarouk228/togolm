@@ -4,15 +4,8 @@ import { useQuery } from "@tanstack/react-query";
 import { getDetailedHealth } from "@/lib/api";
 import { useT } from "@/lib/i18n";
 import { StatusBadge } from "@/components/status-badge";
-import { Database, Cpu, Server, RefreshCw, Loader2 } from "lucide-react";
-
-function Spinner() {
-  return (
-    <div className="flex items-center justify-center py-16">
-      <Loader2 className="animate-spin text-green-500" size={28} />
-    </div>
-  );
-}
+import { Database, Cpu, Server, RefreshCw } from "lucide-react";
+import { ShimmerServiceCards, ShimmerCoverage } from "@/components/shimmer";
 
 function ErrorMsg({ msg }: { msg: string }) {
   return (
@@ -128,7 +121,10 @@ export default function HealthPage() {
       </div>
 
       {isLoading ? (
-        <Spinner />
+        <>
+          <ShimmerServiceCards />
+          <ShimmerCoverage />
+        </>
       ) : error ? (
         <ErrorMsg msg={t("common.error")} />
       ) : (

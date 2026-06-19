@@ -30,7 +30,7 @@ class RecentDocument(BaseModel):
 
 class ApiKeyItem(BaseModel):
     id: str
-    key_prefix: str
+    key_prefix: str | None
     owner_name: str | None
     owner_email: str | None
     use_case: str | None
@@ -69,3 +69,10 @@ class QueryItem(BaseModel):
     latency_ms: int | None
     api_key_prefix: str | None
     created_at: str | None
+
+
+class QueryListResponse(BaseModel):
+    items: list[QueryItem]
+    total: int
+    page: int
+    page_size: int

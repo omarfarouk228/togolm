@@ -15,6 +15,7 @@ from api.app.features.admin.schemas import (
     CreateKeyResponse,
     PatchKeyRequest,
     QueryItem,
+    QueryListResponse,
     RecentDocument,
     SourceStat,
 )
@@ -86,13 +87,13 @@ def get_corpus_stats(conn) -> dict:
             SELECT category, COUNT(*) FROM documents
             WHERE status = 'active' GROUP BY category ORDER BY COUNT(*) DESC
         """)
-        by_category = [{"category": r[0] or "unknown", "count": r[1]} for r in cur.fetchall()]
+        by_category = {r[0] or "unknown": r[1] for r in cur.fetchall()}
 
         cur.execute("""
             SELECT language, COUNT(*) FROM documents
             WHERE status = 'active' GROUP BY language ORDER BY COUNT(*) DESC
         """)
-        by_language = [{"language": r[0] or "unknown", "count": r[1]} for r in cur.fetchall()]
+        by_language = {r[0] or "unknown": r[1] for r in cur.fetchall()}
 
         cur.execute("SELECT COUNT(DISTINCT source) FROM documents WHERE status = 'active'")
         total_sources = cur.fetchone()[0]
@@ -281,10 +282,12 @@ def delete_api_key(conn, key_id: str) -> None:
 # ── Queries ───────────────────────────────────────────────────────────────────
 
 
-def list_queries(conn, page: int, page_size: int, off_topic_only: bool) -> list[QueryItem]:
+def list_queries(conn, page: int, page_size: int, off_topic_only: bool) -> QueryListResponse:
     offset = (page - 1) * page_size
     where = "WHERE is_off_topic = true" if off_topic_only else ""
     with conn.cursor() as cur:
+        cur.execute(f"SELECT COUNT(*) FROM user_queries {where}")
+        total = cur.fetchone()[0]
         cur.execute(
             f"""
             SELECT id::text, question, language, category, is_off_topic,
@@ -296,7 +299,7 @@ def list_queries(conn, page: int, page_size: int, off_topic_only: bool) -> list[
         """,
             (page_size, offset),
         )
-        return [
+        items = [
             QueryItem(
                 id=r[0],
                 question=r[1],
@@ -310,6 +313,7 @@ def list_queries(conn, page: int, page_size: int, off_topic_only: bool) -> list[
             )
             for r in cur.fetchall()
         ]
+    return QueryListResponse(items=items, total=total, page=page, page_size=page_size)
 
 
 def get_query_stats(conn, days: int) -> dict:
@@ -402,9 +406,12 @@ def get_usage_stats(conn, r: redis.Redis, days: int) -> dict:
     except Exception:
         pass
 
+    requests_today = by_day[-1]["total"] if by_day else 0
+
     return {
         "period_days": days,
         "total_requests": total_requests,
+        "requests_today": requests_today,
         "total_rate_limit_hits": total_rl_hits,
         "rate_limit_hit_rate": round(total_rl_hits / total_requests * 100, 1)
         if total_requests
@@ -443,12 +450,16 @@ def get_health(conn, r: redis.Redis) -> dict:
     return {
         "database": {
             "status": "ok" if db_ok else "error",
-            "total_documents": total_docs,
-            "total_chunks": total_chunks,
-            "embedded_chunks": embedded_chunks,
-            "embedding_coverage_pct": round(embedded_chunks / total_chunks * 100, 1)
-            if total_chunks
-            else 0,
+            "details": {
+                "total_documents": total_docs,
+                "total_chunks": total_chunks,
+                "embedded_chunks": embedded_chunks,
+            }
+            if db_ok
+            else None,
         },
         "redis": {"status": "ok" if redis_ok else "error"},
+        "chunks_with_embeddings": embedded_chunks,
+        "total_chunks": total_chunks,
+        "embedding_coverage": round(embedded_chunks / total_chunks * 100, 1) if total_chunks else 0,
     }

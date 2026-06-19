@@ -4,7 +4,8 @@ import { useQuery } from "@tanstack/react-query";
 import { getCorpusStats, getCorpusSources, getRecentDocuments } from "@/lib/api";
 import { useT } from "@/lib/i18n";
 import { StatCard } from "@/components/stat-card";
-import { FileText, Layers, Globe, Tag, Loader2 } from "lucide-react";
+import { FileText, Layers, Globe, Tag } from "lucide-react";
+import { ShimmerStatCards, ShimmerTable } from "@/components/shimmer";
 import {
   ResponsiveContainer,
   BarChart,
@@ -27,14 +28,6 @@ const COLORS = [
   "#ec4899",
   "#14b8a6",
 ];
-
-function Spinner() {
-  return (
-    <div className="flex items-center justify-center py-16">
-      <Loader2 className="animate-spin text-green-500" size={28} />
-    </div>
-  );
-}
 
 function ErrorMsg({ msg }: { msg: string }) {
   return (
@@ -80,7 +73,7 @@ export default function CorpusPage() {
 
       {/* Stats cards */}
       {ls ? (
-        <Spinner />
+        <ShimmerStatCards count={4} />
       ) : es ? (
         <ErrorMsg msg={t("common.error")} />
       ) : (
@@ -180,7 +173,7 @@ export default function CorpusPage() {
           <h2 className="text-sm font-semibold text-slate-700">{t("corpus.sources")}</h2>
         </div>
         {lsrc ? (
-          <Spinner />
+          <ShimmerTable rows={8} cols={4} />
         ) : esrc ? (
           <div className="p-4"><ErrorMsg msg={t("common.error")} /></div>
         ) : (
@@ -223,7 +216,7 @@ export default function CorpusPage() {
           <h2 className="text-sm font-semibold text-slate-700">{t("corpus.recentDocuments")}</h2>
         </div>
         {lr ? (
-          <Spinner />
+          <ShimmerTable rows={8} cols={4} />
         ) : er ? (
           <div className="p-4"><ErrorMsg msg={t("common.error")} /></div>
         ) : (
@@ -246,7 +239,7 @@ export default function CorpusPage() {
                     <td className="px-5 py-3 text-slate-500 max-w-[160px] truncate">{doc.source}</td>
                     <td className="px-5 py-3 text-slate-500 uppercase text-xs">{doc.language}</td>
                     <td className="px-5 py-3 text-slate-400 text-xs whitespace-nowrap">
-                      {format(parseISO(doc.created_at), "MMM d, yyyy HH:mm")}
+                      {doc.created_at ? format(parseISO(doc.created_at), "MMM d, yyyy HH:mm") : "—"}
                     </td>
                   </tr>
                 ))}
