@@ -24,7 +24,8 @@ echo "    App dir : ${APP_DIR}"
 echo "    Spiders : ${SPIDERS:-all}"
 echo ""
 
-ssh "${VPS_USER}@${VPS_IP}" APP_DIR="${APP_DIR}" SPIDERS="${SPIDERS}" bash << 'REMOTE'
+ssh "${VPS_USER}@${VPS_IP}" \
+  "APP_DIR=$(printf '%q' "${APP_DIR}") SPIDERS=$(printf '%q' "${SPIDERS}") bash -s" << 'REMOTE'
 set -e
 
 # ── Find the API container (supports plain Docker Compose and Coolify) ───
@@ -48,10 +49,32 @@ else
     SPIDER_ARGS=""
 fi
 
-# ── Run the pipeline ──────────────────────────────────────────
+# ── Run the pipeline detached from the SSH session ───────────
+# nohup ensures the process survives SSH timeout or disconnection.
+# Output is streamed to /tmp/togolm_pipeline.log and tailed here;
+# closing the terminal is safe — the pipeline keeps running.
+LOG=/tmp/togolm_pipeline.log
 echo "==> Starting pipeline (scrape + ingest + embed)..."
-docker exec "$API" python scripts/run_scrapers.py $SPIDER_ARGS
+echo "    Log : $LOG"
+echo "    (safe to close terminal — pipeline will keep running)"
+echo ""
+
+nohup docker exec "$API" python scripts/run_scrapers.py $SPIDER_ARGS > "$LOG" 2>&1 &
+BGPID=$!
+echo "Pipeline PID : $BGPID"
+echo ""
+
+# Stream the log until the process finishes
+tail -f "$LOG" &
+TAILPID=$!
+wait "$BGPID"
+STATUS=$?
+kill "$TAILPID" 2>/dev/null || true
 
 echo ""
-echo "Corpus update complete."
+if [ "$STATUS" -eq 0 ]; then
+    echo "Corpus update complete."
+else
+    echo "Pipeline exited with status $STATUS — check $LOG for details."
+fi
 REMOTE

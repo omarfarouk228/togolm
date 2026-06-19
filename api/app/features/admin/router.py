@@ -1,112 +1,228 @@
 """
-GET /v1/admin/stats — API usage statistics (admin-only)
+Admin endpoints — auth via POST /v1/admin/login (returns JWT).
 
-Protected by X-Admin-Key header matching the API_SECRET_KEY environment variable.
-Stats are read from Redis counters written by the rate_limit middleware.
+Auth:
+  POST /v1/admin/login           — validate admin key, get JWT token
+
+Corpus:
+  GET  /v1/admin/corpus/stats    — totals, by source / category / language
+  GET  /v1/admin/corpus/sources  — per-source doc count and last scrape date
+  GET  /v1/admin/corpus/recent   — recently ingested documents
+
+API Keys:
+  GET    /v1/admin/keys          — list all keys
+  POST   /v1/admin/keys          — create a key with a given plan
+  PATCH  /v1/admin/keys/{id}     — update plan or active status
+  DELETE /v1/admin/keys/{id}     — hard-delete a key
+
+Queries:
+  GET  /v1/admin/queries         — paginated query history
+  GET  /v1/admin/queries/stats   — off-topic rate, avg latency, totals
+
+Usage stats:
+  GET  /v1/admin/stats           — request counts from Redis
+
+System:
+  GET  /v1/admin/health/detailed — DB, Redis, embedding coverage
 """
 
-import datetime
-import os
-
-import redis
-from fastapi import APIRouter, Header, HTTPException, Query
+from fastapi import APIRouter, Header, Query
 
 from api.app.core.db import get_conn
+from api.app.features.admin import service
+from api.app.features.admin.schemas import (
+    AdminLoginRequest,
+    AdminLoginResponse,
+    ApiKeyItem,
+    CreateKeyRequest,
+    CreateKeyResponse,
+    PatchKeyRequest,
+    QueryItem,
+    RecentDocument,
+    SourceStat,
+)
 
 router = APIRouter(tags=["Admin"])
 
-_PLANS = ["anon", "free", "dev", "institution"]
-_STATS_TTL = 35 * 86_400
+
+def _auth(authorization: str | None, x_admin_key: str | None) -> None:
+    service.require_admin(authorization, x_admin_key)
 
 
-def _get_redis() -> redis.Redis:
-    url = os.getenv("REDIS_URL") or os.getenv("CELERY_BROKER_URL", "redis://localhost:6379/0")
-    return redis.from_url(url, decode_responses=True)
+# ── Auth ──────────────────────────────────────────────────────────────────────
 
 
-def _require_admin(x_admin_key: str | None) -> None:
-    secret = os.getenv("API_SECRET_KEY", "")
-    if not secret or x_admin_key != secret:
-        raise HTTPException(status_code=401, detail="Invalid or missing X-Admin-Key.")
+@router.post("/admin/login", response_model=AdminLoginResponse)
+def login(req: AdminLoginRequest):
+    """Exchange the admin key for a 24-hour JWT token."""
+    return service.login(req.key)
+
+
+# ── Corpus ────────────────────────────────────────────────────────────────────
+
+
+@router.get("/admin/corpus/stats")
+def corpus_stats(
+    authorization: str | None = Header(default=None),
+    x_admin_key: str | None = Header(default=None),
+):
+    _auth(authorization, x_admin_key)
+    conn = get_conn()
+    try:
+        return service.get_corpus_stats(conn)
+    finally:
+        conn.close()
+
+
+@router.get("/admin/corpus/sources", response_model=list[SourceStat])
+def corpus_sources(
+    authorization: str | None = Header(default=None),
+    x_admin_key: str | None = Header(default=None),
+):
+    _auth(authorization, x_admin_key)
+    conn = get_conn()
+    try:
+        return service.get_corpus_sources(conn)
+    finally:
+        conn.close()
+
+
+@router.get("/admin/corpus/recent", response_model=list[RecentDocument])
+def corpus_recent(
+    limit: int = Query(20, ge=1, le=100),
+    authorization: str | None = Header(default=None),
+    x_admin_key: str | None = Header(default=None),
+):
+    _auth(authorization, x_admin_key)
+    conn = get_conn()
+    try:
+        return service.get_recent_documents(conn, limit)
+    finally:
+        conn.close()
+
+
+# ── API Keys ──────────────────────────────────────────────────────────────────
+
+
+@router.get("/admin/keys", response_model=list[ApiKeyItem])
+def list_keys(
+    plan: str | None = Query(None),
+    active_only: bool = Query(False),
+    authorization: str | None = Header(default=None),
+    x_admin_key: str | None = Header(default=None),
+):
+    _auth(authorization, x_admin_key)
+    conn = get_conn()
+    try:
+        return service.list_api_keys(conn, plan, active_only)
+    finally:
+        conn.close()
+
+
+@router.post("/admin/keys", response_model=CreateKeyResponse, status_code=201)
+def create_key(
+    req: CreateKeyRequest,
+    authorization: str | None = Header(default=None),
+    x_admin_key: str | None = Header(default=None),
+):
+    _auth(authorization, x_admin_key)
+    conn = get_conn()
+    try:
+        return service.create_api_key(conn, req)
+    finally:
+        conn.close()
+
+
+@router.patch("/admin/keys/{key_id}", response_model=ApiKeyItem)
+def update_key(
+    key_id: str,
+    req: PatchKeyRequest,
+    authorization: str | None = Header(default=None),
+    x_admin_key: str | None = Header(default=None),
+):
+    _auth(authorization, x_admin_key)
+    conn = get_conn()
+    try:
+        return service.update_api_key(conn, key_id, req)
+    finally:
+        conn.close()
+
+
+@router.delete("/admin/keys/{key_id}", status_code=204)
+def delete_key(
+    key_id: str,
+    authorization: str | None = Header(default=None),
+    x_admin_key: str | None = Header(default=None),
+):
+    _auth(authorization, x_admin_key)
+    conn = get_conn()
+    try:
+        service.delete_api_key(conn, key_id)
+    finally:
+        conn.close()
+
+
+# ── Queries ───────────────────────────────────────────────────────────────────
+
+
+@router.get("/admin/queries", response_model=list[QueryItem])
+def list_queries(
+    page: int = Query(1, ge=1),
+    page_size: int = Query(20, ge=1, le=100),
+    off_topic_only: bool = Query(False),
+    authorization: str | None = Header(default=None),
+    x_admin_key: str | None = Header(default=None),
+):
+    _auth(authorization, x_admin_key)
+    conn = get_conn()
+    try:
+        return service.list_queries(conn, page, page_size, off_topic_only)
+    finally:
+        conn.close()
+
+
+@router.get("/admin/queries/stats")
+def query_stats(
+    days: int = Query(7, ge=1, le=90),
+    authorization: str | None = Header(default=None),
+    x_admin_key: str | None = Header(default=None),
+):
+    _auth(authorization, x_admin_key)
+    conn = get_conn()
+    try:
+        return service.get_query_stats(conn, days)
+    finally:
+        conn.close()
+
+
+# ── Usage stats ───────────────────────────────────────────────────────────────
 
 
 @router.get("/admin/stats")
 def get_admin_stats(
-    days: int = Query(default=7, ge=1, le=90, description="Number of past days to include"),
+    days: int = Query(default=7, ge=1, le=90),
+    authorization: str | None = Header(default=None),
     x_admin_key: str | None = Header(default=None),
 ):
-    """
-    Return API usage statistics for the last N days.
-
-    Requires X-Admin-Key header matching API_SECRET_KEY.
-    """
-    _require_admin(x_admin_key)
-
-    today = datetime.date.today()
-    dates = [(today - datetime.timedelta(days=i)).isoformat() for i in range(days - 1, -1, -1)]
-
-    # Fetch all counters in a single pipeline
-    r = _get_redis()
-    pipe = r.pipeline()
-    for date in dates:
-        pipe.get(f"stats:req:{date}")
-        pipe.get(f"stats:rl_hit:{date}")
-        for plan in _PLANS:
-            pipe.get(f"stats:req:{date}:{plan}")
-
-    results = pipe.execute()
-
-    # Parse pipeline results
-    by_day = []
-    total_requests = 0
-    total_rl_hits = 0
-    idx = 0
-
-    for date in dates:
-        day_total = int(results[idx] or 0)
-        day_rl_hits = int(results[idx + 1] or 0)
-        idx += 2
-
-        by_plan: dict[str, int] = {}
-        for plan in _PLANS:
-            by_plan[plan] = int(results[idx] or 0)
-            idx += 1
-
-        total_requests += day_total
-        total_rl_hits += day_rl_hits
-        by_day.append(
-            {
-                "date": date,
-                "total": day_total,
-                "rate_limit_hits": day_rl_hits,
-                "by_plan": by_plan,
-            }
-        )
-
-    # Active API keys from the database
-    keys_by_plan: dict[str, int] = {p: 0 for p in _PLANS if p != "anon"}
-    total_keys = 0
+    _auth(authorization, x_admin_key)
+    conn = get_conn()
     try:
-        conn = get_conn()
-        with conn.cursor() as cur:
-            cur.execute("SELECT plan, COUNT(*) FROM api_keys WHERE is_active = true GROUP BY plan")
-            for plan, count in cur.fetchall():
-                keys_by_plan[plan] = int(count)
-                total_keys += int(count)
+        return service.get_usage_stats(conn, service.get_redis(), days)
+    finally:
         conn.close()
-    except Exception:
-        pass  # DB unavailable — return partial stats
 
-    return {
-        "period_days": days,
-        "total_requests": total_requests,
-        "total_rate_limit_hits": total_rl_hits,
-        "rate_limit_hit_rate": (
-            round(total_rl_hits / total_requests * 100, 1) if total_requests else 0
-        ),
-        "by_day": by_day,
-        "active_api_keys": {
-            "total": total_keys,
-            "by_plan": keys_by_plan,
-        },
-    }
+
+# ── Health ────────────────────────────────────────────────────────────────────
+
+
+@router.get("/admin/health/detailed")
+def health_detailed(
+    authorization: str | None = Header(default=None),
+    x_admin_key: str | None = Header(default=None),
+):
+    _auth(authorization, x_admin_key)
+    conn = get_conn()
+    try:
+        return service.get_health(conn, service.get_redis())
+    finally:
+        conn.close()

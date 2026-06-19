@@ -20,6 +20,7 @@ COPY pyproject.toml uv.lock* ./
 # Install uv for fast installs, then install all project dependencies.
 RUN pip install --no-cache-dir uv && \
     uv pip install --system --no-cache \
+        "PyJWT>=2.8" \
         fastapi \
         "uvicorn[standard]" \
         "pydantic[email]" \
@@ -38,7 +39,9 @@ RUN pip install --no-cache-dir uv && \
         "httpx>=0.27" \
         "python-slugify>=8.0" \
         "pdfminer-six>=20260107" \
-        sentence-transformers
+        sentence-transformers \
+        datasets \
+        huggingface_hub
 
 # Pre-download the embedding model (bakes it into the image so cold starts
 # don't need internet access to download ~120 MB model weights).
