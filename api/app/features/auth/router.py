@@ -11,9 +11,9 @@ import redis
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, EmailStr
 
-from api.app.auth import APIKeyRecord, get_api_key
-from api.app.db import get_conn
-from api.app.rate_limit import PLAN_QUOTAS
+from api.app.core.auth import APIKeyRecord, get_api_key
+from api.app.core.db import get_conn
+from api.app.core.rate_limit import PLAN_QUOTAS
 
 router = APIRouter(tags=["Auth"])
 
