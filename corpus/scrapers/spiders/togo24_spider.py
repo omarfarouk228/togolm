@@ -6,7 +6,19 @@ from urllib.parse import urljoin, urlparse
 import scrapy
 from scrapers.spiders.base_spider import BaseTogoSpider
 
-_SKIP_EXT = {".jpg", ".jpeg", ".png", ".gif", ".svg", ".pdf", ".zip", ".css", ".js", ".woff", ".woff2"}
+_SKIP_EXT = {
+    ".jpg",
+    ".jpeg",
+    ".png",
+    ".gif",
+    ".svg",
+    ".pdf",
+    ".zip",
+    ".css",
+    ".js",
+    ".woff",
+    ".woff2",
+}
 _SKIP_PATH = {"/tag/", "/author/", "/feed/", "/wp-admin/", "/wp-content/", "/page/"}
 _WP_DATE = re.compile(r"/\d{4}/\d{2}/\d{2}/.+")
 _SLUG = re.compile(r"/[a-z0-9][a-z0-9\-]{8,}/?$", re.IGNORECASE)

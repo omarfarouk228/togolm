@@ -64,9 +64,16 @@ class OhadaSpider(BaseTogoSpider):
     def _is_legal_content(self, url: str) -> bool:
         path = urlparse(url).path.lower()
         legal_sections = [
-            "/actes-uniformes", "/acte-uniforme", "/traite", "/reglements",
-            "/jurisprudence", "/doctrine", "/legislation", "/textes",
-            "/droit-uniforme", "/droit-des-affaires",
+            "/actes-uniformes",
+            "/acte-uniforme",
+            "/traite",
+            "/reglements",
+            "/jurisprudence",
+            "/doctrine",
+            "/legislation",
+            "/textes",
+            "/droit-uniforme",
+            "/droit-des-affaires",
         ]
         return any(s in path for s in legal_sections)
 
@@ -80,7 +87,10 @@ class OhadaSpider(BaseTogoSpider):
         if not title or len(title) < 5:
             return None
         raw = (
-            self._text(response, ".entry-content p, .entry-content li, .entry-content h2, .entry-content h3")
+            self._text(
+                response,
+                ".entry-content p, .entry-content li, .entry-content h2, .entry-content h3",
+            )
             or self._text(response, ".post-content p, .post-content li")
             or self._text(response, ".field--name-body p, .field--name-body li")
             or self._text(response, "article p, article li, article h2")

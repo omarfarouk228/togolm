@@ -68,9 +68,18 @@ class BceaoSpider(BaseTogoSpider):
         if any(t in url_lower for t in _TOGO_PATHS):
             return True
         # Allow publications, statistics, regulations, reports
-        relevant_sections = ["/publications/", "/statistiques/", "/reglementation/",
-                             "/rapports/", "/rapport-", "/notes-", "/bulletin-",
-                             "/communique", "/decision", "/instruction"]
+        relevant_sections = [
+            "/publications/",
+            "/statistiques/",
+            "/reglementation/",
+            "/rapports/",
+            "/rapport-",
+            "/notes-",
+            "/bulletin-",
+            "/communique",
+            "/decision",
+            "/instruction",
+        ]
         return any(s in path for s in relevant_sections)
 
     def _extract(self, response):

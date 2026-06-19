@@ -13,26 +13,29 @@
 # =============================================================
 set -euo pipefail
 
-VPS_IP="${VPS_IP:-62.169.27.133}"
+VPS_IP="${VPS_IP:?Error: set VPS_IP before running (e.g. VPS_IP=x.x.x.x bash scripts/vps_update.sh)}"
 VPS_USER="${VPS_USER:-root}"
+APP_DIR="${APP_DIR:-/opt/togolm}"
 SPIDERS="${*}"  # all CLI args become spider list, empty = all
 
 echo "==> TogoLM VPS Update"
 echo "    Host    : ${VPS_USER}@${VPS_IP}"
+echo "    App dir : ${APP_DIR}"
 echo "    Spiders : ${SPIDERS:-all}"
 echo ""
 
-ssh "${VPS_USER}@${VPS_IP}" SPIDERS="${SPIDERS}" bash << 'REMOTE'
+ssh "${VPS_USER}@${VPS_IP}" APP_DIR="${APP_DIR}" SPIDERS="${SPIDERS}" bash << 'REMOTE'
 set -e
 
-# ── Find the API container ────────────────────────────────────
-API=$(docker ps --format '{{.Names}}' | grep -iE 'api' | grep -viE 'celery|beat' | head -1)
+# ── Find the API container via Docker Compose ─────────────────
+API=$(cd "$APP_DIR" && docker compose -f docker-compose.prod.yml ps -q api 2>/dev/null | head -1)
 if [ -z "$API" ]; then
-    echo "ERROR: No API container found. Running containers:"
+    echo "ERROR: No 'api' service container found in $APP_DIR."
+    echo "Running containers:"
     docker ps --format '{{.Names}}'
     exit 1
 fi
-echo "Container : $API"
+echo "Container : $(docker inspect --format '{{.Name}}' "$API" | sed 's|^/||')"
 echo ""
 
 # ── Build spider arguments ────────────────────────────────────

@@ -75,7 +75,10 @@ class EdusupSpider(BaseTogoSpider):
         if not title or len(title) < 5:
             return None
         raw = (
-            self._text(response, ".entry-content p, .entry-content li, .entry-content h2, .entry-content h3")
+            self._text(
+                response,
+                ".entry-content p, .entry-content li, .entry-content h2, .entry-content h3",
+            )
             or self._text(response, ".post-content p, .post-content li")
             or self._text(response, ".elementor-widget-container p, .elementor-widget-container li")
             or self._text(response, "article p, article li, article h2")
