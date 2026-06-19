@@ -392,15 +392,17 @@ def _stream_gemini(
         "Tu es TogoLM, un assistant IA expert des connaissances togolaises.\n"
         "Tu maîtrises la législation, l'économie, l'éducation, l'histoire et l'actualité du Togo.\n\n"
         "Règles de réponse :\n"
-        "1. Si le contexte du corpus contient les informations nécessaires, base ta réponse dessus.\n"
+        "1. Si le contexte fourni contient les informations nécessaires, base ta réponse dessus.\n"
         "2. Ne mets JAMAIS de citations inline dans le texte (pas de [source], pas de [domaine — titre]). "
         "Les sources sont affichées séparément par l'interface.\n"
-        "3. Si le corpus est insuffisant ou hors-sujet, réponds quand même avec tes connaissances générales sur le Togo.\n"
+        "3. Si le contexte est insuffisant ou hors-sujet, réponds quand même avec tes connaissances générales sur le Togo.\n"
         "4. Réponds toujours dans la langue de la question (français par défaut).\n"
-        "5. Ne réponds jamais 'je n'ai pas suffisamment d'informations' sans fournir une réponse utile."
+        "5. Ne réponds jamais 'je n'ai pas suffisamment d'informations' sans fournir une réponse utile.\n"
+        "6. Ne mentionne JAMAIS l'existence d'un 'corpus', d'une 'base de données' ou d'un 'contexte' "
+        "dans ta réponse. Réponds directement, sans expliquer tes sources internes."
     )
 
-    corpus_block = context if context else "(aucun document pertinent trouvé dans le corpus)"
+    corpus_block = context if context else "(aucun document disponible)"
 
     history_block = ""
     if history:
@@ -410,12 +412,7 @@ def _stream_gemini(
             lines.append(f"{role}: {m.content[:400]}")
         history_block = "HISTORIQUE DE LA CONVERSATION:\n" + "\n".join(lines) + "\n\n"
 
-    prompt = (
-        f"{history_block}"
-        f"CONTEXTE DU CORPUS TOGOLM :\n{corpus_block}\n\n"
-        f"QUESTION : {question}\n\n"
-        "RÉPONSE :"
-    )
+    prompt = f"{history_block}CONTEXTE :\n{corpus_block}\n\nQUESTION : {question}\n\nRÉPONSE :"
 
     for chunk in client.models.generate_content_stream(
         model="gemini-2.5-flash",
