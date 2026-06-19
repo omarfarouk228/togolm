@@ -51,7 +51,9 @@ COPY scripts/  ./scripts/
 COPY alembic.ini ./alembic.ini
 
 # Non-root user for security
-RUN useradd --create-home --shell /bin/bash app
+RUN useradd --create-home --shell /bin/bash app && \
+    mkdir -p /app/corpus/datasets && \
+    chown -R app:app /app
 USER app
 
 # Health check (calls the /health endpoint every 30s)
