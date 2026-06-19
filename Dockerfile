@@ -47,6 +47,7 @@ FROM deps AS production
 COPY api/      ./api/
 COPY corpus/   ./corpus/
 COPY alembic/  ./alembic/
+COPY scripts/  ./scripts/
 COPY alembic.ini ./alembic.ini
 
 # Non-root user for security
