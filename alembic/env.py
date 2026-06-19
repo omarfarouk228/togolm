@@ -1,5 +1,6 @@
 import os
 from logging.config import fileConfig
+from urllib.parse import quote_plus
 
 from sqlalchemy import engine_from_config, pool
 
@@ -19,7 +20,7 @@ def _get_url() -> str:
     port = os.getenv("POSTGRES_PORT", "5432")
     db = os.getenv("POSTGRES_DB", "togolm")
     user = os.getenv("POSTGRES_USER", "togolm")
-    password = os.getenv("POSTGRES_PASSWORD") or ""
+    password = quote_plus(os.getenv("POSTGRES_PASSWORD") or "")
     return f"postgresql+psycopg2://{user}:{password}@{host}:{port}/{db}"
 
 
