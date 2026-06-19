@@ -2,11 +2,27 @@
 Shared pytest fixtures for TogoLM API tests.
 """
 
+from unittest.mock import MagicMock, patch
+
 import pytest
 from fastapi.testclient import TestClient
 
 from api.app.features.query.service import RetrievedChunk
 from api.app.main import app
+
+
+@pytest.fixture(autouse=True, scope="session")
+def disable_rate_limit():
+    """Patch Redis to always return count=1 so rate limits never trigger.
+
+    Keeps check_rate_limit running (auth sub-dep get_api_key still executes)
+    while avoiding 429s caused by the shared anon IP across the test session.
+    """
+    mock_redis = MagicMock()
+    mock_redis.incr.return_value = 1
+    mock_redis.pipeline.return_value.execute.return_value = []
+    with patch("api.app.core.rate_limit._get_redis", return_value=mock_redis):
+        yield
 
 
 @pytest.fixture(scope="session")

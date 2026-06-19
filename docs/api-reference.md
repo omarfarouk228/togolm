@@ -1,6 +1,6 @@
 # TogoLM API Reference
 
-Base URL: `https://api.togolm.ai/v1` (production) / `http://localhost:8000/v1` (local)
+Base URL: `https://api.togolm.kofcorporation.com/v1` (production) / `http://localhost:8000/v1` (local)
 
 ## Authentication
 
@@ -24,6 +24,9 @@ V1 uses simple API key authentication. Omit the header for public (rate-limited)
 | `POST` | `/v1/query` | RAG query (full response) |
 | `POST` | `/v1/query/stream` | RAG query (SSE stream) |
 | `POST` | `/v1/embed` | Generate embedding vector |
+| `POST` | `/v1/auth/register` | Request a free API key |
+| `GET` | `/v1/auth/me` | Current key info and usage |
+
 
 ---
 
