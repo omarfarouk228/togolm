@@ -17,22 +17,9 @@ FROM base AS deps
 # they change, not on every code edit.
 COPY pyproject.toml uv.lock* ./
 
-# Install uv for fast installs, then install API-only dependencies.
+# Install uv for fast installs, then install all project dependencies.
 RUN pip install --no-cache-dir uv && \
-    uv pip install --system --no-cache \
-        fastapi \
-        "uvicorn[standard]" \
-        "pydantic[email]" \
-        python-dotenv \
-        psycopg2-binary \
-        pgvector \
-        sqlalchemy \
-        alembic \
-        sentence-transformers \
-        "google-genai>=2.3.0" \
-        redis \
-        celery \
-        tqdm
+    uv pip install --system --no-cache .
 
 # Pre-download the embedding model (bakes it into the image so cold starts
 # don't need internet access to download ~120 MB model weights).
