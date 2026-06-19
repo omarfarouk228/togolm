@@ -109,6 +109,8 @@ const translations: Record<string, Record<Lang, string>> = {
 
   // Common
   "common.loading": { en: "Loading…", fr: "Chargement…" },
+  "nav.logoutConfirm": { en: "Sign out?", fr: "Se déconnecter ?" },
+  "nav.logoutConfirmMsg": { en: "You will be redirected to the login page.", fr: "Vous serez redirigé vers la page de connexion." },
   "common.error": { en: "Error loading data", fr: "Erreur de chargement" },
   "common.retry": { en: "Retry", fr: "Réessayer" },
   "common.confirm": { en: "Confirm", fr: "Confirmer" },
@@ -143,10 +145,15 @@ export function useT() {
     setLangState(next);
   }, [lang]);
 
+  const changeLang = useCallback((next: Lang) => {
+    setLang(next);
+    setLangState(next);
+  }, []);
+
   const t = useCallback(
     (key: string) => translate(key, lang),
     [lang]
   );
 
-  return { t, lang, toggleLang };
+  return { t, lang, toggleLang, setLang: changeLang };
 }

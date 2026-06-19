@@ -139,10 +139,10 @@ async function apiFetch<T>(
 
 // ---- Auth ------------------------------------------------------------------
 
-export async function adminLogin(password: string): Promise<LoginResponse> {
+export async function adminLogin(key: string): Promise<LoginResponse> {
   return apiFetch<LoginResponse>("/v1/admin/login", {
     method: "POST",
-    body: JSON.stringify({ password }),
+    body: JSON.stringify({ key }),
   });
 }
 

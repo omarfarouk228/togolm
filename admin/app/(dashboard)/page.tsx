@@ -4,7 +4,8 @@ import { useQuery } from "@tanstack/react-query";
 import { getCorpusStats, getUsageStats } from "@/lib/api";
 import { useT } from "@/lib/i18n";
 import { StatCard } from "@/components/stat-card";
-import { FileText, Layers, Activity, Cpu, Loader2 } from "lucide-react";
+import { FileText, Layers, Activity, Cpu } from "lucide-react";
+import { ShimmerStatCards, ShimmerChart } from "@/components/shimmer";
 import {
   ResponsiveContainer,
   AreaChart,
@@ -15,14 +16,6 @@ import {
   Tooltip,
 } from "recharts";
 import { format, parseISO } from "date-fns";
-
-function Spinner() {
-  return (
-    <div className="flex items-center justify-center py-20">
-      <Loader2 className="animate-spin text-green-500" size={28} />
-    </div>
-  );
-}
 
 function ErrorMessage({ message }: { message: string }) {
   return (
@@ -71,7 +64,10 @@ export default function DashboardPage() {
 
       {/* Stat cards */}
       {loadingCorpus || loadingUsage ? (
-        <Spinner />
+        <>
+          <ShimmerStatCards count={4} />
+          <ShimmerChart />
+        </>
       ) : corpusError || usageError ? (
         <ErrorMessage message={t("common.error")} />
       ) : (

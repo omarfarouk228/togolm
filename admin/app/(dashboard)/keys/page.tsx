@@ -13,7 +13,8 @@ import {
 import { useT } from "@/lib/i18n";
 import { StatusBadge } from "@/components/status-badge";
 import { ConfirmDialog } from "@/components/confirm-dialog";
-import { Plus, Loader2, Trash2, X } from "lucide-react";
+import { Plus, Trash2, X } from "lucide-react";
+import { ShimmerTable } from "@/components/shimmer";
 import { format, parseISO } from "date-fns";
 
 type Plan = "free" | "dev" | "institution";
@@ -26,14 +27,6 @@ function planBadge(plan: Plan) {
   };
   const { label, variant } = variants[plan] ?? { label: plan, variant: "gray" };
   return <StatusBadge label={label} variant={variant} />;
-}
-
-function Spinner() {
-  return (
-    <div className="flex items-center justify-center py-16">
-      <Loader2 className="animate-spin text-green-500" size={28} />
-    </div>
-  );
 }
 
 function ErrorMsg({ msg }: { msg: string }) {
@@ -194,7 +187,7 @@ export default function KeysPage() {
       </div>
 
       {isLoading ? (
-        <Spinner />
+        <ShimmerTable rows={6} cols={7} />
       ) : error ? (
         <ErrorMsg msg={t("common.error")} />
       ) : (
