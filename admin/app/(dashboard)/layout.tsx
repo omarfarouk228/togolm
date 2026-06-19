@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { isAuthenticated } from "@/lib/auth";
 import { Sidebar } from "@/components/sidebar";
-import { Loader2 } from "lucide-react";
+import { ShimmerLayout } from "@/components/shimmer";
 
 export default function DashboardLayout({
   children,
@@ -24,9 +24,7 @@ export default function DashboardLayout({
 
   if (!checked) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-slate-50">
-        <Loader2 className="animate-spin text-green-500" size={28} />
-      </div>
+      <ShimmerLayout />
     );
   }
 
