@@ -6,14 +6,14 @@ Create Date: 2025-01-01 00:00:00.000000
 
 """
 
-from typing import Sequence, Union
+from collections.abc import Sequence
 
 from alembic import op
 
 revision: str = "001"
-down_revision: Union[str, Sequence[str], None] = None
-branch_labels: Union[str, Sequence[str], None] = None
-depends_on: Union[str, Sequence[str], None] = None
+down_revision: str | Sequence[str] | None = None
+branch_labels: str | Sequence[str] | None = None
+depends_on: str | Sequence[str] | None = None
 
 
 def upgrade() -> None:
@@ -121,7 +121,9 @@ def upgrade() -> None:
 
     # Seed document for CI tests
     op.execute("""
-        INSERT INTO documents (id, source, url, category, title, raw_content, clean_content, word_count, language, status)
+        INSERT INTO documents
+            (id, source, url, category, title,
+             raw_content, clean_content, word_count, language, status)
         VALUES (
             '00000000-0000-0000-0000-000000000001',
             'jo.gouv.tg',

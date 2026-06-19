@@ -4,7 +4,6 @@ from logging.config import fileConfig
 from sqlalchemy import engine_from_config, pool
 
 from alembic import context
-
 from api.app.models import Base
 
 config = context.config
@@ -20,7 +19,7 @@ def _get_url() -> str:
     port = os.getenv("POSTGRES_PORT", "5432")
     db = os.getenv("POSTGRES_DB", "togolm")
     user = os.getenv("POSTGRES_USER", "togolm")
-    password = os.getenv("POSTGRES_PASSWORD", "togolm_dev")
+    password = os.getenv("POSTGRES_PASSWORD") or ""
     return f"postgresql+psycopg2://{user}:{password}@{host}:{port}/{db}"
 
 
