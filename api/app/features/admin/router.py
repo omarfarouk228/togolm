@@ -185,9 +185,18 @@ def list_queries(
     conn = get_conn()
     try:
         return service.list_queries(
-            conn, page, page_size, off_topic_only,
-            category, language, latency_min, latency_max,
-            chunks_min, chunks_max, date_from, date_to,
+            conn,
+            page,
+            page_size,
+            off_topic_only,
+            category,
+            language,
+            latency_min,
+            latency_max,
+            chunks_min,
+            chunks_max,
+            date_from,
+            date_to,
         )
     finally:
         conn.close()
