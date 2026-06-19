@@ -412,12 +412,7 @@ def _stream_gemini(
             lines.append(f"{role}: {m.content[:400]}")
         history_block = "HISTORIQUE DE LA CONVERSATION:\n" + "\n".join(lines) + "\n\n"
 
-    prompt = (
-        f"{history_block}"
-        f"CONTEXTE :\n{corpus_block}\n\n"
-        f"QUESTION : {question}\n\n"
-        "RÉPONSE :"
-    )
+    prompt = f"{history_block}CONTEXTE :\n{corpus_block}\n\nQUESTION : {question}\n\nRÉPONSE :"
 
     for chunk in client.models.generate_content_stream(
         model="gemini-2.5-flash",
