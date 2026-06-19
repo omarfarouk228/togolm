@@ -282,11 +282,55 @@ def delete_api_key(conn, key_id: str) -> None:
 # ── Queries ───────────────────────────────────────────────────────────────────
 
 
-def list_queries(conn, page: int, page_size: int, off_topic_only: bool) -> QueryListResponse:
+def list_queries(
+    conn,
+    page: int,
+    page_size: int,
+    off_topic_only: bool,
+    category: str | None = None,
+    language: str | None = None,
+    latency_min: int | None = None,
+    latency_max: int | None = None,
+    chunks_min: int | None = None,
+    chunks_max: int | None = None,
+    date_from: str | None = None,
+    date_to: str | None = None,
+) -> QueryListResponse:
     offset = (page - 1) * page_size
-    where = "WHERE is_off_topic = true" if off_topic_only else ""
+    conditions: list[str] = []
+    params: list = []
+
+    if off_topic_only:
+        conditions.append("is_off_topic = true")
+    if category:
+        conditions.append("category = %s")
+        params.append(category)
+    if language:
+        conditions.append("language = %s")
+        params.append(language)
+    if latency_min is not None:
+        conditions.append("latency_ms >= %s")
+        params.append(latency_min)
+    if latency_max is not None:
+        conditions.append("latency_ms <= %s")
+        params.append(latency_max)
+    if chunks_min is not None:
+        conditions.append("chunks_found >= %s")
+        params.append(chunks_min)
+    if chunks_max is not None:
+        conditions.append("chunks_found <= %s")
+        params.append(chunks_max)
+    if date_from:
+        conditions.append("created_at >= %s")
+        params.append(date_from)
+    if date_to:
+        conditions.append("created_at <= %s")
+        params.append(date_to + " 23:59:59")
+
+    where = ("WHERE " + " AND ".join(conditions)) if conditions else ""
+
     with conn.cursor() as cur:
-        cur.execute(f"SELECT COUNT(*) FROM user_queries {where}")
+        cur.execute(f"SELECT COUNT(*) FROM user_queries {where}", params)
         total = cur.fetchone()[0]
         cur.execute(
             f"""
@@ -297,7 +341,7 @@ def list_queries(conn, page: int, page_size: int, off_topic_only: bool) -> Query
             ORDER BY created_at DESC
             LIMIT %s OFFSET %s
         """,
-            (page_size, offset),
+            params + [page_size, offset],
         )
         items = [
             QueryItem(
