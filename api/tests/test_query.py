@@ -13,9 +13,9 @@ from unittest.mock import patch
 import pytest
 from fastapi.testclient import TestClient
 
+from api.app.core.rate_limit import check_rate_limit
+from api.app.features.query.service import RetrievedChunk
 from api.app.main import app
-from api.app.rate_limit import check_rate_limit
-from api.app.services.rag import RetrievedChunk
 
 client = TestClient(app)
 
@@ -45,8 +45,10 @@ FAKE_CHUNK = RetrievedChunk(
 class TestQueryEndpoint:
     def test_returns_expected_shape(self):
         with (
-            patch("api.app.routers.query.retrieve", return_value=[FAKE_CHUNK]),
-            patch("api.app.services.rag._generate_with_gemini", return_value="Réponse test"),
+            patch("api.app.features.query.router.retrieve", return_value=[FAKE_CHUNK]),
+            patch(
+                "api.app.features.query.service._generate_with_gemini", return_value="Réponse test"
+            ),
         ):
             resp = client.post("/v1/query", json={"question": "Quel est le régime du Togo ?"})
         assert resp.status_code == 200
@@ -59,8 +61,8 @@ class TestQueryEndpoint:
 
     def test_sources_include_title_url_score(self):
         with (
-            patch("api.app.routers.query.retrieve", return_value=[FAKE_CHUNK]),
-            patch("api.app.services.rag._generate_with_gemini", return_value="OK"),
+            patch("api.app.features.query.router.retrieve", return_value=[FAKE_CHUNK]),
+            patch("api.app.features.query.service._generate_with_gemini", return_value="OK"),
         ):
             resp = client.post("/v1/query", json={"question": "Régime politique du Togo ?"})
         sources = resp.json()["sources"]
@@ -70,7 +72,7 @@ class TestQueryEndpoint:
         assert 0 <= sources[0]["score"] <= 1
 
     def test_empty_corpus_returns_answer(self):
-        with patch("api.app.routers.query.retrieve", return_value=[]):
+        with patch("api.app.features.query.router.retrieve", return_value=[]):
             resp = client.post("/v1/query", json={"question": "Question sans résultat ?"})
         assert resp.status_code == 200
         assert resp.json()["sources"] == []
@@ -84,7 +86,7 @@ class TestQueryEndpoint:
         assert resp.status_code == 422
 
     def test_retrieval_error_returns_500(self):
-        with patch("api.app.routers.query.retrieve", side_effect=Exception("DB error")):
+        with patch("api.app.features.query.router.retrieve", side_effect=Exception("DB error")):
             resp = client.post("/v1/query", json={"question": "Question valide ?"})
         assert resp.status_code == 500
 
@@ -106,8 +108,8 @@ def _parse_sse(text: str) -> list[dict]:
 class TestStreamEndpoint:
     def test_response_is_event_stream(self):
         with (
-            patch("api.app.routers.query.retrieve", return_value=[FAKE_CHUNK]),
-            patch("api.app.routers.query._stream_gemini", return_value=iter([])),
+            patch("api.app.features.query.router.retrieve", return_value=[FAKE_CHUNK]),
+            patch("api.app.features.query.router._stream_gemini", return_value=iter([])),
         ):
             resp = client.post("/v1/query/stream", json={"question": "Question stream ?"})
         assert resp.status_code == 200
@@ -115,16 +117,16 @@ class TestStreamEndpoint:
 
     def test_stream_ends_with_done(self):
         with (
-            patch("api.app.routers.query.retrieve", return_value=[FAKE_CHUNK]),
-            patch("api.app.routers.query._stream_gemini", return_value=iter([])),
+            patch("api.app.features.query.router.retrieve", return_value=[FAKE_CHUNK]),
+            patch("api.app.features.query.router._stream_gemini", return_value=iter([])),
         ):
             resp = client.post("/v1/query/stream", json={"question": "Question stream ?"})
         assert "data: [DONE]" in resp.text
 
     def test_stream_includes_sources_event(self):
         with (
-            patch("api.app.routers.query.retrieve", return_value=[FAKE_CHUNK]),
-            patch("api.app.routers.query._stream_gemini", return_value=iter([])),
+            patch("api.app.features.query.router.retrieve", return_value=[FAKE_CHUNK]),
+            patch("api.app.features.query.router._stream_gemini", return_value=iter([])),
         ):
             resp = client.post("/v1/query/stream", json={"question": "Question stream ?"})
         events = _parse_sse(resp.text)
@@ -136,9 +138,9 @@ class TestStreamEndpoint:
         monkeypatch.setenv("GEMINI_API_KEY", "AQ.fake-key")
         gemini_event = f"data: {json.dumps({'type': 'chunk', 'text': 'Réponse Gemini'})}\n\n"
         with (
-            patch("api.app.routers.query.retrieve", return_value=[FAKE_CHUNK]),
+            patch("api.app.features.query.router.retrieve", return_value=[FAKE_CHUNK]),
             patch(
-                "api.app.routers.query._stream_gemini", return_value=iter([gemini_event])
+                "api.app.features.query.router._stream_gemini", return_value=iter([gemini_event])
             ) as mock_g,
         ):
             resp = client.post("/v1/query/stream", json={"question": "Question Gemini ?"})
@@ -148,7 +150,7 @@ class TestStreamEndpoint:
 
     def test_stream_extractive_fallback_when_no_key(self, monkeypatch):
         monkeypatch.delenv("GEMINI_API_KEY", raising=False)
-        with patch("api.app.routers.query.retrieve", return_value=[FAKE_CHUNK]):
+        with patch("api.app.features.query.router.retrieve", return_value=[FAKE_CHUNK]):
             resp = client.post("/v1/query/stream", json={"question": "Question extractive ?"})
         events = _parse_sse(resp.text)
         chunk_events = [e for e in events if e.get("type") == "chunk"]
@@ -159,7 +161,7 @@ class TestStreamEndpoint:
 
     def test_stream_no_results_message(self, monkeypatch):
         monkeypatch.delenv("GEMINI_API_KEY", raising=False)
-        with patch("api.app.routers.query.retrieve", return_value=[]):
+        with patch("api.app.features.query.router.retrieve", return_value=[]):
             resp = client.post("/v1/query/stream", json={"question": "Question sans résultat ?"})
         events = _parse_sse(resp.text)
         chunk_events = [e for e in events if e.get("type") == "chunk"]
@@ -167,7 +169,7 @@ class TestStreamEndpoint:
         assert "trouvé de documents pertinents" in chunk_events[0]["text"]
 
     def test_stream_retrieval_error_yields_error_event(self):
-        with patch("api.app.routers.query.retrieve", side_effect=Exception("DB down")):
+        with patch("api.app.features.query.router.retrieve", side_effect=Exception("DB down")):
             resp = client.post("/v1/query/stream", json={"question": "Question erreur ?"})
         events = _parse_sse(resp.text)
         error_events = [e for e in events if e.get("type") == "error"]
@@ -179,7 +181,7 @@ class TestStreamEndpoint:
 # Off-topic detection (_is_off_topic unit tests)
 # ---------------------------------------------------------------------------
 
-from api.app.routers.query import _contains_code, _is_off_topic  # noqa: E402
+from api.app.features.query.router import _contains_code, _is_off_topic  # noqa: E402
 
 
 class TestOffTopicDetection:

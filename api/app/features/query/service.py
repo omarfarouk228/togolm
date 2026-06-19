@@ -13,7 +13,7 @@ When Gemini key is available, generation can be added on top.
 import os
 from dataclasses import dataclass
 
-from api.app.db import get_conn
+from api.app.core.db import get_conn
 from corpus.processors.embedder import get_embedder
 
 _embedder = None

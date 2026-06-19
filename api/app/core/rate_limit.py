@@ -26,7 +26,7 @@ import os
 import redis
 from fastapi import Depends, HTTPException, Request
 
-from api.app.auth import APIKeyRecord, get_api_key
+from api.app.core.auth import APIKeyRecord, get_api_key
 
 # Limits: plan → (max_requests, window_in_seconds)
 _LIMITS: dict[str, tuple[int, int]] = {

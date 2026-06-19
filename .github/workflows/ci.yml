@@ -68,9 +68,7 @@ jobs:
           uv pip install --system -e ".[dev]"
 
       - name: Initialize test database
-        run: psql -h localhost -U togolm_test -d togolm_test -f scripts/init.sql
-        env:
-          PGPASSWORD: togolm_test
+        run: alembic upgrade head
 
       - name: Run tests
         run: pytest api/tests/ -v --tb=short

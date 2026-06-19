@@ -8,7 +8,7 @@ import psycopg2
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel
 
-from api.app.db import get_conn
+from api.app.core.db import get_conn
 
 router = APIRouter(tags=["Documents"])
 

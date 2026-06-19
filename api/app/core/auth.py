@@ -21,7 +21,7 @@ from dataclasses import dataclass
 
 from fastapi import Header, HTTPException
 
-from api.app.db import get_conn
+from api.app.core.db import get_conn
 
 # ---------------------------------------------------------------------------
 # Data model
