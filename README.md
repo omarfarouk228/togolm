@@ -44,9 +44,13 @@ togolm/
 ├── api/
 │   ├── app/
 │   │   ├── main.py           # FastAPI entry point
-│   │   ├── routers/          # corpus.py, documents.py, query.py
-│   │   └── services/rag.py   # Vector retrieval + Gemini generation
-│   └── tests/                # 11 pytest integration tests
+│   │   ├── core/             # db.py, auth.py, rate_limit.py, models.py
+│   │   └── features/         # admin/, auth/, corpus/, documents/, query/
+│   │       └── query/
+│   │           └── service.py # Vector retrieval + Gemini generation
+│   └── tests/                # pytest integration tests
+├── alembic/                  # Database migrations (Alembic)
+│   └── versions/
 ├── finetuning/
 │   ├── dataset/
 │   │   ├── generator.py      # Q&A pair generation (Gemini)
@@ -64,7 +68,10 @@ togolm/
 │   │   └── chat/page.tsx     # Streaming RAG chat UI
 │   └── lib/api.ts            # Typed API client + SSE stream
 ├── scripts/
-│   └── init.sql              # PostgreSQL schema (documents + chunks)
+│   ├── create_api_key.py     # CLI to create/list/revoke API keys
+│   ├── embed_missing.py      # Backfill embeddings for existing docs
+│   ├── db_export.sh          # Export local DB and import on VPS
+│   └── run_scrapers.py       # Master scraping pipeline
 ├── .env.example
 └── pyproject.toml
 ```
@@ -90,7 +97,7 @@ cp .env.example .env
 ### 2 — Initialize the database
 
 ```bash
-psql -U $POSTGRES_USER -d $POSTGRES_DB -f scripts/init.sql
+alembic upgrade head
 ```
 
 ### 3 — Install Python dependencies

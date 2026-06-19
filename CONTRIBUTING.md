@@ -36,7 +36,7 @@ cp .env.example .env
 # Set POSTGRES_USER, POSTGRES_DB, POSTGRES_HOST
 
 # 5. Initialize the database
-psql -U $POSTGRES_USER -d $POSTGRES_DB -f scripts/init.sql
+alembic upgrade head
 
 # 6. Run tests
 uv run pytest api/tests/ -v

@@ -76,7 +76,8 @@ class TestBuildAnswer:
         monkeypatch.setenv("GEMINI_API_KEY", "AQ.fake-key-for-test")
         chunk = make_chunk(content="Texte de secours.")
         with patch(
-            "api.app.features.query.service._generate_with_gemini", side_effect=Exception("API error")
+            "api.app.features.query.service._generate_with_gemini",
+            side_effect=Exception("API error"),
         ):
             answer = build_answer("question ?", [chunk])
         assert "Texte de secours" in answer

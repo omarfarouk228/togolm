@@ -24,15 +24,17 @@
                            ▼
 ┌─────────────────────────────────────────────────────────────────┐
 │                   POSTGRESQL + PGVECTOR                          │
-│  Table: documents   (62 000+ docs, 26 sources)                  │
-│  Table: chunks      (101 000+ chunks, 384-dim embeddings)       │
-│  Table: api_keys    (SHA-256, plans: free / dev / institution)  │
+│  Table: documents    (62 000+ docs, 26 sources)                  │
+│  Table: chunks       (101 000+ chunks, 384-dim embeddings)      │
+│  Table: api_keys     (SHA-256, plans: free / dev / institution) │
+│  Table: user_queries (query logs, latency, off-topic tracking)  │
+│  Migrations: Alembic (alembic upgrade head)                     │
 └──────────┬──────────────────────────────┬───────────────────────┘
            │                              │
            ▼                              ▼
 ┌──────────────────────┐      ┌───────────────────────────────────┐
 │     FINE-TUNING      │      │           RAG ENGINE               │
-│  finetuning/         │      │  api/app/services/rag.py          │
+│  finetuning/         │      │  api/app/features/query/service.py│
 │  QLoRA · Mistral 7B  │      │  Retrieve → Rerank → Generate     │
 │  Hugging Face Hub    │      │  Gemini 2.5 Flash / local model   │
 └──────────────────────┘      └──────────────────┬────────────────┘
@@ -132,48 +134,16 @@ celery -A corpus.celery_app worker --beat --loglevel=info
 
 #### Schéma
 
-```sql
--- Documents (textes bruts + nettoyés)
-CREATE TABLE documents (
-    id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    source      VARCHAR(255) NOT NULL,
-    url         TEXT UNIQUE NOT NULL,
-    category    VARCHAR(100),
-    subcategory VARCHAR(100),
-    title       TEXT,
-    raw_content TEXT,
-    clean_content TEXT,
-    language    VARCHAR(10) DEFAULT 'fr',
-    published_at DATE,
-    metadata    JSONB,
-    status      VARCHAR(20) DEFAULT 'active',
-    created_at  TIMESTAMP DEFAULT NOW(),
-    updated_at  TIMESTAMP DEFAULT NOW()
-);
+Le schéma est géré par Alembic (`alembic upgrade head`). Voir `alembic/versions/` pour les migrations.
 
--- Chunks vectoriels (384 dims)
-CREATE TABLE chunks (
-    id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    document_id UUID REFERENCES documents(id) ON DELETE CASCADE,
-    chunk_index INTEGER,
-    content     TEXT,
-    word_count  INTEGER,
-    embedding   vector(384),
-    created_at  TIMESTAMP DEFAULT NOW()
-);
+Tables principales :
 
--- Clés API (SHA-256, jamais en clair)
-CREATE TABLE api_keys (
-    id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    key_hash    VARCHAR(64) UNIQUE NOT NULL,
-    owner_name  VARCHAR(255),
-    owner_email VARCHAR(255),
-    plan        VARCHAR(20) DEFAULT 'dev',   -- free | dev | institution
-    is_active   BOOLEAN DEFAULT TRUE,
-    created_at  TIMESTAMP DEFAULT NOW(),
-    last_used   TIMESTAMP
-);
-```
+| Table | Description |
+|-------|-------------|
+| `documents` | Textes bruts + nettoyés, embedding 384-dim, FTS tsvector généré |
+| `chunks` | Chunks 400 mots, embedding 384-dim, lié à `documents` |
+| `api_keys` | SHA-256 hash, prefix d'affichage, plan (free/dev/institution) |
+| `user_queries` | Logs des requêtes : question, latence, off-topic, chunks trouvés |
 
 #### Index vectoriel
 
@@ -205,22 +175,26 @@ services:
 ```
 api/
 ├── app/
-│   ├── main.py          # App entry point, middlewares, routers
-│   ├── auth.py          # X-API-Key → APIKeyRecord (DB lookup + SHA-256)
-│   ├── rate_limit.py    # Redis INCR/EXPIRE, fail-open
-│   ├── db.py            # get_conn() — connexion PostgreSQL centralisée
-│   ├── routers/
-│   │   ├── query.py     # POST /v1/query, POST /v1/query/stream
-│   │   ├── corpus.py    # GET /v1/corpus/stats, categories
-│   │   └── documents.py # GET /v1/documents/search, retrieve
-│   └── services/
-│       └── rag.py       # retrieve() + build_answer()
+│   ├── main.py               # App entry point, middlewares, routers
+│   ├── core/
+│   │   ├── auth.py           # X-API-Key → APIKeyRecord (DB lookup + SHA-256)
+│   │   ├── db.py             # get_conn() — connexion PostgreSQL centralisée
+│   │   ├── rate_limit.py     # Redis INCR/EXPIRE, fail-open
+│   │   └── models.py         # SQLAlchemy models (Alembic target_metadata)
+│   └── features/
+│       ├── admin/router.py   # GET /v1/admin/stats
+│       ├── auth/router.py    # POST /v1/auth/register, GET /v1/auth/me
+│       ├── corpus/router.py  # GET /v1/categories, GET /v1/stats
+│       ├── documents/router.py # GET /v1/documents, GET /v1/search
+│       └── query/
+│           ├── router.py     # POST /v1/query, POST /v1/query/stream, POST /v1/embed
+│           └── service.py    # retrieve() + build_answer()
 └── tests/
     ├── conftest.py
-    ├── test_rag.py       # 10 tests
-    ├── test_query.py     # 13 tests
-    ├── test_auth.py      # 10 tests
-    └── test_rate_limit.py # 10 tests
+    ├── test_rag.py
+    ├── test_query.py
+    ├── test_auth.py
+    └── test_rate_limit.py
 ```
 
 #### Authentification

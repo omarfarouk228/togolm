@@ -46,7 +46,9 @@ class TestQueryEndpoint:
     def test_returns_expected_shape(self):
         with (
             patch("api.app.features.query.router.retrieve", return_value=[FAKE_CHUNK]),
-            patch("api.app.features.query.service._generate_with_gemini", return_value="Réponse test"),
+            patch(
+                "api.app.features.query.service._generate_with_gemini", return_value="Réponse test"
+            ),
         ):
             resp = client.post("/v1/query", json={"question": "Quel est le régime du Togo ?"})
         assert resp.status_code == 200
