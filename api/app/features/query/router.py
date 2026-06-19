@@ -13,9 +13,9 @@ from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
-from api.app.auth import APIKeyRecord, get_api_key
-from api.app.db import get_conn
-from api.app.services.rag import RetrievedChunk, build_answer, retrieve
+from api.app.core.auth import APIKeyRecord, get_api_key
+from api.app.core.db import get_conn
+from api.app.features.query.service import RetrievedChunk, build_answer, retrieve
 
 _GREETINGS_RE = re.compile(
     r"^\s*(hello|hi|hey|bonjour|salut|bonsoir|bonne\s*nuit|good\s*morning|good\s*evening|"

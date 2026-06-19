@@ -69,7 +69,7 @@ select = ["E", "F", "I", "UP"]
 # Jupyter notebooks may have style issues that can't be fixed without reformatting cells
 "*.ipynb" = ["E501", "E741", "F401", "I001"]
 # SQL strings, regex patterns, and docstrings may exceed line limit
-"api/app/routers/*.py" = ["E501"]
+"api/app/features/**/*.py" = ["E501"]
 "api/tests/*.py" = ["E501"]
 "corpus/processors/ingestor.py" = ["E501"]
 "corpus/scrapers/spiders/*.py" = ["E501"]

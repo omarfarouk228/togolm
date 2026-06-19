@@ -6,7 +6,7 @@ GET /v1/stats      — Public corpus statistics
 from fastapi import APIRouter
 from pydantic import BaseModel
 
-from api.app.db import get_conn
+from api.app.core.db import get_conn
 
 router = APIRouter(tags=["Corpus"])
 

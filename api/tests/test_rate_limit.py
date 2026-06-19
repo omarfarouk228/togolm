@@ -9,8 +9,8 @@ from unittest.mock import MagicMock, patch
 import pytest
 from fastapi import HTTPException
 
-from api.app.auth import APIKeyRecord
-from api.app.rate_limit import check_rate_limit
+from api.app.core.auth import APIKeyRecord
+from api.app.core.rate_limit import check_rate_limit
 
 
 def make_record(plan: str = "dev") -> APIKeyRecord:

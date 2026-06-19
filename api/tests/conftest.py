@@ -5,8 +5,8 @@ Shared pytest fixtures for TogoLM API tests.
 import pytest
 from fastapi.testclient import TestClient
 
+from api.app.features.query.service import RetrievedChunk
 from api.app.main import app
-from api.app.services.rag import RetrievedChunk
 
 
 @pytest.fixture(scope="session")
