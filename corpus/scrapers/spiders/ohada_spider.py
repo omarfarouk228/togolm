@@ -22,15 +22,15 @@ class OhadaSpider(BaseTogoSpider):
 
     start_urls = [
         # Actes Uniformes — the core OHADA legislation
-        "https://www.ohada.com/actes-uniformes.html",
-        "https://www.ohada.org/index.php/actes-uniformes",
+        "https://ohada.org/index.php/actes-uniformes",
         "https://ohada.org/actes-uniformes",
+        "https://ohada.org/",
         # Jurisprudence CCJA
-        "https://www.ohada.com/jurisprudence-ccja.html",
+        "https://ohada.org/index.php/jurisprudence",
         # Traité OHADA
-        "https://www.ohada.com/traite.html",
+        "https://ohada.org/index.php/traite",
         # Règlements
-        "https://www.ohada.com/reglements.html",
+        "https://ohada.org/index.php/reglements",
     ]
 
     custom_settings = {
@@ -53,7 +53,7 @@ class OhadaSpider(BaseTogoSpider):
                 continue
             url = urljoin(response.url, href)
             parsed = urlparse(url)
-            if parsed.netloc and "ohada" not in parsed.netloc:
+            if parsed.netloc and "ohada.org" not in parsed.netloc:
                 continue
             if self._skip(url):
                 continue

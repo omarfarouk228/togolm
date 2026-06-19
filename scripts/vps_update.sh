@@ -59,7 +59,7 @@ echo "    Log : $LOG"
 echo "    (safe to close terminal — pipeline will keep running)"
 echo ""
 
-nohup docker exec "$API" python scripts/run_scrapers.py $SPIDER_ARGS > "$LOG" 2>&1 &
+nohup docker exec -e PYTHONUNBUFFERED=1 "$API" python -u scripts/run_scrapers.py $SPIDER_ARGS > "$LOG" 2>&1 &
 BGPID=$!
 echo "Pipeline PID : $BGPID"
 echo ""
