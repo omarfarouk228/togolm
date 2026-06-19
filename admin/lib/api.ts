@@ -59,11 +59,13 @@ export interface UpdateKeyBody {
 export interface QueryRecord {
   id: string;
   question: string;
+  language: string | null;
+  category: string | null;
   is_off_topic: boolean;
   chunks_found: number;
-  latency_ms: number;
-  created_at: string;
-  api_key_id: string | null;
+  latency_ms: number | null;
+  api_key_prefix: string | null;
+  created_at: string | null;
 }
 
 export interface QueryListResponse {
@@ -186,14 +188,37 @@ export async function deleteApiKey(id: string): Promise<void> {
 
 // ---- Queries ---------------------------------------------------------------
 
+export interface QueryFilters {
+  offTopicOnly?: boolean;
+  category?: string;
+  language?: string;
+  latencyMin?: number;
+  latencyMax?: number;
+  chunksMin?: number;
+  chunksMax?: number;
+  dateFrom?: string;
+  dateTo?: string;
+}
+
 export async function getQueries(
   page = 1,
   pageSize = 20,
-  offTopicOnly = false
+  filters: QueryFilters = {}
 ): Promise<QueryListResponse> {
-  return apiFetch<QueryListResponse>(
-    `/v1/admin/queries?page=${page}&page_size=${pageSize}&off_topic_only=${offTopicOnly}`
-  );
+  const p = new URLSearchParams({
+    page: String(page),
+    page_size: String(pageSize),
+    off_topic_only: String(filters.offTopicOnly ?? false),
+  });
+  if (filters.category) p.set("category", filters.category);
+  if (filters.language) p.set("language", filters.language);
+  if (filters.latencyMin != null) p.set("latency_min", String(filters.latencyMin));
+  if (filters.latencyMax != null) p.set("latency_max", String(filters.latencyMax));
+  if (filters.chunksMin != null) p.set("chunks_min", String(filters.chunksMin));
+  if (filters.chunksMax != null) p.set("chunks_max", String(filters.chunksMax));
+  if (filters.dateFrom) p.set("date_from", filters.dateFrom);
+  if (filters.dateTo) p.set("date_to", filters.dateTo);
+  return apiFetch<QueryListResponse>(`/v1/admin/queries?${p.toString()}`);
 }
 
 export async function getQueryStats(days = 7): Promise<QueryStats> {
