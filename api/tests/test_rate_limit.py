@@ -39,7 +39,7 @@ class TestRateLimitAnonymous:
     async def test_first_request_passes(self):
         mock_redis = MagicMock()
         mock_redis.incr.return_value = 1
-        with patch("api.app.rate_limit._get_redis", return_value=mock_redis):
+        with patch("api.app.core.rate_limit._get_redis", return_value=mock_redis):
             # Should not raise
             await check_rate_limit(_make_request(), api_key=None)
 
@@ -47,7 +47,7 @@ class TestRateLimitAnonymous:
     async def test_within_limit_passes(self):
         mock_redis = MagicMock()
         mock_redis.incr.return_value = 10  # within anon limit of 20
-        with patch("api.app.rate_limit._get_redis", return_value=mock_redis):
+        with patch("api.app.core.rate_limit._get_redis", return_value=mock_redis):
             await check_rate_limit(_make_request(), api_key=None)
 
     @pytest.mark.asyncio
@@ -56,14 +56,14 @@ class TestRateLimitAnonymous:
         mock_redis.incr.return_value = (
             20  # exactly at anon limit; count > max_req → 20 > 20 = False
         )
-        with patch("api.app.rate_limit._get_redis", return_value=mock_redis):
+        with patch("api.app.core.rate_limit._get_redis", return_value=mock_redis):
             await check_rate_limit(_make_request(), api_key=None)
 
     @pytest.mark.asyncio
     async def test_over_limit_raises_429(self):
         mock_redis = MagicMock()
         mock_redis.incr.return_value = 101
-        with patch("api.app.rate_limit._get_redis", return_value=mock_redis):
+        with patch("api.app.core.rate_limit._get_redis", return_value=mock_redis):
             with pytest.raises(HTTPException) as exc_info:
                 await check_rate_limit(_make_request(), api_key=None)
         assert exc_info.value.status_code == 429
@@ -73,7 +73,7 @@ class TestRateLimitAnonymous:
         mock_redis = MagicMock()
         mock_redis.incr.return_value = 1
         request = _make_request(ip="10.0.0.1", forwarded_for="203.0.113.5, 10.0.0.1")
-        with patch("api.app.rate_limit._get_redis", return_value=mock_redis):
+        with patch("api.app.core.rate_limit._get_redis", return_value=mock_redis):
             await check_rate_limit(request, api_key=None)
         # The Redis key should use the first IP in X-Forwarded-For
         call_args = mock_redis.incr.call_args[0][0]
@@ -86,14 +86,14 @@ class TestRateLimitAuthenticated:
         """dev plan: 1 000 req/day — should pass at count 999."""
         mock_redis = MagicMock()
         mock_redis.incr.return_value = 999
-        with patch("api.app.rate_limit._get_redis", return_value=mock_redis):
+        with patch("api.app.core.rate_limit._get_redis", return_value=mock_redis):
             await check_rate_limit(_make_request(), api_key=make_record(plan="dev"))
 
     @pytest.mark.asyncio
     async def test_dev_plan_over_limit_raises_429(self):
         mock_redis = MagicMock()
         mock_redis.incr.return_value = 1001
-        with patch("api.app.rate_limit._get_redis", return_value=mock_redis):
+        with patch("api.app.core.rate_limit._get_redis", return_value=mock_redis):
             with pytest.raises(HTTPException) as exc_info:
                 await check_rate_limit(_make_request(), api_key=make_record(plan="dev"))
         assert exc_info.value.status_code == 429
@@ -103,7 +103,7 @@ class TestRateLimitAuthenticated:
         """institution plan: 100 000 req/day — pass at 99 999."""
         mock_redis = MagicMock()
         mock_redis.incr.return_value = 99_999
-        with patch("api.app.rate_limit._get_redis", return_value=mock_redis):
+        with patch("api.app.core.rate_limit._get_redis", return_value=mock_redis):
             await check_rate_limit(_make_request(), api_key=make_record(plan="institution"))
 
     @pytest.mark.asyncio
@@ -112,7 +112,7 @@ class TestRateLimitAuthenticated:
         mock_redis = MagicMock()
         mock_redis.incr.return_value = 1
         record = make_record()
-        with patch("api.app.rate_limit._get_redis", return_value=mock_redis):
+        with patch("api.app.core.rate_limit._get_redis", return_value=mock_redis):
             await check_rate_limit(_make_request(ip="1.2.3.4"), api_key=record)
         redis_key = mock_redis.incr.call_args[0][0]
         assert record.id in redis_key
@@ -123,7 +123,7 @@ class TestRateLimitAuthenticated:
         """String api_key (env fallback) → dev plan limits."""
         mock_redis = MagicMock()
         mock_redis.incr.return_value = 999
-        with patch("api.app.rate_limit._get_redis", return_value=mock_redis):
+        with patch("api.app.core.rate_limit._get_redis", return_value=mock_redis):
             await check_rate_limit(_make_request(), api_key="env-fallback-key")
 
 
@@ -131,7 +131,7 @@ class TestRateLimitFailOpen:
     @pytest.mark.asyncio
     async def test_redis_down_does_not_block_request(self):
         """If Redis is unavailable, the request must still pass (fail open)."""
-        with patch("api.app.rate_limit._get_redis", side_effect=Exception("Redis down")):
+        with patch("api.app.core.rate_limit._get_redis", side_effect=Exception("Redis down")):
             # Should NOT raise — fail open
             await check_rate_limit(_make_request(), api_key=None)
 
@@ -139,5 +139,5 @@ class TestRateLimitFailOpen:
     async def test_redis_incr_error_does_not_block(self):
         mock_redis = MagicMock()
         mock_redis.incr.side_effect = Exception("INCR failed")
-        with patch("api.app.rate_limit._get_redis", return_value=mock_redis):
+        with patch("api.app.core.rate_limit._get_redis", return_value=mock_redis):
             await check_rate_limit(_make_request(), api_key=None)
