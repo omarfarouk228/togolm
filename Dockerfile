@@ -19,7 +19,26 @@ COPY pyproject.toml uv.lock* ./
 
 # Install uv for fast installs, then install all project dependencies.
 RUN pip install --no-cache-dir uv && \
-    uv pip install --system --no-cache .
+    uv pip install --system --no-cache \
+        fastapi \
+        "uvicorn[standard]" \
+        "pydantic[email]" \
+        python-dotenv \
+        psycopg2-binary \
+        pgvector \
+        sqlalchemy \
+        alembic \
+        "google-genai>=2.3.0" \
+        redis \
+        celery \
+        tqdm \
+        scrapy \
+        "beautifulsoup4>=4.12" \
+        "lxml>=5.1" \
+        "httpx>=0.27" \
+        "python-slugify>=8.0" \
+        "pdfminer-six>=20260107" \
+        sentence-transformers
 
 # Pre-download the embedding model (bakes it into the image so cold starts
 # don't need internet access to download ~120 MB model weights).
