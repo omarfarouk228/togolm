@@ -23,7 +23,12 @@ const navItems = [
   { href: "/health", labelKey: "nav.health", icon: HeartPulse },
 ];
 
-export function Sidebar() {
+interface SidebarProps {
+  isOpen?: boolean;
+  onClose?: () => void;
+}
+
+export function Sidebar({ isOpen = false, onClose }: SidebarProps) {
   const pathname = usePathname();
   const router = useRouter();
   const { t, lang, setLang } = useT();
@@ -36,7 +41,14 @@ export function Sidebar() {
 
   return (
     <>
-      <aside className="flex flex-col h-screen w-56 bg-sidebar text-white shrink-0">
+      <aside
+        className={`
+          fixed inset-y-0 left-0 z-50 flex flex-col w-64 bg-sidebar text-white shrink-0
+          transform transition-transform duration-200 ease-in-out
+          md:relative md:w-56 md:translate-x-0
+          ${isOpen ? "translate-x-0" : "-translate-x-full"}
+        `}
+      >
         {/* Logo */}
         <div className="px-5 py-6 border-b border-white/10">
           <span className="text-lg font-bold tracking-tight text-white">
@@ -55,6 +67,7 @@ export function Sidebar() {
                 <li key={href}>
                   <Link
                     href={href}
+                    onClick={onClose}
                     className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
                       isActive
                         ? "bg-green-500/20 text-green-400"
@@ -101,8 +114,8 @@ export function Sidebar() {
 
       {/* Logout confirmation modal */}
       {showLogoutModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
-          <div className="bg-white rounded-xl shadow-xl p-6 w-80 space-y-4">
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 backdrop-blur-sm">
+          <div className="bg-white rounded-xl shadow-xl p-6 w-80 mx-4 space-y-4">
             <h2 className="text-base font-semibold text-slate-800">{t("nav.logoutConfirm")}</h2>
             <p className="text-sm text-slate-500">{t("nav.logoutConfirmMsg")}</p>
             <div className="flex gap-3 justify-end">

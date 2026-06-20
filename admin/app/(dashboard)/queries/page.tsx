@@ -326,43 +326,46 @@ export default function QueriesPage() {
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-slate-100 text-xs text-slate-500 uppercase tracking-wider">
-                  <th className="text-left px-5 py-3 font-medium">{t("queries.question")}</th>
-                  <th className="text-center px-5 py-3 font-medium">{t("queries.offTopic")}</th>
-                  <th className="text-right px-5 py-3 font-medium">{t("queries.chunksFound")}</th>
-                  <th className="text-right px-5 py-3 font-medium">{t("queries.latency")}</th>
-                  <th className="text-left px-5 py-3 font-medium">{t("queries.date")}</th>
-                  <th className="px-5 py-3" />
+                  <th className="text-left px-4 py-3 font-medium">{t("queries.question")}</th>
+                  <th className="text-center px-4 py-3 font-medium">{t("queries.offTopic")}</th>
+                  <th className="text-right px-4 py-3 font-medium hidden sm:table-cell">{t("queries.chunksFound")}</th>
+                  <th className="text-right px-4 py-3 font-medium hidden sm:table-cell">{t("queries.latency")}</th>
+                  <th className="text-left px-4 py-3 font-medium hidden md:table-cell">{t("queries.date")}</th>
+                  <th className="px-4 py-3" />
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-50">
                 {(queryList?.items ?? []).length === 0 ? (
                   <tr>
-                    <td colSpan={6} className="px-5 py-10 text-center text-sm text-slate-400">
+                    <td colSpan={6} className="px-4 py-10 text-center text-sm text-slate-400">
                       {t("common.noData")}
                     </td>
                   </tr>
                 ) : (
                   (queryList?.items ?? []).map((q) => (
                     <tr key={q.id} className="hover:bg-slate-50 transition-colors">
-                      <td className="px-5 py-3 text-slate-700 max-w-[320px]">
+                      <td className="px-4 py-3 text-slate-700 max-w-[200px] sm:max-w-[320px]">
                         <p className="truncate">{q.question}</p>
+                        <p className="text-xs text-slate-400 mt-0.5 md:hidden">
+                          {q.created_at ? format(parseISO(q.created_at), "MMM d, HH:mm") : "—"}
+                        </p>
                       </td>
-                      <td className="px-5 py-3 text-center">
+                      <td className="px-4 py-3 text-center">
                         {q.is_off_topic
                           ? <StatusBadge label={t("queries.yes")} variant="red" />
                           : <StatusBadge label={t("queries.no")} variant="green" />}
                       </td>
-                      <td className="px-5 py-3 text-right text-slate-500">{q.chunks_found}</td>
-                      <td className="px-5 py-3 text-right text-slate-500">
+                      <td className="px-4 py-3 text-right text-slate-500 hidden sm:table-cell">{q.chunks_found}</td>
+                      <td className="px-4 py-3 text-right text-slate-500 hidden sm:table-cell">
                         {q.latency_ms != null ? Math.round(q.latency_ms) : "—"}
                       </td>
-                      <td className="px-5 py-3 text-slate-400 text-xs whitespace-nowrap">
+                      <td className="px-4 py-3 text-slate-400 text-xs whitespace-nowrap hidden md:table-cell">
                         {q.created_at ? format(parseISO(q.created_at), "MMM d, HH:mm") : "—"}
                       </td>
                       <td className="px-3 py-3">
                         <button
                           onClick={() => setSelected(q)}
-                          className="text-slate-400 hover:text-green-500 transition-colors"
+                          className="text-slate-400 hover:text-green-500 transition-colors cursor-pointer"
                         >
                           <Eye size={15} />
                         </button>

@@ -84,14 +84,19 @@ togolm/
 │       ├── auth.ts           # JWT helpers
 │       └── i18n.ts           # EN/FR translations
 ├── scripts/
-│   ├── run_scrapers.py       # Master scraping + ingest + embed pipeline
-│   ├── push_dataset.py       # Export corpus to HuggingFace dataset
-│   ├── vps_setup.sh          # One-time VPS provisioning
-│   ├── vps_update.sh         # Run corpus pipeline on VPS via SSH
-│   ├── vps_push_dataset.sh   # Push corpus to HuggingFace from VPS
-│   ├── create_api_key.py     # CLI to create/list/revoke API keys
-│   ├── embed_missing.py      # Backfill embeddings for existing docs
-│   └── db_export.sh          # Export local DB and import on VPS
+│   ├── corpus/
+│   │   ├── run_scrapers.py   # Master scraping + ingest + embed pipeline
+│   │   ├── ingest_docs.sh    # Convert local PDF/TXT/MD to corpus JSONL
+│   │   ├── embed_missing.py  # Backfill embeddings for existing docs
+│   │   └── push_dataset.py   # Export corpus to HuggingFace dataset
+│   ├── vps/
+│   │   ├── setup.sh          # One-time VPS provisioning
+│   │   ├── update.sh         # Run corpus pipeline on VPS via SSH
+│   │   ├── ingest_docs.sh    # Upload JSONL + ingest + embed on VPS
+│   │   ├── push_dataset.sh   # Push corpus to HuggingFace from VPS
+│   │   └── db_export.sh      # Export local DB and import on VPS
+│   └── admin/
+│       └── create_api_key.py # CLI to create/list/revoke API keys
 ├── .env.example
 └── pyproject.toml
 ```
@@ -130,10 +135,10 @@ uv run --env-file .env alembic upgrade head
 
 ```bash
 # Scrape all sources, ingest into PostgreSQL, embed
-uv run python scripts/run_scrapers.py
+uv run python scripts/corpus/run_scrapers.py
 
 # Or a single spider
-uv run python scripts/run_scrapers.py --spiders inseed
+uv run python scripts/corpus/run_scrapers.py --spiders inseed
 ```
 
 ### 5 — Start the API
