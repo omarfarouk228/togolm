@@ -6,14 +6,14 @@
 # scrape → ingest → embed pipeline remotely.
 #
 # Usage:
-#   bash scripts/vps_update.sh                        # all spiders
-#   bash scripts/vps_update.sh inseed                 # one spider
-#   bash scripts/vps_update.sh inseed togofirst       # multiple
-#   VPS_USER=togolm bash scripts/vps_update.sh        # custom user
+#   bash scripts/vps/update.sh                        # all spiders
+#   bash scripts/vps/update.sh inseed                 # one spider
+#   bash scripts/vps/update.sh inseed togofirst       # multiple
+#   VPS_USER=togolm bash scripts/vps/update.sh        # custom user
 # =============================================================
 set -euo pipefail
 
-VPS_IP="${VPS_IP:?Error: set VPS_IP before running (e.g. VPS_IP=x.x.x.x bash scripts/vps_update.sh)}"
+VPS_IP="${VPS_IP:?Error: set VPS_IP before running (e.g. VPS_IP=x.x.x.x bash scripts/vps/update.sh)}"
 VPS_USER="${VPS_USER:-root}"
 APP_DIR="${APP_DIR:-/opt/togolm}"
 SPIDERS="${*:-}"  # all CLI args become spider list, empty = all
@@ -59,7 +59,7 @@ echo "    Log : $LOG"
 echo "    (safe to close terminal — pipeline will keep running)"
 echo ""
 
-nohup docker exec -e PYTHONUNBUFFERED=1 "$API" python -u scripts/run_scrapers.py $SPIDER_ARGS > "$LOG" 2>&1 &
+nohup docker exec -e PYTHONUNBUFFERED=1 "$API" python -u scripts/corpus/run_scrapers.py $SPIDER_ARGS > "$LOG" 2>&1 &
 BGPID=$!
 echo "Pipeline PID : $BGPID"
 echo ""

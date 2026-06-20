@@ -196,13 +196,13 @@ export default function KeysPage() {
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-slate-100 text-xs text-slate-500 uppercase tracking-wider">
-                  <th className="text-left px-5 py-3 font-medium">{t("keys.name")}</th>
-                  <th className="text-left px-5 py-3 font-medium">{t("keys.email")}</th>
-                  <th className="text-left px-5 py-3 font-medium">{t("keys.plan")}</th>
-                  <th className="text-left px-5 py-3 font-medium">{t("keys.useCase")}</th>
-                  <th className="text-center px-5 py-3 font-medium">{t("keys.active")}</th>
-                  <th className="text-left px-5 py-3 font-medium">{t("keys.created")}</th>
-                  <th className="text-right px-5 py-3 font-medium">{t("keys.actions")}</th>
+                  <th className="text-left px-4 py-3 font-medium">{t("keys.name")}</th>
+                  <th className="text-left px-4 py-3 font-medium hidden sm:table-cell">{t("keys.email")}</th>
+                  <th className="text-left px-4 py-3 font-medium">{t("keys.plan")}</th>
+                  <th className="text-left px-4 py-3 font-medium hidden lg:table-cell">{t("keys.useCase")}</th>
+                  <th className="text-center px-4 py-3 font-medium">{t("keys.active")}</th>
+                  <th className="text-left px-4 py-3 font-medium hidden md:table-cell">{t("keys.created")}</th>
+                  <th className="text-right px-4 py-3 font-medium">{t("keys.actions")}</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-50">
@@ -215,21 +215,22 @@ export default function KeysPage() {
                 ) : (
                   (keys ?? []).map((key) => (
                     <tr key={key.id} className="hover:bg-slate-50 transition-colors">
-                      <td className="px-5 py-3 font-medium text-slate-700">
+                      <td className="px-4 py-3 font-medium text-slate-700">
                         <div>{key.name}</div>
                         <div className="text-xs text-slate-400 font-mono">{key.key_prefix}…</div>
+                        <div className="text-xs text-slate-400 sm:hidden mt-0.5">{key.email}</div>
                       </td>
-                      <td className="px-5 py-3 text-slate-500">{key.email}</td>
-                      <td className="px-5 py-3">{planBadge(key.plan)}</td>
-                      <td className="px-5 py-3 text-slate-500 max-w-[180px] truncate">
+                      <td className="px-4 py-3 text-slate-500 hidden sm:table-cell">{key.email}</td>
+                      <td className="px-4 py-3">{planBadge(key.plan)}</td>
+                      <td className="px-4 py-3 text-slate-500 max-w-[180px] truncate hidden lg:table-cell">
                         {key.use_case || "—"}
                       </td>
-                      <td className="px-5 py-3 text-center">
+                      <td className="px-4 py-3 text-center">
                         <button
                           onClick={() =>
                             toggleMutation.mutate({ id: key.id, is_active: !key.is_active })
                           }
-                          className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${
+                          className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors cursor-pointer ${
                             key.is_active ? "bg-green-500" : "bg-slate-200"
                           }`}
                         >
@@ -240,13 +241,13 @@ export default function KeysPage() {
                           />
                         </button>
                       </td>
-                      <td className="px-5 py-3 text-slate-400 text-xs whitespace-nowrap">
+                      <td className="px-4 py-3 text-slate-400 text-xs whitespace-nowrap hidden md:table-cell">
                         {format(parseISO(key.created_at), "MMM d, yyyy")}
                       </td>
-                      <td className="px-5 py-3 text-right">
+                      <td className="px-4 py-3 text-right">
                         <button
                           onClick={() => setDeleteTarget(key)}
-                          className="text-slate-400 hover:text-red-500 transition-colors"
+                          className="text-slate-400 hover:text-red-500 transition-colors cursor-pointer"
                           title={t("keys.delete")}
                         >
                           <Trash2 size={15} />
