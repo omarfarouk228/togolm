@@ -5,12 +5,12 @@
 # Runs push_dataset.py inside the API container on the server.
 #
 # Usage:
-#   HF_TOKEN=hf_xxx VPS_IP=x.x.x.x bash scripts/vps_push_dataset.sh
-#   HF_TOKEN=hf_xxx VPS_IP=x.x.x.x bash scripts/vps_push_dataset.sh --private
+#   HF_TOKEN=hf_xxx VPS_IP=x.x.x.x bash scripts/vps/push_dataset.sh
+#   HF_TOKEN=hf_xxx VPS_IP=x.x.x.x bash scripts/vps/push_dataset.sh --private
 # =============================================================
 set -euo pipefail
 
-VPS_IP="${VPS_IP:?Error: set VPS_IP before running (e.g. VPS_IP=x.x.x.x bash scripts/vps_push_dataset.sh)}"
+VPS_IP="${VPS_IP:?Error: set VPS_IP before running (e.g. VPS_IP=x.x.x.x bash scripts/vps/push_dataset.sh)}"
 VPS_USER="${VPS_USER:-root}"
 APP_DIR="${APP_DIR:-/opt/togolm}"
 HF_TOKEN="${HF_TOKEN:?Error: set HF_TOKEN before running (e.g. HF_TOKEN=hf_xxx ...)}"
@@ -34,5 +34,5 @@ fi
 echo "Container : $API"
 echo ""
 
-docker exec -e HF_TOKEN="$HF_TOKEN" "$API" python scripts/push_dataset.py $EXTRA_ARGS
+docker exec -e HF_TOKEN="$HF_TOKEN" "$API" python scripts/corpus/push_dataset.py $EXTRA_ARGS
 REMOTE

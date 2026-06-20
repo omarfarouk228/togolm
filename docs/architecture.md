@@ -323,13 +323,13 @@ Authentification : `POST /v1/admin/login` avec la valeur de `API_SECRET_KEY`. Re
 
 ```bash
 # Créer une nouvelle clé
-python scripts/create_api_key.py create --owner "Nom" --email "email@example.com" --plan dev
+python scripts/admin/create_api_key.py create --owner "Nom" --email "email@example.com" --plan dev
 
 # Lister les clés actives
-python scripts/create_api_key.py list
+python scripts/admin/create_api_key.py list
 
 # Révoquer une clé
-python scripts/create_api_key.py revoke <key_id>
+python scripts/admin/create_api_key.py revoke <key_id>
 ```
 
 Format des clés : `tlm_` + 64 caractères hexadécimaux
