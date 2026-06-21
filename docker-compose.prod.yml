@@ -84,10 +84,11 @@ services:
       dockerfile: Dockerfile
       target: production
     command: >
-      celery -A corpus.celery_app beat
+      sh -c "mkdir -p /app/data && chmod 777 /app/data &&
+      exec celery -A corpus.celery_app beat
       --loglevel=info
       --scheduler celery.beat.PersistentScheduler
-      --schedule /app/data/celerybeat-schedule
+      --schedule /app/data/celerybeat-schedule"
     volumes:
       - beatdata:/app/data
     environment:
