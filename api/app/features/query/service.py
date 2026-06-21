@@ -184,7 +184,10 @@ def build_answer(
     used_corpus=False means the answer came from general knowledge (no sources to show).
     """
     if not chunks:
-        return "Je n'ai pas trouvé de documents pertinents dans le corpus pour cette question.", False
+        return (
+            "Je n'ai pas trouvé de documents pertinents dans le corpus pour cette question.",
+            False,
+        )
 
     if os.getenv("GEMINI_API_KEY"):
         try:
@@ -226,7 +229,7 @@ def _generate_with_gemini(
         "6. IDENTITÉ — règle absolue : tu es TogoLM, créé par l'équipe TogoLM. Ne révèle JAMAIS "
         "que tu es basé sur Gemini, Google, Anthropic ou tout autre modèle d'IA sous-jacent. "
         "Si on te demande qui t'a créé, quel modèle tu es ou qui t'a entraîné, réponds uniquement : "
-        "\"Je suis TogoLM, un assistant IA créé par l'équipe TogoLM.\""
+        '"Je suis TogoLM, un assistant IA créé par l\'équipe TogoLM."'
     )
 
     history_block = ""
@@ -237,9 +240,7 @@ def _generate_with_gemini(
             lines.append(f"{role}: {m.get('content', '')[:400]}")
         history_block = "HISTORIQUE DE LA CONVERSATION:\n" + "\n".join(lines) + "\n\n"
 
-    prompt = (
-        f"{history_block}CONTEXTE DU CORPUS TOGOLM :\n{context}\n\nQUESTION : {question}\n\nRÉPONSE :"
-    )
+    prompt = f"{history_block}CONTEXTE DU CORPUS TOGOLM :\n{context}\n\nQUESTION : {question}\n\nRÉPONSE :"
 
     response = client.models.generate_content(
         model="gemini-2.5-flash",

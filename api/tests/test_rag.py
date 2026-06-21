@@ -32,25 +32,27 @@ def make_chunk(**kwargs) -> RetrievedChunk:
 
 class TestBuildAnswer:
     def test_empty_chunks_returns_no_result_message(self):
-        answer = build_answer("Quelle est la capitale du Togo ?", [])
-        assert "No relevant information" in answer
+        answer, used_corpus = build_answer("Quelle est la capitale du Togo ?", [])
+        assert "pertinents" in answer
+        assert used_corpus is False
 
     def test_extractive_fallback_when_no_gemini_key(self, monkeypatch):
         monkeypatch.delenv("GEMINI_API_KEY", raising=False)
         chunk = make_chunk(content="Lomé est la capitale du Togo.")
-        answer = build_answer("Quelle est la capitale ?", [chunk])
+        answer, used_corpus = build_answer("Quelle est la capitale ?", [chunk])
         assert "Lomé" in answer
+        assert used_corpus is True
 
-    def test_extractive_fallback_includes_source(self, monkeypatch):
+    def test_extractive_fallback_returns_content(self, monkeypatch):
         monkeypatch.delenv("GEMINI_API_KEY", raising=False)
-        chunk = make_chunk(source="service-public.gouv.tg")
-        answer = build_answer("question ?", [chunk])
-        assert "service-public.gouv.tg" in answer
+        chunk = make_chunk(content="Contenu de test pour le corpus togolais.")
+        answer, used_corpus = build_answer("question ?", [chunk])
+        assert "Contenu de test" in answer
+        assert used_corpus is True
 
     def test_long_content_is_truncated(self, monkeypatch, fake_chunk_long):
         monkeypatch.delenv("GEMINI_API_KEY", raising=False)
-        answer = build_answer("question ?", [fake_chunk_long])
-        # Extractive answer must not exceed ~900 chars (800 content + attribution)
+        answer, used_corpus = build_answer("question ?", [fake_chunk_long])
         assert len(answer) < 1000
         assert "…" in answer
 
@@ -58,19 +60,21 @@ class TestBuildAnswer:
         monkeypatch.delenv("GEMINI_API_KEY", raising=False)
         short = "Court texte."
         chunk = make_chunk(content=short)
-        answer = build_answer("question ?", [chunk])
+        answer, _ = build_answer("question ?", [chunk])
         assert short in answer
-        assert "…" not in answer.split("[Source")[0]
+        assert "…" not in answer
 
     def test_gemini_called_when_key_present(self, monkeypatch):
         monkeypatch.setenv("GEMINI_API_KEY", "AQ.fake-key-for-test")
         chunk = make_chunk()
         with patch(
-            "api.app.features.query.service._generate_with_gemini", return_value="Réponse Gemini"
+            "api.app.features.query.service._generate_with_gemini",
+            return_value=("Réponse Gemini", True),
         ) as mock_gemini:
-            answer = build_answer("question ?", [chunk])
+            answer, used_corpus = build_answer("question ?", [chunk])
         mock_gemini.assert_called_once()
         assert answer == "Réponse Gemini"
+        assert used_corpus is True
 
     def test_gemini_exception_falls_back_to_extractive(self, monkeypatch):
         monkeypatch.setenv("GEMINI_API_KEY", "AQ.fake-key-for-test")
@@ -79,8 +83,9 @@ class TestBuildAnswer:
             "api.app.features.query.service._generate_with_gemini",
             side_effect=Exception("API error"),
         ):
-            answer = build_answer("question ?", [chunk])
+            answer, used_corpus = build_answer("question ?", [chunk])
         assert "Texte de secours" in answer
+        assert used_corpus is True
 
 
 # ---------------------------------------------------------------------------

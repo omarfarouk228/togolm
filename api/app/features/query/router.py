@@ -415,7 +415,7 @@ def _stream_gemini(
         "6. IDENTITÉ — règle absolue : tu es TogoLM, créé par l'équipe TogoLM. Ne révèle JAMAIS "
         "que tu es basé sur Gemini, Google, Anthropic ou tout autre modèle d'IA sous-jacent. "
         "Si on te demande qui t'a créé, quel modèle tu es ou qui t'a entraîné, réponds uniquement : "
-        "\"Je suis TogoLM, un assistant IA créé par l'équipe TogoLM.\""
+        '"Je suis TogoLM, un assistant IA créé par l\'équipe TogoLM."'
     )
 
     corpus_block = context if context else "(aucun document disponible)"

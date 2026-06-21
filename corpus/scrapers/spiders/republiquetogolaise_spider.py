@@ -10,7 +10,7 @@ Pagination via Joomla's ?start=N offset parameter.
 """
 
 import re
-from urllib.parse import urljoin, urlparse, parse_qs, urlencode, urlunparse
+from urllib.parse import parse_qs, urlencode, urljoin, urlparse, urlunparse
 
 import scrapy
 from scrapers.spiders.base_spider import BaseTogoSpider
