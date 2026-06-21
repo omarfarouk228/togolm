@@ -21,7 +21,7 @@ from dotenv import load_dotenv
 from pgvector.psycopg2 import register_vector
 from tqdm import tqdm
 
-ROOT = Path(__file__).resolve().parent.parent
+ROOT = Path(__file__).resolve().parent.parent.parent
 load_dotenv(ROOT / ".env")
 sys.path.insert(0, str(ROOT))
 

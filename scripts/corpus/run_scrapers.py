@@ -27,8 +27,8 @@ import sys
 import time
 from pathlib import Path
 
-# Project root
-ROOT = Path(__file__).resolve().parent.parent
+# Project root (scripts/corpus/run_scrapers.py → scripts/corpus → scripts → root)
+ROOT = Path(__file__).resolve().parent.parent.parent
 SCRAPY_DIR = ROOT / "corpus"
 DATASETS_DIR = ROOT / "corpus" / "datasets"
 
@@ -59,6 +59,7 @@ ALL_SPIDERS = [
     "togofirst",
     "icilome",
     "republicoftogo",
+    "republiquetogolaise",
     "letogolais",
     "savoirnews",
     # Encyclopédique
