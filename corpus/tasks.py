@@ -40,6 +40,7 @@ WORKING_SPIDERS = [
     "togofirst",
     "icilome",
     "republicoftogo",
+    "republiquetogolaise",
     "letogolais",
     "savoirnews",
     "wikipedia",
@@ -64,6 +65,7 @@ NEWS_SPIDERS = [
     "togofirst",
     "icilome",
     "republicoftogo",
+    "republiquetogolaise",
     "letogolais",
     "savoirnews",
     "lomeinfos",
@@ -72,11 +74,11 @@ NEWS_SPIDERS = [
 ]
 
 
-@app.task(bind=True, max_retries=0, soft_time_limit=600, time_limit=660)
+@app.task(bind=True, max_retries=0, soft_time_limit=1800, time_limit=1860)
 def run_spider(self, spider_name: str) -> dict:
     """
     Run a single Scrapy spider. Returns {spider, success, output_kb}.
-    Soft limit = 10 min, hard limit = 11 min.
+    Soft limit = 30 min, hard limit = 31 min.
     """
     output_file = DATASETS_DIR / f"{spider_name}.jsonl"
     DATASETS_DIR.mkdir(exist_ok=True)
@@ -93,7 +95,7 @@ def run_spider(self, spider_name: str) -> dict:
         "WARNING",
     ]
 
-    result = subprocess.run(cmd, cwd=str(SCRAPY_DIR), timeout=590)
+    result = subprocess.run(cmd, cwd=str(SCRAPY_DIR), timeout=1790)
     size_kb = output_file.stat().st_size / 1024 if output_file.exists() else 0
 
     return {
@@ -103,7 +105,7 @@ def run_spider(self, spider_name: str) -> dict:
     }
 
 
-@app.task(bind=True, max_retries=0, time_limit=7200)
+@app.task(bind=True, max_retries=0, time_limit=86400)
 def run_all_spiders(self, embed: bool = True) -> dict:
     """
     Run all working spiders sequentially, then ingest into PostgreSQL.
@@ -120,7 +122,7 @@ def run_all_spiders(self, embed: bool = True) -> dict:
     }
 
 
-@app.task(bind=True, max_retries=0, time_limit=3600)
+@app.task(bind=True, max_retries=0, time_limit=21600)
 def run_news_spiders(self, embed: bool = False) -> dict:
     """
     Run only news/press spiders, then ingest new JSONL entries.
