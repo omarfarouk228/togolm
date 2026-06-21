@@ -47,7 +47,8 @@ class TestQueryEndpoint:
         with (
             patch("api.app.features.query.router.retrieve", return_value=[FAKE_CHUNK]),
             patch(
-                "api.app.features.query.service._generate_with_gemini", return_value="Réponse test"
+                "api.app.features.query.service._generate_with_gemini",
+                return_value=("Réponse test", True),
             ),
         ):
             resp = client.post("/v1/query", json={"question": "Quel est le régime du Togo ?"})
@@ -62,7 +63,10 @@ class TestQueryEndpoint:
     def test_sources_include_title_url_score(self):
         with (
             patch("api.app.features.query.router.retrieve", return_value=[FAKE_CHUNK]),
-            patch("api.app.features.query.service._generate_with_gemini", return_value="OK"),
+            patch(
+                "api.app.features.query.service._generate_with_gemini",
+                return_value=("OK", True),
+            ),
         ):
             resp = client.post("/v1/query", json={"question": "Régime politique du Togo ?"})
         sources = resp.json()["sources"]

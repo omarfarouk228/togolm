@@ -286,6 +286,7 @@ uv run python -m finetuning.scripts.publish \
 | letogolais.com | Press | ✅ |
 | savoirnews.net | Press | ✅ |
 | republicoftogo.com | Press | ✅ |
+| republiquetogolaise.com | Press | ✅ |
 | togo24.net | Press | ✅ |
 | togoinfos.com | Press | ⚠️ DNS failure |
 | togopress.info | Press | ⚠️ DNS failure |

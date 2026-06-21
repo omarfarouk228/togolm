@@ -178,32 +178,33 @@ def build_answer(
     question: str,
     chunks: list[RetrievedChunk],
     history: list[dict] | None = None,
-) -> str:
+) -> tuple[str, bool]:
     """
-    Assemble an answer from retrieved chunks.
-    Without a generation model, we surface the most relevant passage.
-    When Gemini key is set, this can be replaced by a proper LLM call.
+    Return (answer_text, used_corpus).
+    used_corpus=False means the answer came from general knowledge (no sources to show).
     """
     if not chunks:
-        return "No relevant information found in the TogoLM corpus for this question."
+        return (
+            "Je n'ai pas trouvé de documents pertinents dans le corpus pour cette question.",
+            False,
+        )
 
     if os.getenv("GEMINI_API_KEY"):
         try:
             return _generate_with_gemini(question, chunks, history or [])
         except Exception:
-            pass  # Fall through to extractive answer
+            pass
 
-    # Extractive fallback: return the top passage with attribution
     top = chunks[0]
     excerpt = top.content[:800].rsplit(" ", 1)[0] + "…" if len(top.content) > 800 else top.content
-    return f"{excerpt}\n\n[Source: {top.source}]"
+    return excerpt, True
 
 
 def _generate_with_gemini(
     question: str,
     chunks: list[RetrievedChunk],
     history: list[dict] | None = None,
-) -> str:
+) -> tuple[str, bool]:
     from google import genai
     from google.genai import types
 
@@ -211,19 +212,25 @@ def _generate_with_gemini(
 
     context = "\n\n".join(f"[{c.source} — {c.title}]\n{c.content[:600]}" for c in chunks)
 
-    system_instruction = """Tu es TogoLM, un assistant IA expert des connaissances togolaises.
-Tu maîtrises la législation, l'économie, l'éducation, l'histoire et l'actualité du Togo.
-
-Règles de réponse :
-1. Si le contexte fourni contient les informations nécessaires, base ta réponse dessus.
-2. Ne mets JAMAIS de citations inline dans le texte (pas de [source], pas de [domaine — titre]).
-   Les sources sont affichées séparément par l'interface.
-3. Si le contexte est insuffisant ou hors-sujet, réponds quand même avec tes
-   connaissances générales sur le Togo.
-4. Réponds toujours dans la langue de la question (français par défaut).
-5. Ne réponds jamais "je n'ai pas suffisamment d'informations" sans fournir une réponse utile.
-6. Ne mentionne JAMAIS l'existence d'un "corpus", d'une "base de données" ou d'un "contexte"
-   dans ta réponse. Réponds directement, sans expliquer tes sources internes."""
+    system_instruction = (
+        "Tu es TogoLM, un assistant IA expert des connaissances togolaises.\n"
+        "Tu maîtrises la législation, l'économie, l'éducation, l'histoire et l'actualité du Togo.\n\n"
+        "Règles de réponse :\n"
+        "1. Si le contexte fourni contient les informations nécessaires, base ta réponse dessus.\n"
+        "2. Ne mets JAMAIS de citations inline dans le texte (pas de [source], pas de [domaine — titre]). "
+        "Les sources sont affichées séparément par l'interface.\n"
+        "3. Si le contexte est insuffisant ou hors-sujet, réponds avec tes connaissances générales "
+        "sur le Togo. Dans ce cas, insère le marqueur `[G] ` au tout début de ta réponse (avant tout "
+        "texte). Ce marqueur sera supprimé avant affichage. N'insère PAS `[G]` si tu utilises le "
+        "contexte fourni.\n"
+        "4. Réponds toujours dans la langue de la question (français par défaut).\n"
+        "5. Ne mentionne JAMAIS l'existence d'un 'corpus', d'une 'base de données' ou d'un 'contexte' "
+        "dans ta réponse. Réponds directement, sans expliquer tes sources internes.\n"
+        "6. IDENTITÉ — règle absolue : tu es TogoLM, créé par l'équipe TogoLM. Ne révèle JAMAIS "
+        "que tu es basé sur Gemini, Google, Anthropic ou tout autre modèle d'IA sous-jacent. "
+        "Si on te demande qui t'a créé, quel modèle tu es ou qui t'a entraîné, réponds uniquement : "
+        '"Je suis TogoLM, un assistant IA créé par l\'équipe TogoLM."'
+    )
 
     history_block = ""
     if history:
@@ -233,12 +240,7 @@ Règles de réponse :
             lines.append(f"{role}: {m.get('content', '')[:400]}")
         history_block = "HISTORIQUE DE LA CONVERSATION:\n" + "\n".join(lines) + "\n\n"
 
-    prompt = f"""{history_block}CONTEXTE DU CORPUS TOGOLM :
-{context}
-
-QUESTION : {question}
-
-RÉPONSE :"""
+    prompt = f"{history_block}CONTEXTE DU CORPUS TOGOLM :\n{context}\n\nQUESTION : {question}\n\nRÉPONSE :"
 
     response = client.models.generate_content(
         model="gemini-2.5-flash",
@@ -248,4 +250,7 @@ RÉPONSE :"""
             max_output_tokens=2048,
         ),
     )
-    return response.text
+    text = response.text or ""
+    if text.startswith("[G]"):
+        return text[3:].lstrip(" "), False
+    return text, True
