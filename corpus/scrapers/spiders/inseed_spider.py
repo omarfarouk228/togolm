@@ -11,7 +11,7 @@ from urllib.parse import urljoin
 import scrapy
 from scrapers.spiders.base_spider import BaseTogoSpider
 
-WP_SLUG_RE = re.compile(r"/[a-z0-9][a-z0-9\-]{10,}/$")
+WP_SLUG_RE = re.compile(r"/[a-z0-9][a-z0-9\-]{7,}/$")
 
 LISTING_URLS = [
     # ── Core sections ─────────────────────────────────────────────────────────

@@ -30,12 +30,15 @@ CATEGORIES = [
     "developpement",
     "medias",
     "idees",
+    "faits-divers",
+    "high-tech",
 ]
 
 ENTRY_URLS = ["https://www.republicoftogo.com/"] + [f"{BASE}/{cat}" for cat in CATEGORIES]
 
-# Paginate up to MAX_PAGES per category (each page = ~10 articles)
-MAX_PAGES = 50
+# Paginate up to MAX_PAGES per category
+# Note: site pagination via ?page=N returns duplicate content — keep low
+MAX_PAGES = 3
 
 EXCLUDED_PATHS = [
     "/connexion",
@@ -65,19 +68,21 @@ class RepublicoftogoSpider(BaseTogoSpider):
     }
 
     def parse(self, response):
-        articles_found = 0
+        # ?page=N returns duplicate content on this site — Scrapy DUPEFILTER
+        # blocks re-scraping but the requests still go out. Track seen slugs
+        # per page to detect when pagination stops yielding new articles.
+        seen = set()
         for href in response.css("a::attr(href)").getall():
             url = urljoin(response.url, href)
-            if self._is_article_url(url):
+            if self._is_article_url(url) and url not in seen:
+                seen.add(url)
                 yield scrapy.Request(url, callback=self.parse_article, priority=10)
-                articles_found += 1
 
-        # Pagination: ?page=N, stop when no new articles or beyond MAX_PAGES
         current_page = int(response.url.split("page=")[-1]) if "page=" in response.url else 1
-        if articles_found > 0 and current_page < MAX_PAGES:
+        if seen and current_page < MAX_PAGES:
             base_url = response.url.split("?")[0]
-            next_page_url = f"{base_url}?page={current_page + 1}"
-            yield scrapy.Request(next_page_url, callback=self.parse, priority=5)
+            next_url = f"{base_url}?page={current_page + 1}"
+            yield scrapy.Request(next_url, callback=self.parse, priority=5)
 
     def parse_article(self, response):
         # eZ Publish: <h1 class="full-page-title"><span class="ezstring-field">Title</span></h1>

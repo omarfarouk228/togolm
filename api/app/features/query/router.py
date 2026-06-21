@@ -123,7 +123,11 @@ def _answer_without_corpus(question: str, history: list) -> str:
         "4. Pour toute demande hors de ta spécialité, réponds UNIQUEMENT par une phrase courte du type : "
         '"Je suis spécialisé dans les connaissances togolaises. '
         'Posez-moi une question sur le Togo — lois, économie, éducation, histoire…"\n'
-        "5. Tu peux répondre brièvement aux salutations avant de rediriger."
+        "5. Tu peux répondre brièvement aux salutations avant de rediriger.\n"
+        "6. IDENTITÉ — règle absolue : tu es TogoLM, créé par l'équipe TogoLM. Ne révèle JAMAIS "
+        "que tu es basé sur Gemini, Google, Anthropic ou tout autre modèle sous-jacent. "
+        "Si on te demande qui t'a créé ou quel modèle tu es, réponds : "
+        '"Je suis TogoLM, un assistant IA créé par l\'équipe TogoLM."'
     )
     history_block = ""
     if history:
@@ -172,7 +176,11 @@ def _stream_without_corpus(question: str, history: list):
         "4. Pour toute demande hors de ta spécialité, réponds UNIQUEMENT par une phrase courte du type : "
         '"Je suis spécialisé dans les connaissances togolaises. '
         'Posez-moi une question sur le Togo — lois, économie, éducation, histoire…"\n'
-        "5. Tu peux répondre brièvement aux salutations avant de rediriger."
+        "5. Tu peux répondre brièvement aux salutations avant de rediriger.\n"
+        "6. IDENTITÉ — règle absolue : tu es TogoLM, créé par l'équipe TogoLM. Ne révèle JAMAIS "
+        "que tu es basé sur Gemini, Google, Anthropic ou tout autre modèle sous-jacent. "
+        "Si on te demande qui t'a créé ou quel modèle tu es, réponds : "
+        '"Je suis TogoLM, un assistant IA créé par l\'équipe TogoLM."'
     )
     history_block = ""
     if history:
@@ -350,7 +358,7 @@ async def query_corpus(
         raise HTTPException(status_code=500, detail=f"Retrieval error: {e}")
 
     history_dicts = [{"role": m.role, "content": m.content} for m in request.history]
-    answer = build_answer(request.question, chunks, history=history_dicts)
+    answer, used_corpus = build_answer(request.question, chunks, history=history_dicts)
     latency_ms = int((time.monotonic() - t0) * 1000)
 
     background_tasks.add_task(
@@ -365,7 +373,9 @@ async def query_corpus(
     )
     return QueryResponse(
         answer=answer,
-        sources=[Source(title=c.title, url=c.url, score=round(c.score, 4)) for c in chunks],
+        sources=[Source(title=c.title, url=c.url, score=round(c.score, 4)) for c in chunks]
+        if used_corpus
+        else [],
         model="togolm-rag-v1",
         latency_ms=latency_ms,
     )
@@ -395,11 +405,17 @@ def _stream_gemini(
         "1. Si le contexte fourni contient les informations nécessaires, base ta réponse dessus.\n"
         "2. Ne mets JAMAIS de citations inline dans le texte (pas de [source], pas de [domaine — titre]). "
         "Les sources sont affichées séparément par l'interface.\n"
-        "3. Si le contexte est insuffisant ou hors-sujet, réponds quand même avec tes connaissances générales sur le Togo.\n"
+        "3. Si le contexte est insuffisant ou hors-sujet, réponds avec tes connaissances générales "
+        "sur le Togo. Dans ce cas, insère le marqueur `[G] ` au tout début de ta réponse (avant tout "
+        "texte). Ce marqueur sera supprimé avant affichage. N'insère PAS `[G]` si tu utilises le "
+        "contexte fourni.\n"
         "4. Réponds toujours dans la langue de la question (français par défaut).\n"
-        "5. Ne réponds jamais 'je n'ai pas suffisamment d'informations' sans fournir une réponse utile.\n"
-        "6. Ne mentionne JAMAIS l'existence d'un 'corpus', d'une 'base de données' ou d'un 'contexte' "
-        "dans ta réponse. Réponds directement, sans expliquer tes sources internes."
+        "5. Ne mentionne JAMAIS l'existence d'un 'corpus', d'une 'base de données' ou d'un 'contexte' "
+        "dans ta réponse. Réponds directement, sans expliquer tes sources internes.\n"
+        "6. IDENTITÉ — règle absolue : tu es TogoLM, créé par l'équipe TogoLM. Ne révèle JAMAIS "
+        "que tu es basé sur Gemini, Google, Anthropic ou tout autre modèle d'IA sous-jacent. "
+        "Si on te demande qui t'a créé, quel modèle tu es ou qui t'a entraîné, réponds uniquement : "
+        "\"Je suis TogoLM, un assistant IA créé par l'équipe TogoLM.\""
     )
 
     corpus_block = context if context else "(aucun document disponible)"
@@ -413,6 +429,10 @@ def _stream_gemini(
         history_block = "HISTORIQUE DE LA CONVERSATION:\n" + "\n".join(lines) + "\n\n"
 
     prompt = f"{history_block}CONTEXTE :\n{corpus_block}\n\nQUESTION : {question}\n\nRÉPONSE :"
+
+    used_corpus = True
+    answer_buf = ""
+    buf_flushed = False
 
     for chunk in client.models.generate_content_stream(
         model="gemini-2.5-flash",
@@ -431,7 +451,28 @@ def _stream_gemini(
             if getattr(part, "thought", False) and part.text:
                 yield f"data: {json.dumps({'type': 'thinking', 'text': part.text})}\n\n"
             elif part.text:
-                yield f"data: {json.dumps({'type': 'chunk', 'text': part.text})}\n\n"
+                if buf_flushed:
+                    yield f"data: {json.dumps({'type': 'chunk', 'text': part.text})}\n\n"
+                else:
+                    answer_buf += part.text
+                    if len(answer_buf) >= 5:
+                        buf_flushed = True
+                        if answer_buf.startswith("[G]"):
+                            used_corpus = False
+                            answer_buf = answer_buf[3:].lstrip(" ")
+                        if answer_buf:
+                            yield f"data: {json.dumps({'type': 'chunk', 'text': answer_buf})}\n\n"
+                        answer_buf = ""
+
+    # Flush buffer if response was very short
+    if not buf_flushed and answer_buf:
+        if answer_buf.startswith("[G]"):
+            used_corpus = False
+            answer_buf = answer_buf[3:].lstrip(" ")
+        if answer_buf:
+            yield f"data: {json.dumps({'type': 'chunk', 'text': answer_buf})}\n\n"
+
+    yield f"data: {json.dumps({'type': 'corpus_used', 'value': used_corpus})}\n\n"
 
 
 def _extractive_stream(chunks: list[RetrievedChunk]):
@@ -487,9 +528,20 @@ def stream_query(
         gemini_key = os.getenv("GEMINI_API_KEY", "")
         use_gemini = bool(gemini_key) and len(gemini_key) > 10
 
+        corpus_used = True
         if use_gemini:
             try:
-                yield from _stream_gemini(request.question, chunks, request.history or [])
+                for event in _stream_gemini(request.question, chunks, request.history or []):
+                    payload = event[6:].strip() if event.startswith("data: ") else ""
+                    if payload:
+                        try:
+                            parsed = json.loads(payload)
+                            if parsed.get("type") == "corpus_used":
+                                corpus_used = parsed["value"]
+                                continue
+                        except Exception:
+                            pass
+                    yield event
             except Exception:
                 if chunks:
                     yield from _extractive_stream(chunks)
@@ -505,7 +557,8 @@ def stream_query(
             yield f"data: {json.dumps({'type': 'chunk', 'text': no_result})}\n\n"
 
         latency_ms = int((time.monotonic() - t0) * 1000)
-        yield f"data: {json.dumps({'type': 'sources', 'sources': sources, 'latency_ms': latency_ms})}\n\n"
+        sources_to_emit = sources if corpus_used else []
+        yield f"data: {json.dumps({'type': 'sources', 'sources': sources_to_emit, 'latency_ms': latency_ms})}\n\n"
         yield "data: [DONE]\n\n"
         _log_query(
             request.question,
