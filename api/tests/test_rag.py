@@ -6,7 +6,8 @@ All DB and embedder calls are mocked — no real PostgreSQL needed.
 
 from unittest.mock import MagicMock, patch
 
-from api.app.features.query.service import RetrievedChunk, build_answer, retrieve
+from rag.generation import build_answer
+from rag.retrieval import RetrievedChunk, retrieve
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -66,7 +67,7 @@ class TestBuildAnswer:
         monkeypatch.setenv("GEMINI_API_KEY", "AQ.fake-key-for-test")
         chunk = make_chunk()
         with patch(
-            "api.app.features.query.service._generate_with_gemini", return_value="Réponse Gemini"
+            "rag.generation.chains._generate_answer", return_value="Réponse Gemini"
         ) as mock_gemini:
             answer = build_answer("question ?", [chunk])
         mock_gemini.assert_called_once()
@@ -76,7 +77,7 @@ class TestBuildAnswer:
         monkeypatch.setenv("GEMINI_API_KEY", "AQ.fake-key-for-test")
         chunk = make_chunk(content="Texte de secours.")
         with patch(
-            "api.app.features.query.service._generate_with_gemini",
+            "rag.generation.chains._generate_answer",
             side_effect=Exception("API error"),
         ):
             answer = build_answer("question ?", [chunk])
@@ -108,8 +109,8 @@ class TestRetrieve:
         mock_conn = self._mock_conn([row], chunk_count=1)
 
         with (
-            patch("api.app.features.query.service.get_conn", return_value=mock_conn),
-            patch("api.app.features.query.service._get_embedder") as mock_emb,
+            patch("rag.retrieval.search.get_conn", return_value=mock_conn),
+            patch("rag.retrieval.search._get_embedder") as mock_emb,
         ):
             mock_emb.return_value.encode_one.return_value = [0.1] * 384
             result = retrieve("question de test", top_k=1)
@@ -124,8 +125,8 @@ class TestRetrieve:
         mock_conn = self._mock_conn([row], chunk_count=1)
 
         with (
-            patch("api.app.features.query.service.get_conn", return_value=mock_conn),
-            patch("api.app.features.query.service._get_embedder") as mock_emb,
+            patch("rag.retrieval.search.get_conn", return_value=mock_conn),
+            patch("rag.retrieval.search._get_embedder") as mock_emb,
         ):
             mock_emb.return_value.encode_one.return_value = [0.1] * 384
             result = retrieve("question", top_k=5)
@@ -137,8 +138,8 @@ class TestRetrieve:
         mock_conn = self._mock_conn([row], chunk_count=0)
 
         with (
-            patch("api.app.features.query.service.get_conn", return_value=mock_conn),
-            patch("api.app.features.query.service._get_embedder") as mock_emb,
+            patch("rag.retrieval.search.get_conn", return_value=mock_conn),
+            patch("rag.retrieval.search._get_embedder") as mock_emb,
         ):
             mock_emb.return_value.encode_one.return_value = [0.1] * 384
             result = retrieve("question")

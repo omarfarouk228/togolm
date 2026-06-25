@@ -51,6 +51,8 @@ FROM deps AS production
 
 # Copy application code (excludes everything in .dockerignore)
 COPY api/      ./api/
+COPY rag/      ./rag/
+COPY db/       ./db/
 COPY corpus/   ./corpus/
 COPY alembic/  ./alembic/
 COPY scripts/  ./scripts/

@@ -148,7 +148,7 @@ def ingest_datasets(self, embed: bool = True) -> dict:
     if not non_empty:
         return {"success": False, "reason": "no JSONL files found"}
 
-    cmd = [PYTHON, "-m", "corpus.processors.ingestor"] + [str(f) for f in non_empty]
+    cmd = [PYTHON, "-m", "rag.indexation.ingestor"] + [str(f) for f in non_empty]
     if not embed:
         cmd.append("--no-embed")
 

@@ -12,8 +12,8 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, EmailStr
 
 from api.app.core.auth import APIKeyRecord, get_api_key
-from api.app.core.db import get_conn
 from api.app.core.rate_limit import PLAN_QUOTAS
+from db import get_conn
 
 router = APIRouter(tags=["Auth"])
 

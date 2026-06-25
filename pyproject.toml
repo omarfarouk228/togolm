@@ -23,6 +23,11 @@ dependencies = [
     "python-dotenv>=1.0",
     # AI
     "google-genai>=2.3.0",
+    "langchain>=1.0,<2.0",
+    "langchain-core>=1.0,<2.0",
+    "langchain-google-genai>=4.2,<5.0",
+    "langgraph>=1.0,<2.0",
+    "langsmith>=0.3.0",
     "sentence-transformers>=5.5.0",
     # Tasks
     "celery>=5.4",
@@ -40,6 +45,9 @@ dev = [
     "httpx>=0.27",
     "ruff>=0.4",
 ]
+eval = [
+    "deepeval>=3.0.0",
+]
 # Install in a GPU environment (Colab, cloud VM) — not needed locally
 finetuning = [
     "transformers>=4.44",
@@ -52,7 +60,7 @@ finetuning = [
 ]
 
 [tool.hatch.build.targets.wheel]
-packages = ["corpus", "api", "finetuning"]
+packages = ["corpus", "api", "rag", "db", "finetuning"]
 
 [build-system]
 requires = ["hatchling"]
@@ -71,7 +79,8 @@ select = ["E", "F", "I", "UP"]
 # SQL strings, regex patterns, and docstrings may exceed line limit
 "api/app/features/**/*.py" = ["E501"]
 "api/tests/*.py" = ["E501"]
-"corpus/processors/ingestor.py" = ["E501"]
+"rag/indexation/ingestor.py" = ["E501"]
+"rag/generation/prompts.py" = ["E501"]
 "corpus/scrapers/spiders/*.py" = ["E501"]
 "finetuning/**/*.py" = ["E501"]
 "scripts/*.py" = ["E501"]

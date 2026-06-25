@@ -147,7 +147,7 @@ def run_ingestor(no_embed: bool) -> bool:
     print(f"  Ingestor — {len(jsonl_files)} file(s)")
     print(f"{'=' * 60}")
 
-    cmd = [PYTHON, "-m", "corpus.processors.ingestor"] + [str(f) for f in jsonl_files]
+    cmd = [PYTHON, "-m", "rag.indexation.ingestor"] + [str(f) for f in jsonl_files]
     if no_embed:
         cmd.append("--no-embed")
 

@@ -11,7 +11,7 @@ import os
 import redis
 from fastapi import APIRouter, Header, HTTPException, Query
 
-from api.app.core.db import get_conn
+from db import get_conn
 
 router = APIRouter(tags=["Admin"])
 

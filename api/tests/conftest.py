@@ -5,19 +5,20 @@ Shared pytest fixtures for TogoLM API tests.
 import pytest
 from fastapi.testclient import TestClient
 
-from api.app.features.query.service import RetrievedChunk
-from api.app.main import app
-
 
 @pytest.fixture(scope="session")
 def client() -> TestClient:
     """Single TestClient shared across the session."""
+    from api.app.main import app
+
     return TestClient(app)
 
 
 @pytest.fixture
-def fake_chunk() -> RetrievedChunk:
+def fake_chunk():
     """A minimal RetrievedChunk for unit tests."""
+    from rag.retrieval import RetrievedChunk
+
     return RetrievedChunk(
         title="Loi de finances 2025",
         url="https://jo.gouv.tg/loi-finances-2025",
@@ -29,8 +30,10 @@ def fake_chunk() -> RetrievedChunk:
 
 
 @pytest.fixture
-def fake_chunk_long() -> RetrievedChunk:
+def fake_chunk_long():
     """A chunk with content exceeding the 800-char truncation threshold."""
+    from rag.retrieval import RetrievedChunk
+
     return RetrievedChunk(
         title="Document long",
         url=None,

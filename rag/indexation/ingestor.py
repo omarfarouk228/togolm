@@ -2,8 +2,8 @@
 Ingest scraped JSONL documents into PostgreSQL + pgvector.
 
 Usage:
-    uv run python -m corpus.processors.ingestor corpus/datasets/service_public.jsonl
-    uv run python -m corpus.processors.ingestor corpus/datasets/*.jsonl --no-embed
+    uv run python -m rag.indexation.ingestor corpus/datasets/service_public.jsonl
+    uv run python -m rag.indexation.ingestor corpus/datasets/*.jsonl --no-embed
 """
 
 import argparse
@@ -18,15 +18,17 @@ from dotenv import load_dotenv
 from pgvector.psycopg2 import register_vector
 from tqdm import tqdm
 
-from corpus.processors.chunker import chunk_by_words
-from corpus.processors.cleaner import clean_document, is_useful
-from corpus.processors.embedder import get_embedder
+from rag.indexation.chunker import chunk_by_words
+from rag.indexation.cleaner import clean_document, is_useful
+from rag.indexation.embedder import get_embedder, max_chunk_words
 
 load_dotenv(Path(__file__).resolve().parents[2] / ".env")
 
 EMBED_BATCH_SIZE = 20
-CHUNK_SIZE = 400  # words per chunk (~512 tokens)
-CHUNK_OVERLAP = 50  # words of overlap between consecutive chunks
+# Sized to the embedding model's token window so chunks are never silently
+# truncated at embed time (see rag.indexation.embedder.max_chunk_words).
+CHUNK_SIZE = max_chunk_words()  # words per chunk
+CHUNK_OVERLAP = max(1, CHUNK_SIZE // 8)  # ~12% overlap between consecutive chunks
 
 # Module-level embedder cache — avoids re-instantiating (and re-checking Gemini quota) per batch
 _embedder = None
@@ -105,7 +107,7 @@ def embed_batch(texts: list[str]) -> list[list[float]]:
                     print(
                         "  [RATE LIMIT] Gemini quota exhausted — switching to local model for this run"
                     )
-                    from corpus.processors.embedder import LocalEmbedder
+                    from rag.indexation.embedder import LocalEmbedder
 
                     _embedder = LocalEmbedder()
                     return _embedder.encode(texts)

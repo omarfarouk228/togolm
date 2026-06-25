@@ -6,15 +6,14 @@ Steps:
   2. Cosine similarity search in pgvector
   3. Return top-k chunks with metadata
 
-Generation (LLM) is kept separate — this module only handles retrieval.
-When Gemini key is available, generation can be added on top.
+Generation (LLM) is kept separate in ``generation``; this module only handles
+retrieval and returns scored chunks with metadata.
 """
 
-import os
 from dataclasses import dataclass
 
-from api.app.core.db import get_conn
-from corpus.processors.embedder import get_embedder
+from db import get_conn
+from rag.indexation.embedder import get_embedder
 
 _embedder = None
 
@@ -172,80 +171,3 @@ def _fulltext_search(
         )
         for row in rows
     ]
-
-
-def build_answer(
-    question: str,
-    chunks: list[RetrievedChunk],
-    history: list[dict] | None = None,
-) -> str:
-    """
-    Assemble an answer from retrieved chunks.
-    Without a generation model, we surface the most relevant passage.
-    When Gemini key is set, this can be replaced by a proper LLM call.
-    """
-    if not chunks:
-        return "No relevant information found in the TogoLM corpus for this question."
-
-    if os.getenv("GEMINI_API_KEY"):
-        try:
-            return _generate_with_gemini(question, chunks, history or [])
-        except Exception:
-            pass  # Fall through to extractive answer
-
-    # Extractive fallback: return the top passage with attribution
-    top = chunks[0]
-    excerpt = top.content[:800].rsplit(" ", 1)[0] + "…" if len(top.content) > 800 else top.content
-    return f"{excerpt}\n\n[Source: {top.source}]"
-
-
-def _generate_with_gemini(
-    question: str,
-    chunks: list[RetrievedChunk],
-    history: list[dict] | None = None,
-) -> str:
-    from google import genai
-    from google.genai import types
-
-    client = genai.Client(api_key=os.environ["GEMINI_API_KEY"])
-
-    context = "\n\n".join(f"[{c.source} — {c.title}]\n{c.content[:600]}" for c in chunks)
-
-    system_instruction = """Tu es TogoLM, un assistant IA expert des connaissances togolaises.
-Tu maîtrises la législation, l'économie, l'éducation, l'histoire et l'actualité du Togo.
-
-Règles de réponse :
-1. Si le contexte fourni contient les informations nécessaires, base ta réponse dessus.
-2. Ne mets JAMAIS de citations inline dans le texte (pas de [source], pas de [domaine — titre]).
-   Les sources sont affichées séparément par l'interface.
-3. Si le contexte est insuffisant ou hors-sujet, réponds quand même avec tes
-   connaissances générales sur le Togo.
-4. Réponds toujours dans la langue de la question (français par défaut).
-5. Ne réponds jamais "je n'ai pas suffisamment d'informations" sans fournir une réponse utile.
-6. Ne mentionne JAMAIS l'existence d'un "corpus", d'une "base de données" ou d'un "contexte"
-   dans ta réponse. Réponds directement, sans expliquer tes sources internes."""
-
-    history_block = ""
-    if history:
-        lines = []
-        for m in history[-6:]:
-            role = "Utilisateur" if m.get("role") == "user" else "Assistant"
-            lines.append(f"{role}: {m.get('content', '')[:400]}")
-        history_block = "HISTORIQUE DE LA CONVERSATION:\n" + "\n".join(lines) + "\n\n"
-
-    prompt = f"""{history_block}CONTEXTE DU CORPUS TOGOLM :
-{context}
-
-QUESTION : {question}
-
-RÉPONSE :"""
-
-    response = client.models.generate_content(
-        model="gemini-2.5-flash",
-        contents=prompt,
-        config=types.GenerateContentConfig(
-            system_instruction=system_instruction,
-            max_output_tokens=2048,
-        ),
-    )
-    return response.text
