@@ -172,13 +172,14 @@ export default function QueriesPage() {
             value={(stats?.total_queries ?? 0).toLocaleString()}
             icon={MessageSquare}
             color="blue"
+            subtitle={`${(stats?.period_queries ?? 0).toLocaleString()} ces 7 derniers jours`}
           />
           <StatCard
             title={t("queries.offTopicRate")}
-            value={`${((stats?.off_topic_rate ?? 0) * 100).toFixed(1)}%`}
+            value={`${(stats?.off_topic_rate_pct ?? 0).toFixed(1)}%`}
             icon={AlertTriangle}
             color="red"
-            subtitle={`${stats?.off_topic_count ?? 0} queries`}
+            subtitle={`${stats?.off_topic_count ?? 0} hors-sujet (7j)`}
           />
           <StatCard
             title={t("queries.avgLatency")}
