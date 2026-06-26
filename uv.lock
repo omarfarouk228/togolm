@@ -3851,7 +3851,7 @@ requires-dist = [
     { name = "celery", specifier = ">=5.4" },
     { name = "datasets", marker = "extra == 'finetuning'", specifier = ">=2.21" },
     { name = "deepeval", marker = "extra == 'eval'", specifier = ">=3.0.0" },
-    { name = "fastapi", specifier = ">=0.111" },
+    { name = "fastapi", specifier = ">=0.115" },
     { name = "google-genai", specifier = ">=2.3.0" },
     { name = "httpx", specifier = ">=0.27" },
     { name = "httpx", marker = "extra == 'dev'", specifier = ">=0.27" },
