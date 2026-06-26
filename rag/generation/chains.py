@@ -135,20 +135,25 @@ def _iter_chunk_events(chunk: Any) -> Iterator[tuple[str, str]]:
 # --- Non-streaming generation -------------------------------------------------
 
 
-def build_answer(question: str, chunks: list[Any], history: History | None = None) -> str:
-    """Assemble an answer from retrieved chunks (graph answer_builder)."""
-    if not chunks:
-        return NO_CORPUS_ANSWER
+def build_answer(question: str, chunks: list[Any], history: History | None = None, max_output_tokens: int = 2048) -> str:
+    """Assemble an answer from retrieved chunks (graph answer_builder).
+
+    When chunks is empty, Gemini answers from general knowledge (no sources will
+    be shown by the caller). Falls back to extractive or NO_CORPUS_ANSWER only
+    when Gemini is unavailable.
+    """
     if gemini_available():
         try:
-            return _generate_answer(question, chunks, history or [])
+            return _generate_answer(question, chunks, history or [], max_output_tokens)
         except Exception:
-            pass  # Fall through to extractive answer
+            pass
+    if not chunks:
+        return NO_CORPUS_ANSWER
     return extractive_answer(chunks)
 
 
-def _generate_answer(question: str, chunks: list[Any], history: History) -> str:
-    chain = RAG_ANSWER_PROMPT | get_chat_model(max_output_tokens=2048) | StrOutputParser()
+def _generate_answer(question: str, chunks: list[Any], history: History, max_output_tokens: int = 2048) -> str:
+    chain = RAG_ANSWER_PROMPT | get_chat_model(max_output_tokens=max_output_tokens) | StrOutputParser()
     return chain.invoke(
         {
             "context": _format_context(chunks),
@@ -195,10 +200,10 @@ def rewrite_question_with_history(question: str, history: History) -> str:
 
 
 def stream_answer(
-    question: str, chunks: list[Any], history: History | None = None
+    question: str, chunks: list[Any], history: History | None = None, max_output_tokens: int = 2048
 ) -> Iterator[tuple[str, str]]:
     """Stream a RAG answer. Raises on LLM failure so the caller can fall back."""
-    model = get_chat_model(max_output_tokens=2048, thinking_budget=2048, streaming=True)
+    model = get_chat_model(max_output_tokens=max_output_tokens, thinking_budget=max_output_tokens, streaming=True)
     chain = RAG_ANSWER_PROMPT | model
     for chunk in chain.stream(
         {
