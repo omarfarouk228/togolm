@@ -23,7 +23,9 @@ def make_record(plan: str = "dev") -> APIKeyRecord:
     )
 
 
-def _make_request(ip: str = "1.2.3.4", forwarded_for: str | None = None, real_ip: str | None = None):
+def _make_request(
+    ip: str = "1.2.3.4", forwarded_for: str | None = None, real_ip: str | None = None
+):
     """Build a minimal mock FastAPI Request."""
     mock_request = MagicMock()
     mock_request.client.host = ip
