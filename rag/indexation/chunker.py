@@ -53,5 +53,3 @@ def chunk_by_words(
         index += 1
 
     return chunks
-
-

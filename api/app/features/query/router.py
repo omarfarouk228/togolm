@@ -159,7 +159,9 @@ def stream_query(
         if gemini_available():
             try:
                 for event_type, text in generation.stream_answer(
-                    request.question, chunks, request.history or [],
+                    request.question,
+                    chunks,
+                    request.history or [],
                     max_output_tokens=request.max_tokens,
                 ):
                     yield _sse(event_type, text)

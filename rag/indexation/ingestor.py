@@ -107,9 +107,7 @@ def embed_batch(texts: list[str]) -> list[list[float]]:
                     print(f"  [{label}] Waiting {wait}s before retry {attempt + 1}/3...")
                     time.sleep(wait)
                 else:
-                    print(
-                        "  [GEMINI UNAVAILABLE] Switching to local model for this run"
-                    )
+                    print("  [GEMINI UNAVAILABLE] Switching to local model for this run")
                     from rag.indexation.embedder import LocalEmbedder
 
                     _embedder = LocalEmbedder()

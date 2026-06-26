@@ -135,7 +135,9 @@ def _iter_chunk_events(chunk: Any) -> Iterator[tuple[str, str]]:
 # --- Non-streaming generation -------------------------------------------------
 
 
-def build_answer(question: str, chunks: list[Any], history: History | None = None, max_output_tokens: int = 2048) -> str:
+def build_answer(
+    question: str, chunks: list[Any], history: History | None = None, max_output_tokens: int = 2048
+) -> str:
     """Assemble an answer from retrieved chunks (graph answer_builder).
 
     When chunks is empty, Gemini answers from general knowledge (no sources will
@@ -152,8 +154,12 @@ def build_answer(question: str, chunks: list[Any], history: History | None = Non
     return extractive_answer(chunks)
 
 
-def _generate_answer(question: str, chunks: list[Any], history: History, max_output_tokens: int = 2048) -> str:
-    chain = RAG_ANSWER_PROMPT | get_chat_model(max_output_tokens=max_output_tokens) | StrOutputParser()
+def _generate_answer(
+    question: str, chunks: list[Any], history: History, max_output_tokens: int = 2048
+) -> str:
+    chain = (
+        RAG_ANSWER_PROMPT | get_chat_model(max_output_tokens=max_output_tokens) | StrOutputParser()
+    )
     return chain.invoke(
         {
             "context": _format_context(chunks),
@@ -203,7 +209,9 @@ def stream_answer(
     question: str, chunks: list[Any], history: History | None = None, max_output_tokens: int = 2048
 ) -> Iterator[tuple[str, str]]:
     """Stream a RAG answer. Raises on LLM failure so the caller can fall back."""
-    model = get_chat_model(max_output_tokens=max_output_tokens, thinking_budget=max_output_tokens, streaming=True)
+    model = get_chat_model(
+        max_output_tokens=max_output_tokens, thinking_budget=max_output_tokens, streaming=True
+    )
     chain = RAG_ANSWER_PROMPT | model
     for chunk in chain.stream(
         {
