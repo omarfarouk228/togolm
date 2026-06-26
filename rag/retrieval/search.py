@@ -98,10 +98,12 @@ def _chunk_vector_search(
         score = float(row[5])
         if score < min_score:
             continue
-        url = row[1] or ""
-        if url in seen_urls:
+        url = row[1]
+        # Only deduplicate documents that have a URL; null-URL docs are always distinct
+        if url and url in seen_urls:
             continue
-        seen_urls.add(url)
+        if url:
+            seen_urls.add(url)
         results.append(
             RetrievedChunk(
                 title=row[0] or "",
@@ -124,19 +126,17 @@ def _fulltext_search(
     top_k: int,
 ) -> list[RetrievedChunk]:
     """PostgreSQL full-text search fallback when chunks are missing."""
-    words = [w for w in question.split() if len(w) > 2]
-    tsquery = " | ".join(words) if words else question
-
+    # plainto_tsquery handles arbitrary text safely (no syntax errors from apostrophes etc.)
     base_sql = """
         SELECT
             title, url, source, category, clean_content,
             ts_rank(to_tsvector('french', coalesce(clean_content,'')),
-                    to_tsquery('french', %s)) AS score
+                    plainto_tsquery('french', %s)) AS score
         FROM documents
         WHERE status = 'active'
-          AND to_tsvector('french', coalesce(clean_content,'')) @@ to_tsquery('french', %s)
+          AND to_tsvector('french', coalesce(clean_content,'')) @@ plainto_tsquery('french', %s)
     """
-    params: list = [tsquery, tsquery]
+    params: list = [question, question]
 
     if category:
         base_sql += " AND category = %s"
@@ -145,20 +145,8 @@ def _fulltext_search(
     base_sql += " ORDER BY score DESC LIMIT %s"
     params.append(top_k)
 
-    try:
-        cur.execute(base_sql, params)
-        rows = cur.fetchall()
-    except Exception:
-        cur.execute(
-            """
-            SELECT title, url, source, category, clean_content, 0.5 AS score
-            FROM documents
-            WHERE status = 'active' AND clean_content ILIKE %s
-            LIMIT %s
-            """,
-            [f"%{question}%", top_k],
-        )
-        rows = cur.fetchall()
+    cur.execute(base_sql, params)
+    rows = cur.fetchall()
 
     return [
         RetrievedChunk(

@@ -23,13 +23,17 @@ def make_record(plan: str = "dev") -> APIKeyRecord:
     )
 
 
-def _make_request(ip: str = "1.2.3.4", forwarded_for: str | None = None):
+def _make_request(
+    ip: str = "1.2.3.4", forwarded_for: str | None = None, real_ip: str | None = None
+):
     """Build a minimal mock FastAPI Request."""
     mock_request = MagicMock()
     mock_request.client.host = ip
     headers = {}
     if forwarded_for:
         headers["X-Forwarded-For"] = forwarded_for
+    if real_ip:
+        headers["X-Real-IP"] = real_ip
     mock_request.headers.get = lambda key, default=None: headers.get(key, default)
     return mock_request
 
@@ -75,9 +79,25 @@ class TestRateLimitAnonymous:
         request = _make_request(ip="10.0.0.1", forwarded_for="203.0.113.5, 10.0.0.1")
         with patch("api.app.core.rate_limit._get_redis", return_value=mock_redis):
             await check_rate_limit(request, api_key=None)
-        # The Redis key should use the first IP in X-Forwarded-For
+        # Fallback (no X-Real-IP): use the leftmost X-Forwarded-For entry (original client)
         call_args = mock_redis.incr.call_args[0][0]
         assert "203.0.113.5" in call_args
+
+    @pytest.mark.asyncio
+    async def test_real_ip_header_takes_priority_over_forwarded_for(self):
+        mock_redis = MagicMock()
+        mock_redis.incr.return_value = 1
+        # X-Real-IP is set by Nginx from $remote_addr — it cannot be forged by the client
+        request = _make_request(
+            ip="10.0.0.1",
+            forwarded_for="spoofed_ip, 10.0.0.1",
+            real_ip="203.0.113.5",
+        )
+        with patch("api.app.core.rate_limit._get_redis", return_value=mock_redis):
+            await check_rate_limit(request, api_key=None)
+        call_args = mock_redis.incr.call_args[0][0]
+        assert "203.0.113.5" in call_args
+        assert "spoofed_ip" not in call_args
 
 
 class TestRateLimitAuthenticated:

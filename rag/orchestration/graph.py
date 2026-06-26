@@ -5,6 +5,7 @@ The route keeps HTTP concerns such as status codes and background tasks. This
 graph owns the RAG workflow: classify, rewrite/enrich, retrieve, then answer.
 """
 
+import threading
 from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any, Literal
@@ -13,6 +14,10 @@ from langgraph.graph import END, START, StateGraph
 from typing_extensions import TypedDict
 
 from rag.retrieval.enrichment import enrich_query
+
+# Compiled graph is expensive to build — cache the default (all-real-deps) instance.
+_default_graph = None
+_default_graph_lock = threading.Lock()
 
 HistoryMessages = list[Any]
 
@@ -133,6 +138,34 @@ def build_query_graph(
     return builder.compile()
 
 
+def _get_default_graph(top_k: int = 5):
+    """Return the cached default graph, building it once on first call.
+
+    Wrappers use late binding (attribute lookup on the module object at call
+    time) so that unittest.mock patches applied to rag.retrieval.retrieve or
+    rag.generation.build_answer are still picked up correctly in tests.
+    """
+    global _default_graph
+    if _default_graph is not None:
+        return _default_graph
+    with _default_graph_lock:
+        if _default_graph is None:
+            import rag.generation as _gen
+            import rag.orchestration.classification as _cls
+            import rag.retrieval as _ret
+
+            _default_graph = build_query_graph(
+                is_trivially_off_topic=lambda q: _cls.is_trivially_off_topic(q),
+                route_query=lambda q: _gen.route_query(q),
+                answer_without_corpus=lambda q, h: _gen.answer_without_corpus(q, h),
+                rewrite_question=lambda q, h: _gen.rewrite_question_with_history(q, h),
+                retriever=lambda **kwargs: _ret.retrieve(**kwargs),
+                answer_builder=lambda q, c, **kwargs: _gen.build_answer(q, c, **kwargs),
+                top_k=top_k,
+            )
+    return _default_graph
+
+
 def run_query_graph(
     *,
     question: str,
@@ -150,37 +183,38 @@ def run_query_graph(
     """Run the query graph and normalize the final state for HTTP handlers.
 
     Side-effecting dependencies default to the real implementations and can be
-    overridden (e.g. in tests) by passing callables.
+    overridden (e.g. in tests) by passing callables. When all use their defaults,
+    a cached compiled graph is reused across requests.
     """
-    if None in (
-        is_trivially_off_topic,
-        route_query,
-        answer_without_corpus,
-        rewrite_question,
-        answer_builder,
-    ):
+    all_defaults = all(
+        dep is None
+        for dep in (
+            is_trivially_off_topic,
+            route_query,
+            answer_without_corpus,
+            rewrite_question,
+            retriever,
+            answer_builder,
+        )
+    )
+
+    if all_defaults:
+        graph = _get_default_graph(top_k)
+    else:
         from rag import generation
         from rag.orchestration import classification
-
-        is_trivially_off_topic = is_trivially_off_topic or classification.is_trivially_off_topic
-        route_query = route_query or generation.route_query
-        answer_without_corpus = answer_without_corpus or generation.answer_without_corpus
-        rewrite_question = rewrite_question or generation.rewrite_question_with_history
-        answer_builder = answer_builder or generation.build_answer
-    if retriever is None:
         from rag.retrieval import retrieve
 
-        retriever = retriever or retrieve
+        graph = build_query_graph(
+            is_trivially_off_topic=is_trivially_off_topic or classification.is_trivially_off_topic,
+            route_query=route_query or generation.route_query,
+            answer_without_corpus=answer_without_corpus or generation.answer_without_corpus,
+            rewrite_question=rewrite_question or generation.rewrite_question_with_history,
+            retriever=retriever or retrieve,
+            answer_builder=answer_builder or generation.build_answer,
+            top_k=top_k,
+        )
 
-    graph = build_query_graph(
-        is_trivially_off_topic=is_trivially_off_topic,
-        route_query=route_query,
-        answer_without_corpus=answer_without_corpus,
-        rewrite_question=rewrite_question,
-        retriever=retriever,
-        answer_builder=answer_builder,
-        top_k=top_k,
-    )
     final_state = graph.invoke(
         {
             "question": question,
