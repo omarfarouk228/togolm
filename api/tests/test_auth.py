@@ -68,8 +68,8 @@ class TestAuthOnQueryEndpoint:
 
     def test_valid_key_reaches_query(self, with_api_keys):
         with (
-            patch("api.app.features.query.router.retrieve", return_value=[]),
-            patch("api.app.features.query.service.build_answer", return_value="OK"),
+            patch("rag.retrieval.retrieve", return_value=[]),
+            patch("rag.generation.build_answer", return_value="OK"),
         ):
             resp = client.post(
                 "/v1/query",

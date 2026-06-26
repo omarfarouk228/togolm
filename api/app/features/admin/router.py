@@ -28,7 +28,6 @@ System:
 
 from fastapi import APIRouter, Header, Query
 
-from api.app.core.db import get_conn
 from api.app.features.admin import service
 from api.app.features.admin.schemas import (
     AdminLoginRequest,
@@ -41,6 +40,7 @@ from api.app.features.admin.schemas import (
     RecentDocument,
     SourceStat,
 )
+from db import get_conn
 
 router = APIRouter(tags=["Admin"])
 

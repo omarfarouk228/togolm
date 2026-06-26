@@ -25,12 +25,14 @@ ROOT = Path(__file__).resolve().parent.parent.parent
 load_dotenv(ROOT / ".env")
 sys.path.insert(0, str(ROOT))
 
-from corpus.processors.chunker import chunk_by_words  # noqa: E402
-from corpus.processors.embedder import get_embedder  # noqa: E402
+from rag.indexation.chunker import chunk_by_words  # noqa: E402
+from rag.indexation.embedder import get_embedder, max_chunk_words  # noqa: E402
 
 EMBED_BATCH_SIZE = 20
-CHUNK_SIZE = 400
-CHUNK_OVERLAP = 50
+# Must match the ingestor: sized to the embedding model's token window so chunks
+# are never silently truncated (see rag.indexation.embedder.max_chunk_words).
+CHUNK_SIZE = max_chunk_words()
+CHUNK_OVERLAP = max(1, CHUNK_SIZE // 8)
 
 
 def get_connection():
@@ -97,7 +99,7 @@ def embed_doc(conn, embedder, doc_id: str, clean_content: str):
                         time.sleep(wait)
                     else:
                         tqdm.write("  [RATE LIMIT] switching to local model")
-                        from corpus.processors.embedder import LocalEmbedder
+                        from rag.indexation.embedder import LocalEmbedder
 
                         embedder.__class__ = LocalEmbedder
                         embedder._model = None

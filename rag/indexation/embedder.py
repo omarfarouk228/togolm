@@ -12,6 +12,21 @@ import os
 
 MODEL_NAME = "paraphrase-multilingual-MiniLM-L12-v2"  # 384-dim, multilingual, ~120 MB
 
+# The local model silently truncates inputs past max_seq_length, so chunks MUST be
+# sized to fit or their tail is never embedded. Sizing always targets the local
+# budget because embed_batch falls back to the local model when the Gemini quota
+# is exhausted mid-run.
+LOCAL_MAX_TOKENS = 128  # paraphrase-multilingual-MiniLM-L12-v2 max_seq_length
+_SPECIAL_TOKENS = 2  # [CLS] + [SEP]
+# Worst-case subword-per-word ratio measured on French Togo text for this model
+# (observed 1.6–2.0). Using the upper bound guarantees no truncation.
+_TOKENS_PER_WORD = 2.1
+
+
+def max_chunk_words(max_tokens: int = LOCAL_MAX_TOKENS) -> int:
+    """Largest word count whose embedding fits within the model's token window."""
+    return max(16, int((max_tokens - _SPECIAL_TOKENS) / _TOKENS_PER_WORD))
+
 
 class LocalEmbedder:
     """Sentence-transformers local embedder. Downloaded once, then cached."""
