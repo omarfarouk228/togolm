@@ -5,9 +5,12 @@ POST /v1/embed        — Embedding endpoint
 """
 
 import json
+import logging
 import os
 import re
 import time
+
+logger = logging.getLogger(__name__)
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 from fastapi.responses import StreamingResponse
@@ -239,7 +242,7 @@ def _log_query(
         finally:
             conn.close()
     except Exception:
-        pass  # logging must never break the main flow
+        logger.exception("_log_query failed — query not persisted")
 
 
 router = APIRouter(tags=["Query"])
@@ -503,11 +506,11 @@ def stream_query(
         if _is_off_topic(request.question):
             yield from _stream_without_corpus(request.question, request.history or [])
             latency_ms = int((time.monotonic() - t0) * 1000)
-            yield f"data: {json.dumps({'type': 'sources', 'sources': [], 'latency_ms': latency_ms})}\n\n"
-            yield "data: [DONE]\n\n"
             _log_query(
                 request.question, request.language, request.category, True, 0, latency_ms, api_key
             )
+            yield f"data: {json.dumps({'type': 'sources', 'sources': [], 'latency_ms': latency_ms})}\n\n"
+            yield "data: [DONE]\n\n"
             return
 
         # Rewrite the question using conversation history so the vector search
@@ -557,9 +560,6 @@ def stream_query(
             yield f"data: {json.dumps({'type': 'chunk', 'text': no_result})}\n\n"
 
         latency_ms = int((time.monotonic() - t0) * 1000)
-        sources_to_emit = sources if corpus_used else []
-        yield f"data: {json.dumps({'type': 'sources', 'sources': sources_to_emit, 'latency_ms': latency_ms})}\n\n"
-        yield "data: [DONE]\n\n"
         _log_query(
             request.question,
             request.language,
@@ -569,6 +569,9 @@ def stream_query(
             latency_ms,
             api_key,
         )
+        sources_to_emit = sources if corpus_used else []
+        yield f"data: {json.dumps({'type': 'sources', 'sources': sources_to_emit, 'latency_ms': latency_ms})}\n\n"
+        yield "data: [DONE]\n\n"
 
     return StreamingResponse(
         generate(),

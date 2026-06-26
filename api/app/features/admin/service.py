@@ -363,6 +363,9 @@ def list_queries(
 def get_query_stats(conn, days: int) -> dict:
     since = datetime.date.today() - datetime.timedelta(days=days)
     with conn.cursor() as cur:
+        cur.execute("SELECT COUNT(*) FROM user_queries")
+        (total_all_time,) = cur.fetchone()
+
         cur.execute(
             """
             SELECT COUNT(*),
@@ -399,7 +402,8 @@ def get_query_stats(conn, days: int) -> dict:
     total = total or 0
     return {
         "period_days": days,
-        "total_queries": total,
+        "total_queries": total_all_time or 0,
+        "period_queries": total,
         "off_topic_count": off_topic or 0,
         "off_topic_rate_pct": round((off_topic or 0) / total * 100, 1) if total else 0,
         "avg_latency_ms": int(avg_latency) if avg_latency else None,
