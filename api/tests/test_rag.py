@@ -6,7 +6,8 @@ All DB and embedder calls are mocked — no real PostgreSQL needed.
 
 from unittest.mock import MagicMock, patch
 
-from api.app.features.query.service import RetrievedChunk, build_answer, retrieve
+from rag.generation import build_answer
+from rag.retrieval import RetrievedChunk, retrieve
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -32,27 +33,24 @@ def make_chunk(**kwargs) -> RetrievedChunk:
 
 class TestBuildAnswer:
     def test_empty_chunks_returns_no_result_message(self):
-        answer, used_corpus = build_answer("Quelle est la capitale du Togo ?", [])
+        answer = build_answer("Quelle est la capitale du Togo ?", [])
         assert "pertinents" in answer
-        assert used_corpus is False
 
     def test_extractive_fallback_when_no_gemini_key(self, monkeypatch):
         monkeypatch.delenv("GEMINI_API_KEY", raising=False)
         chunk = make_chunk(content="Lomé est la capitale du Togo.")
-        answer, used_corpus = build_answer("Quelle est la capitale ?", [chunk])
+        answer = build_answer("Quelle est la capitale ?", [chunk])
         assert "Lomé" in answer
-        assert used_corpus is True
 
     def test_extractive_fallback_returns_content(self, monkeypatch):
         monkeypatch.delenv("GEMINI_API_KEY", raising=False)
         chunk = make_chunk(content="Contenu de test pour le corpus togolais.")
-        answer, used_corpus = build_answer("question ?", [chunk])
+        answer = build_answer("question ?", [chunk])
         assert "Contenu de test" in answer
-        assert used_corpus is True
 
     def test_long_content_is_truncated(self, monkeypatch, fake_chunk_long):
         monkeypatch.delenv("GEMINI_API_KEY", raising=False)
-        answer, used_corpus = build_answer("question ?", [fake_chunk_long])
+        answer = build_answer("question ?", [fake_chunk_long])
         assert len(answer) < 1000
         assert "…" in answer
 
@@ -60,7 +58,7 @@ class TestBuildAnswer:
         monkeypatch.delenv("GEMINI_API_KEY", raising=False)
         short = "Court texte."
         chunk = make_chunk(content=short)
-        answer, _ = build_answer("question ?", [chunk])
+        answer = build_answer("question ?", [chunk])
         assert short in answer
         assert "…" not in answer
 
@@ -68,24 +66,21 @@ class TestBuildAnswer:
         monkeypatch.setenv("GEMINI_API_KEY", "AQ.fake-key-for-test")
         chunk = make_chunk()
         with patch(
-            "api.app.features.query.service._generate_with_gemini",
-            return_value=("Réponse Gemini", True),
+            "rag.generation.chains._generate_answer", return_value="Réponse Gemini"
         ) as mock_gemini:
-            answer, used_corpus = build_answer("question ?", [chunk])
+            answer = build_answer("question ?", [chunk])
         mock_gemini.assert_called_once()
         assert answer == "Réponse Gemini"
-        assert used_corpus is True
 
     def test_gemini_exception_falls_back_to_extractive(self, monkeypatch):
         monkeypatch.setenv("GEMINI_API_KEY", "AQ.fake-key-for-test")
         chunk = make_chunk(content="Texte de secours.")
         with patch(
-            "api.app.features.query.service._generate_with_gemini",
+            "rag.generation.chains._generate_answer",
             side_effect=Exception("API error"),
         ):
-            answer, used_corpus = build_answer("question ?", [chunk])
+            answer = build_answer("question ?", [chunk])
         assert "Texte de secours" in answer
-        assert used_corpus is True
 
 
 # ---------------------------------------------------------------------------
@@ -113,8 +108,8 @@ class TestRetrieve:
         mock_conn = self._mock_conn([row], chunk_count=1)
 
         with (
-            patch("api.app.features.query.service.get_conn", return_value=mock_conn),
-            patch("api.app.features.query.service._get_embedder") as mock_emb,
+            patch("rag.retrieval.search.get_conn", return_value=mock_conn),
+            patch("rag.retrieval.search._get_embedder") as mock_emb,
         ):
             mock_emb.return_value.encode_one.return_value = [0.1] * 384
             result = retrieve("question de test", top_k=1)
@@ -129,8 +124,8 @@ class TestRetrieve:
         mock_conn = self._mock_conn([row], chunk_count=1)
 
         with (
-            patch("api.app.features.query.service.get_conn", return_value=mock_conn),
-            patch("api.app.features.query.service._get_embedder") as mock_emb,
+            patch("rag.retrieval.search.get_conn", return_value=mock_conn),
+            patch("rag.retrieval.search._get_embedder") as mock_emb,
         ):
             mock_emb.return_value.encode_one.return_value = [0.1] * 384
             result = retrieve("question", top_k=5)
@@ -142,8 +137,8 @@ class TestRetrieve:
         mock_conn = self._mock_conn([row], chunk_count=0)
 
         with (
-            patch("api.app.features.query.service.get_conn", return_value=mock_conn),
-            patch("api.app.features.query.service._get_embedder") as mock_emb,
+            patch("rag.retrieval.search.get_conn", return_value=mock_conn),
+            patch("rag.retrieval.search._get_embedder") as mock_emb,
         ):
             mock_emb.return_value.encode_one.return_value = [0.1] * 384
             result = retrieve("question")

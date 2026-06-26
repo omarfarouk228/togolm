@@ -2,7 +2,7 @@
 Shared PostgreSQL connection factory.
 
 Usage:
-    from api.app.db import get_conn
+    from db import get_conn
 
     conn = get_conn()          # standard connection
     conn = get_conn(vector=True)  # with pgvector registered (for RAG)

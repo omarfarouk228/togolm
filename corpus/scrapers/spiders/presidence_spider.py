@@ -76,15 +76,26 @@ class PresidenceSpider(BaseTogoSpider):
 
     def _parse_listing(self, response):
         """Parse a category/listing page: follow article links + pagination."""
+        articles_found = []
         for href in response.css("a::attr(href)").getall():
             url = urljoin(response.url, href)
             if self._is_article_url(url):
+                articles_found.append(url)
                 yield scrapy.Request(url, callback=self.parse_article, priority=10)
 
-        # WordPress pagination: /page/2/, /page/3/, …
-        next_page = response.css("a.next::attr(href), a[rel='next']::attr(href)").get()
-        if next_page:
-            yield scrapy.Request(urljoin(response.url, next_page), callback=self._parse_listing)
+        if not articles_found:
+            return
+
+        # WordPress /page/N/ numbered pagination — the site has no a.next or rel=next links
+        base_url = response.url.rstrip("/")
+        if "/page/" in base_url:
+            base, _, page_str = base_url.rpartition("/page/")
+            current_page = int(page_str) if page_str.isdigit() else 1
+        else:
+            base = base_url
+            current_page = 1
+        next_url = f"{base}/page/{current_page + 1}/"
+        yield scrapy.Request(next_url, callback=self._parse_listing, priority=5)
 
     def parse_article(self, response):
         title = response.css("h1::text").get("").strip()

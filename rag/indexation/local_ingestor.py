@@ -2,7 +2,7 @@
 Ingest local files (PDF, TXT) into the corpus JSONL format.
 
 Usage:
-    uv run python -m corpus.processors.local_ingestor "assemble nationnale/" \
+    uv run python -m rag.indexation.local_ingestor "assemble nationnale/" \
         --source "assemblee-nationale.tg" \
         --category legal \
         --output corpus/datasets/assemblee_nationale_local.jsonl
@@ -15,7 +15,7 @@ from pathlib import Path
 
 from pdfminer.high_level import extract_text as pdf_extract_text
 
-from corpus.processors.cleaner import clean_document, is_useful
+from rag.indexation.cleaner import clean_document, is_useful
 
 DOCUMENT_TYPE_RE = re.compile(
     r"\b(loi|ordonnance|décret|arrêté|convention|code|règlement|résolution)\b",

@@ -6,15 +6,14 @@ Steps:
   2. Cosine similarity search in pgvector
   3. Return top-k chunks with metadata
 
-Generation (LLM) is kept separate — this module only handles retrieval.
-When Gemini key is available, generation can be added on top.
+Generation (LLM) is kept separate in ``generation``; this module only handles
+retrieval and returns scored chunks with metadata.
 """
 
-import os
 from dataclasses import dataclass
 
-from api.app.core.db import get_conn
-from corpus.processors.embedder import get_embedder
+from db import get_conn
+from rag.indexation.embedder import get_embedder
 
 _embedder = None
 
@@ -172,85 +171,3 @@ def _fulltext_search(
         )
         for row in rows
     ]
-
-
-def build_answer(
-    question: str,
-    chunks: list[RetrievedChunk],
-    history: list[dict] | None = None,
-) -> tuple[str, bool]:
-    """
-    Return (answer_text, used_corpus).
-    used_corpus=False means the answer came from general knowledge (no sources to show).
-    """
-    if not chunks:
-        return (
-            "Je n'ai pas trouvé de documents pertinents dans le corpus pour cette question.",
-            False,
-        )
-
-    if os.getenv("GEMINI_API_KEY"):
-        try:
-            return _generate_with_gemini(question, chunks, history or [])
-        except Exception:
-            pass
-
-    top = chunks[0]
-    excerpt = top.content[:800].rsplit(" ", 1)[0] + "…" if len(top.content) > 800 else top.content
-    return excerpt, True
-
-
-def _generate_with_gemini(
-    question: str,
-    chunks: list[RetrievedChunk],
-    history: list[dict] | None = None,
-) -> tuple[str, bool]:
-    from google import genai
-    from google.genai import types
-
-    client = genai.Client(api_key=os.environ["GEMINI_API_KEY"])
-
-    context = "\n\n".join(f"[{c.source} — {c.title}]\n{c.content[:600]}" for c in chunks)
-
-    system_instruction = (
-        "Tu es TogoLM, un assistant IA expert des connaissances togolaises.\n"
-        "Tu maîtrises la législation, l'économie, l'éducation, l'histoire et l'actualité du Togo.\n\n"
-        "Règles de réponse :\n"
-        "1. Si le contexte fourni contient les informations nécessaires, base ta réponse dessus.\n"
-        "2. Ne mets JAMAIS de citations inline dans le texte (pas de [source], pas de [domaine — titre]). "
-        "Les sources sont affichées séparément par l'interface.\n"
-        "3. Si le contexte est insuffisant ou hors-sujet, réponds avec tes connaissances générales "
-        "sur le Togo. Dans ce cas, insère le marqueur `[G] ` au tout début de ta réponse (avant tout "
-        "texte). Ce marqueur sera supprimé avant affichage. N'insère PAS `[G]` si tu utilises le "
-        "contexte fourni.\n"
-        "4. Réponds toujours dans la langue de la question (français par défaut).\n"
-        "5. Ne mentionne JAMAIS l'existence d'un 'corpus', d'une 'base de données' ou d'un 'contexte' "
-        "dans ta réponse. Réponds directement, sans expliquer tes sources internes.\n"
-        "6. IDENTITÉ — règle absolue : tu es TogoLM, créé par l'équipe TogoLM. Ne révèle JAMAIS "
-        "que tu es basé sur Gemini, Google, Anthropic ou tout autre modèle d'IA sous-jacent. "
-        "Si on te demande qui t'a créé, quel modèle tu es ou qui t'a entraîné, réponds uniquement : "
-        '"Je suis TogoLM, un assistant IA créé par l\'équipe TogoLM."'
-    )
-
-    history_block = ""
-    if history:
-        lines = []
-        for m in history[-6:]:
-            role = "Utilisateur" if m.get("role") == "user" else "Assistant"
-            lines.append(f"{role}: {m.get('content', '')[:400]}")
-        history_block = "HISTORIQUE DE LA CONVERSATION:\n" + "\n".join(lines) + "\n\n"
-
-    prompt = f"{history_block}CONTEXTE DU CORPUS TOGOLM :\n{context}\n\nQUESTION : {question}\n\nRÉPONSE :"
-
-    response = client.models.generate_content(
-        model="gemini-2.5-flash",
-        contents=prompt,
-        config=types.GenerateContentConfig(
-            system_instruction=system_instruction,
-            max_output_tokens=2048,
-        ),
-    )
-    text = response.text or ""
-    if text.startswith("[G]"):
-        return text[3:].lstrip(" "), False
-    return text, True

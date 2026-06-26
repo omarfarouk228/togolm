@@ -34,9 +34,9 @@
            ▼                              ▼
 ┌──────────────────────┐      ┌───────────────────────────────────┐
 │     FINE-TUNING      │      │           RAG ENGINE               │
-│  finetuning/         │      │  api/app/features/query/service.py│
-│  QLoRA · Mistral 7B  │      │  Retrieve → Rerank → Generate     │
-│  Hugging Face Hub    │      │  Gemini 2.5 Flash / local model   │
+│  finetuning/         │      │  rag/ (LangChain + LangGraph)     │
+│  QLoRA · Mistral 7B  │      │  guard → router → enrich          │
+│  Hugging Face Hub    │      │  → retrieve → answer              │
 └──────────────────────┘      └──────────────────┬────────────────┘
                                                  │
                                                  ▼
@@ -118,7 +118,7 @@ Configuration Scrapy (`corpus/scrapers/settings.py`) :
 - `CONCURRENT_REQUESTS = 4`
 - `RETRY_TIMES = 3`
 
-#### 1.2 Processors (`corpus/processors/`)
+#### 1.2 Indexation (`rag/indexation/`)
 
 **`cleaner.py`** — Nettoyage du texte
 - Suppression du HTML/JS/CSS résiduel
@@ -126,8 +126,8 @@ Configuration Scrapy (`corpus/scrapers/settings.py`) :
 - Filtre `is_useful()` : minimum 50 mots
 
 **`chunker.py`** — Découpage en chunks
-- `chunk_by_words()` : 400 mots/chunk, 50 mots de chevauchement
-- Retourne des objets `Chunk(document_id, chunk_index, text)`
+- `chunk_by_words()` : taille calculée via `max_chunk_words()` pour tenir dans la fenêtre du modèle d'embedding (< 100 mots, ~12% de chevauchement)
+- Retourne des objets `Chunk(document_id, chunk_index, text, word_count)`
 
 **`embedder.py`** — Génération d'embeddings
 - Priorité 1 : Gemini `gemini-embedding-001` (384 dims, API key requis)
@@ -202,7 +202,6 @@ api/
 │   ├── main.py               # App entry point, middlewares, routers
 │   ├── core/
 │   │   ├── auth.py           # X-API-Key → APIKeyRecord (DB lookup + SHA-256)
-│   │   ├── db.py             # get_conn() — connexion PostgreSQL centralisée
 │   │   ├── rate_limit.py     # Redis INCR/EXPIRE, fail-open
 │   │   └── models.py         # SQLAlchemy models (Alembic target_metadata)
 │   └── features/
@@ -215,13 +214,32 @@ api/
 │       ├── documents/router.py # GET /v1/documents, GET /v1/search
 │       └── query/
 │           ├── router.py     # POST /v1/query, POST /v1/query/stream, POST /v1/embed
-│           └── service.py    # retrieve() + build_answer()
+│           └── querylog.py   # log_query() → table user_queries
 └── tests/
     ├── conftest.py
     ├── test_rag.py
     ├── test_query.py
+    ├── test_query_enrichment.py
+    ├── test_query_graph.py
     ├── test_auth.py
-    └── test_rate_limit.py
+    ├── test_rate_limit.py
+    ├── test_corpus.py
+    └── test_indexation.py
+
+rag/
+├── generation/
+│   ├── chains.py             # build_answer(), stream_answer(), route_query()
+│   ├── prompts.py            # Versioned system prompts (RAG, off-topic, router)
+│   └── llm.py                # ChatGoogleGenerativeAI factory, gemini_available()
+├── retrieval/
+│   ├── search.py             # retrieve() — vector + fulltext search
+│   └── enrichment.py         # enrich_query() — category detection
+└── orchestration/
+    ├── graph.py              # LangGraph query graph (run_query_graph)
+    └── classification.py     # is_trivially_off_topic() micro-guard
+
+db/
+└── __init__.py               # get_conn() — connexion PostgreSQL partagée
 ```
 
 #### Authentification
@@ -249,11 +267,12 @@ pipe.expire(key, window_seconds)
 #### RAG Pipeline
 
 ```
-Question → Embedding (384 dims)
-         → pgvector cosine search (top-5 chunks)
-         → Reranking par score de similarité
-         → Gemini 2.5 Flash (ou fallback local)
-         → Réponse + sources citées
+Question → Micro-guard (trivially off-topic ?)
+         → LLM router (on_topic / off_topic)
+         → Query enrichment (category detection, rewrite with history)
+         → Embedding (384 dims) → pgvector cosine search (top-5 chunks)
+         → Gemini 2.5 Flash (LangChain) ou fallback extractif local
+         → Réponse streamée (SSE) + sources
 ```
 
 ---

@@ -30,6 +30,11 @@ RUN pip install --no-cache-dir uv && \
         sqlalchemy \
         alembic \
         "google-genai>=2.3.0" \
+        "langchain>=1.0,<2.0" \
+        "langchain-core>=1.0,<2.0" \
+        "langchain-google-genai>=4.2,<5.0" \
+        "langgraph>=1.0,<2.0" \
+        "langsmith>=0.3.0" \
         redis \
         celery \
         tqdm \
@@ -54,6 +59,8 @@ FROM deps AS production
 
 # Copy application code (excludes everything in .dockerignore)
 COPY api/      ./api/
+COPY rag/      ./rag/
+COPY db/       ./db/
 COPY corpus/   ./corpus/
 COPY alembic/  ./alembic/
 COPY scripts/  ./scripts/

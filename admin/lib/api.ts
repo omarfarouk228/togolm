@@ -77,8 +77,9 @@ export interface QueryListResponse {
 
 export interface QueryStats {
   total_queries: number;
+  period_queries: number;
   off_topic_count: number;
-  off_topic_rate: number;
+  off_topic_rate_pct: number;
   avg_latency_ms: number;
   days: number;
 }
@@ -129,6 +130,11 @@ async function apiFetch<T>(
   const res = await fetch(`${BASE}${path}`, { ...options, headers });
 
   if (!res.ok) {
+    if (res.status === 401) {
+      removeToken();
+      window.location.replace("/login");
+      return undefined as T;
+    }
     const text = await res.text().catch(() => res.statusText);
     throw new Error(`HTTP ${res.status}: ${text}`);
   }
