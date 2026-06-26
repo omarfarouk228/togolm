@@ -12,7 +12,7 @@
 │                      SOURCES DE DONNÉES                          │
 │  Gouvernement · Presse · Journal Officiel · OTR · INSEED        │
 └──────────────────────────┬──────────────────────────────────────┘
-                           │ Scrapy (20 spiders)
+                           │ Scrapy (35 spiders)
                            ▼
 ┌─────────────────────────────────────────────────────────────────┐
 │                    PIPELINE DE COLLECTE                          │
@@ -24,7 +24,7 @@
                            ▼
 ┌─────────────────────────────────────────────────────────────────┐
 │                   POSTGRESQL + PGVECTOR                          │
-│  Table: documents    (62 000+ docs, 26 sources)                  │
+│  Table: documents    (62 000+ docs, 55+ sources distinctes)       │
 │  Table: chunks       (101 000+ chunks, 384-dim embeddings)      │
 │  Table: api_keys     (SHA-256, plans: free / dev / institution) │
 │  Table: user_queries (query logs, latency, off-topic tracking)  │
@@ -55,6 +55,13 @@
 │   showcase/         │      │    Apps · Institutions · Devs      │
 │   Next.js · Vercel  │      │                                    │
 └─────────────────────┘      └────────────────────────────────────┘
+           │
+           ▼
+┌─────────────────────────────────────────────────────────────────┐
+│               ADMIN DASHBOARD (privé)                            │
+│  admin/   —   Next.js 15 + TanStack Query + Recharts            │
+│  JWT auth · corpus stats · CRUD clés · analytics queries        │
+└─────────────────────────────────────────────────────────────────┘
 ```
 
 ---
@@ -65,14 +72,22 @@
 
 #### 1.1 Scrapers (`corpus/scrapers/`)
 
+35 fichiers spider (hors `base_spider.py`) couvrant 55+ sources distinctes. Certains spiders agrègent plusieurs domaines (`gouv_ministry` → 13 sources, `beta_sources` → 5, `international` → 8).
+
 | Spider | Source | Catégorie | Statut |
 |--------|--------|-----------|--------|
 | `service_public` | service-public.gouv.tg | administrative | ✅ Actif |
 | `presidence` | presidence.gouv.tg | politics | ✅ Actif |
+| `primature` | primature.gouv.tg | politics | ✅ Actif |
 | `inseed` | inseed.tg | economy | ✅ Actif |
-| `gouv_ministry` | *.gouv.tg (12 ministères) | government | ✅ Actif |
+| `gouv_ministry` | *.gouv.tg (ministères) | government | ✅ Actif |
 | `journal_officiel` | jo.gouv.tg | legal | ✅ Actif |
 | `otr` | otr.tg | legal/tax | ✅ Actif |
+| `ohada` | ohada.com | legal | ✅ Actif |
+| `droit_afrique` | droit-afrique.com | legal | ✅ Actif |
+| `legal_pdf` | PDFs légaux | legal | ✅ Actif |
+| `uemoa` | uemoa.int | legal/economy | ✅ Actif |
+| `bceao` | bceao.int | economy/finance | ✅ Actif |
 | `togofirst` | togofirst.com | press | ✅ Actif |
 | `icilome` | icilome.com | press | ✅ Actif |
 | `republicoftogo` | republicoftogo.com | press | ✅ Actif |
@@ -80,9 +95,18 @@
 | `savoirnews` | savoirnews.net | press | ✅ Actif |
 | `lomeinfos` | lomeinfos.com | press | ✅ Actif |
 | `togoactualite` | togoactualite.com | press | ✅ Actif |
+| `togo24` | togo24.net | press | ✅ Actif |
+| `moov_africa` | moov-africa.tg | economy/telecoms | ✅ Actif |
+| `anpe` | anpe.tg | employment | ✅ Actif |
+| `univ_lome` | univ-lome.tg | education | ✅ Actif |
+| `edusup` | edusup.gouv.tg | education | ✅ Actif |
+| `campus_togo` | campus-togo.tg | education | ✅ Actif |
+| `yas` | yas.tg | social | ✅ Actif |
 | `wikipedia` | fr.wikipedia.org | encyclopedic | ✅ Actif |
+| `international` | sources internationales | international | ✅ Actif |
+| `beta_sources` | sources diverses | various | ✅ Actif |
 | `mef` | mef.gouv.tg | economy | ❌ DNS failure |
-| `assemblee_nationale` | assemblee-nationale.tg | legal | ❌ Cloudflare |
+| `assemblee_nationale` | assemblee-nationale.tg | politics | ❌ Cloudflare |
 | `atp` | agencetogopresse.com | press | ❌ DNS failure |
 | `haac` | haac.tg | government | ❌ DNS failure |
 | `togoinfos` | togoinfos.com | press | ❌ DNS failure |
@@ -182,7 +206,10 @@ api/
 │   │   ├── rate_limit.py     # Redis INCR/EXPIRE, fail-open
 │   │   └── models.py         # SQLAlchemy models (Alembic target_metadata)
 │   └── features/
-│       ├── admin/router.py   # GET /v1/admin/stats
+│       ├── admin/
+│       │   ├── router.py     # 12 endpoints admin (corpus, keys, queries, health, login)
+│       │   ├── service.py    # logique métier admin (JWT, stats, CRUD clés)
+│       │   └── schemas.py    # Pydantic models admin
 │       ├── auth/router.py    # POST /v1/auth/register, GET /v1/auth/me
 │       ├── corpus/router.py  # GET /v1/categories, GET /v1/stats
 │       ├── documents/router.py # GET /v1/documents, GET /v1/search
@@ -263,17 +290,46 @@ NEXT_PUBLIC_API_KEY=<clé_publique>
 
 ---
 
-### 6. Gestion des clés API
+### 6. Admin Dashboard (`admin/`)
+
+Next.js 15 app privée — gestion de la plateforme.
+
+```
+admin/
+├── app/
+│   ├── (auth)/login/         # Connexion JWT
+│   └── (dashboard)/
+│       ├── page.tsx          # Stats globales + graphique activité
+│       ├── corpus/           # Sources, documents récents
+│       ├── keys/             # CRUD clés API
+│       ├── queries/          # Historique requêtes
+│       └── health/           # Santé DB, Redis, embeddings
+└── lib/
+    ├── api.ts                # Client typé pour les 12 endpoints admin
+    ├── auth.ts               # Gestion JWT (localStorage)
+    └── i18n.ts               # Traductions EN/FR
+```
+
+Variables d'environnement :
+```bash
+NEXT_PUBLIC_API_URL=http://localhost:8000
+```
+
+Authentification : `POST /v1/admin/login` avec la valeur de `API_SECRET_KEY`. Retourne un JWT valable 24h.
+
+---
+
+### 8. Gestion des clés API
 
 ```bash
 # Créer une nouvelle clé
-python scripts/create_api_key.py create --owner "Nom" --email "email@example.com" --plan dev
+python scripts/admin/create_api_key.py create --owner "Nom" --email "email@example.com" --plan dev
 
 # Lister les clés actives
-python scripts/create_api_key.py list
+python scripts/admin/create_api_key.py list
 
 # Révoquer une clé
-python scripts/create_api_key.py revoke <key_id>
+python scripts/admin/create_api_key.py revoke <key_id>
 ```
 
 Format des clés : `tlm_` + 64 caractères hexadécimaux

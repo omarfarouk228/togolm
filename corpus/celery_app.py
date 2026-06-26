@@ -54,7 +54,5 @@ app.conf.update(
             "kwargs": {"embed": False},  # Embeddings done in weekly batch
         },
     },
-    # Prevent tasks from running simultaneously on the same worker
-    task_acks_late=True,
     worker_prefetch_multiplier=1,
 )

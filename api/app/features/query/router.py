@@ -10,6 +10,8 @@ response. Classification, generation, retrieval and logging live elsewhere.
 import json
 import time
 
+logger = logging.getLogger(__name__)
+
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 from fastapi.responses import StreamingResponse
 
@@ -105,11 +107,11 @@ def stream_query(
             ):
                 yield _sse(event_type, text)
             latency_ms = int((time.monotonic() - t0) * 1000)
-            yield f"data: {json.dumps({'type': 'sources', 'sources': [], 'latency_ms': latency_ms})}\n\n"
-            yield "data: [DONE]\n\n"
             log_query(
                 request.question, request.language, request.category, True, 0, latency_ms, api_key
             )
+            yield f"data: {json.dumps({'type': 'sources', 'sources': [], 'latency_ms': latency_ms})}\n\n"
+            yield "data: [DONE]\n\n"
             return
 
         # Rewrite the question using conversation history so the vector search
@@ -149,8 +151,6 @@ def stream_query(
             yield _sse("chunk", _NO_RESULTS)
 
         latency_ms = int((time.monotonic() - t0) * 1000)
-        yield f"data: {json.dumps({'type': 'sources', 'sources': sources, 'latency_ms': latency_ms})}\n\n"
-        yield "data: [DONE]\n\n"
         log_query(
             request.question,
             request.language,
@@ -160,6 +160,8 @@ def stream_query(
             latency_ms,
             api_key,
         )
+        yield f"data: {json.dumps({'type': 'sources', 'sources': sources, 'latency_ms': latency_ms})}\n\n"
+        yield "data: [DONE]\n\n"
 
     return StreamingResponse(
         generate(),

@@ -1,4 +1,4 @@
-"""Spider for edusup.gouv.tg — Ministère de l'Enseignement Supérieur et de la Recherche."""
+"""Spider for edusup.net — Ministère de l'Enseignement Supérieur et de la Recherche du Togo."""
 
 from urllib.parse import urljoin, urlparse
 
@@ -11,21 +11,21 @@ _SKIP_PATH = {"/feed/", "/wp-admin/", "/wp-content/", "/tag/", "/author/"}
 
 class EdusupSpider(BaseTogoSpider):
     name = "edusup"
-    source = "edusup.gouv.tg"
+    source = "edusup.net"
     category = "education"
     language = "fr"
 
     start_urls = [
-        "https://edusup.gouv.tg/sitemap.xml",
-        "https://edusup.gouv.tg/wp-sitemap.xml",
-        "https://edusup.gouv.tg/",
-        "https://edusup.gouv.tg/actualites/",
-        "https://edusup.gouv.tg/programmes/",
-        "https://edusup.gouv.tg/concours/",
-        "https://edusup.gouv.tg/bourses/",
-        "https://edusup.gouv.tg/institutions/",
-        "https://edusup.gouv.tg/recherche/",
-        "https://edusup.gouv.tg/textes-officiels/",
+        "https://edusup.net/sitemap.xml",
+        "https://edusup.net/wp-sitemap.xml",
+        "https://edusup.net/",
+        "https://edusup.net/actualites/",
+        "https://edusup.net/programmes/",
+        "https://edusup.net/concours/",
+        "https://edusup.net/bourses/",
+        "https://edusup.net/institutions/",
+        "https://edusup.net/recherche/",
+        "https://edusup.net/textes-officiels/",
     ]
 
     custom_settings = {
@@ -59,7 +59,7 @@ class EdusupSpider(BaseTogoSpider):
             if not href or href.startswith(("#", "mailto:", "tel:", "javascript:")):
                 continue
             url = urljoin(response.url, href)
-            if "edusup.gouv.tg" not in urlparse(url).netloc:
+            if "edusup.net" not in urlparse(url).netloc:
                 continue
             if self._skip(url):
                 continue

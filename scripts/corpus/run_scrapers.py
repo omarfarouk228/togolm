@@ -27,8 +27,8 @@ import sys
 import time
 from pathlib import Path
 
-# Project root
-ROOT = Path(__file__).resolve().parent.parent
+# Project root (scripts/corpus/run_scrapers.py → scripts/corpus → scripts → root)
+ROOT = Path(__file__).resolve().parent.parent.parent
 SCRAPY_DIR = ROOT / "corpus"
 DATASETS_DIR = ROOT / "corpus" / "datasets"
 
@@ -59,6 +59,7 @@ ALL_SPIDERS = [
     "togofirst",
     "icilome",
     "republicoftogo",
+    "republiquetogolaise",
     "letogolais",
     "savoirnews",
     # Encyclopédique
@@ -118,7 +119,7 @@ def run_spider(spider_name: str) -> bool:
         result = subprocess.run(
             cmd,
             cwd=str(SCRAPY_DIR),
-            timeout=600,  # 10 min max per spider
+            timeout=1800,  # 30 min max per spider
         )
         elapsed = time.time() - start
         size = output_file.stat().st_size / 1024 if output_file.exists() else 0
@@ -129,7 +130,7 @@ def run_spider(spider_name: str) -> bool:
             print(f"  ❌ Exit code {result.returncode} after {elapsed:.0f}s")
             return False
     except subprocess.TimeoutExpired:
-        print("  ⏱  Timeout (10 min) — spider may still have partial results")
+        print("  ⏱  Timeout (30 min) — spider may still have partial results")
         return False
     except Exception as e:
         print(f"  ❌ Error: {e}")

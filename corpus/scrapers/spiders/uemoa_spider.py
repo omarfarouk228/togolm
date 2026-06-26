@@ -21,15 +21,15 @@ class UemoaSpider(BaseTogoSpider):
     language = "fr"
 
     start_urls = [
-        # Document search filtered for Togo
+        "https://uemoa.int/fr/publications",
+        "https://uemoa.int/fr/actualites",
+        "https://uemoa.int/fr/textes-legislatifs-et-reglementaires",
+        "https://uemoa.int/fr/",
+        # Document library
         "https://e-documenter.uemoa.int/index.php/component/search/?searchword=togo",
         "https://e-documenter.uemoa.int/index.php/documents",
         "https://e-documenter.uemoa.int/index.php/publications",
         "https://e-documenter.uemoa.int/",
-        # Also try direct UEMOA domain
-        "https://www.uemoa.int/fr/publications",
-        "https://www.uemoa.int/fr/actualites",
-        "https://www.uemoa.int/fr/textes-legislatifs-et-reglementaires",
     ]
 
     custom_settings = {
@@ -40,7 +40,7 @@ class UemoaSpider(BaseTogoSpider):
         "HTTPERROR_ALLOWED_CODES": [403, 404],
     }
 
-    _ALLOWED_DOMAINS = {"e-documenter.uemoa.int", "www.uemoa.int", "uemoa.int"}
+    _ALLOWED_DOMAINS = {"e-documenter.uemoa.int", "uemoa.int"}
 
     def parse(self, response):
         yield from self._parse_page(response)
