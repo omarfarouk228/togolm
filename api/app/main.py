@@ -11,6 +11,8 @@ Endpoints:
   GET  /v1/search           — Full-text keyword search
 """
 
+import os
+
 from dotenv import load_dotenv
 
 load_dotenv()  # must run before any module that reads os.getenv()
@@ -33,9 +35,12 @@ app = FastAPI(
     redoc_url="/redoc",
 )
 
+_cors_origins_raw = os.getenv("CORS_ORIGINS", "")
+_allowed_origins = [o.strip() for o in _cors_origins_raw.split(",") if o.strip()] or ["*"]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Restrict in production
+    allow_origins=_allowed_origins,
     allow_methods=["*"],
     allow_headers=["*"],
 )

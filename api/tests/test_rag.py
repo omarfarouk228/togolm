@@ -32,7 +32,17 @@ def make_chunk(**kwargs) -> RetrievedChunk:
 
 
 class TestBuildAnswer:
-    def test_empty_chunks_returns_no_result_message(self):
+    def test_empty_chunks_calls_gemini_for_general_knowledge(self, monkeypatch):
+        monkeypatch.setenv("GEMINI_API_KEY", "AQ.fake-key-for-test")
+        with patch(
+            "rag.generation.chains._generate_answer", return_value="Lomé est la capitale du Togo."
+        ) as mock_gemini:
+            answer = build_answer("Quelle est la capitale du Togo ?", [])
+        mock_gemini.assert_called_once()
+        assert "Lomé" in answer
+
+    def test_empty_chunks_no_gemini_returns_no_result_message(self, monkeypatch):
+        monkeypatch.delenv("GEMINI_API_KEY", raising=False)
         answer = build_answer("Quelle est la capitale du Togo ?", [])
         assert "pertinents" in answer
 
@@ -119,7 +129,7 @@ class TestRetrieve:
         assert result[0].score == 0.9
 
     def test_filters_low_score_chunks(self):
-        # Score below min_score=0.3 → filtered out
+        # Score 0.1 is well below min_score=0.62 → filtered out
         row = ("Titre", "https://test.tg", "test.tg", "legal", "Contenu.", 0.1)
         mock_conn = self._mock_conn([row], chunk_count=1)
 

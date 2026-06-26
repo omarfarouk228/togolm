@@ -98,14 +98,17 @@ def embed_batch(texts: list[str]) -> list[list[float]]:
             return _embedder.encode(texts)
         except Exception as e:
             msg = str(e)
-            if "429" in msg or "RESOURCE_EXHAUSTED" in msg:
+            is_rate_limit = "429" in msg or "RESOURCE_EXHAUSTED" in msg
+            is_transient = "503" in msg or "UNAVAILABLE" in msg or "502" in msg or "500" in msg
+            if is_rate_limit or is_transient:
                 wait = 2**attempt * 15  # 15s, 30s, 60s, 120s
                 if attempt < 3:
-                    print(f"  [RATE LIMIT] Waiting {wait}s before retry {attempt + 1}/3...")
+                    label = "RATE LIMIT" if is_rate_limit else "TRANSIENT ERROR"
+                    print(f"  [{label}] Waiting {wait}s before retry {attempt + 1}/3...")
                     time.sleep(wait)
                 else:
                     print(
-                        "  [RATE LIMIT] Gemini quota exhausted — switching to local model for this run"
+                        "  [GEMINI UNAVAILABLE] Switching to local model for this run"
                     )
                     from rag.indexation.embedder import LocalEmbedder
 
@@ -220,8 +223,8 @@ def process_file(jsonl_path: Path, embed: bool, conn) -> tuple[int, int, int]:
 
             upsert_chunks(cur, doc_id, chunk_texts, chunk_embeddings)
             inserted += 1
+            conn.commit()  # commit per-document so partial progress survives crashes
 
-    conn.commit()
     return total, inserted, skipped
 
 
@@ -242,16 +245,25 @@ def main():
 
     total_all = inserted_all = skipped_all = 0
 
+    failed_files = []
     for path in args.files:
         if not path.exists():
             print(f"[SKIP] {path} not found")
             continue
         print(f"Processing {path}...")
-        t, i, s = process_file(path, embed=not args.no_embed, conn=conn)
-        print(f"  Done: {i} inserted, {s} skipped (below min length), {t} total\n")
-        total_all += t
-        inserted_all += i
-        skipped_all += s
+        try:
+            t, i, s = process_file(path, embed=not args.no_embed, conn=conn)
+            print(f"  Done: {i} inserted, {s} skipped (below min length), {t} total\n")
+            total_all += t
+            inserted_all += i
+            skipped_all += s
+        except Exception as exc:
+            conn.rollback()
+            print(f"  [ERROR] {path.name} failed: {exc}\n")
+            failed_files.append(path.name)
+
+    if failed_files:
+        print(f"Failed files ({len(failed_files)}): {', '.join(failed_files)}")
 
     conn.close()
     print(f"Summary: {inserted_all}/{total_all} documents ingested ({skipped_all} skipped)")

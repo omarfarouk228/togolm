@@ -7,6 +7,7 @@ HTTP layer only: validate, delegate to the query feature modules, shape the
 response. Classification, generation, retrieval and logging live elsewhere.
 """
 
+import asyncio
 import json
 import logging
 import time
@@ -26,6 +27,7 @@ from api.app.features.query.schemas import (
 from rag import generation, retrieval
 from rag.generation import rewrite_question_with_history
 from rag.generation.llm import gemini_available
+from rag.indexation.embedder import LocalEmbedder
 from rag.orchestration.classification import is_trivially_off_topic
 from rag.orchestration.graph import run_query_graph
 from rag.retrieval.enrichment import enrich_query
@@ -35,6 +37,21 @@ logger = logging.getLogger(__name__)
 router = APIRouter(tags=["Query"])
 
 _NO_RESULTS = "Je n'ai pas trouvé de documents pertinents dans le corpus pour cette question."
+
+# Chunks above retrieval min_score (0.62) reach the model as context.
+# Only chunks above this higher threshold are shown as sources in the response —
+# preventing irrelevant borderline matches from appearing as citations.
+_SOURCE_DISPLAY_MIN_SCORE = 0.72
+
+# Module-level embedder cache for the /embed endpoint
+_local_embedder: LocalEmbedder | None = None
+
+
+def _get_local_embedder() -> LocalEmbedder:
+    global _local_embedder
+    if _local_embedder is None:
+        _local_embedder = LocalEmbedder()
+    return _local_embedder
 
 
 def _sse(event_type: str, text: str) -> str:
@@ -52,7 +69,8 @@ async def query_corpus(
     t0 = time.monotonic()
 
     try:
-        result = run_query_graph(
+        result = await asyncio.to_thread(
+            run_query_graph,
             question=request.question,
             category=request.category,
             language=request.language,
@@ -73,9 +91,14 @@ async def query_corpus(
         latency_ms,
         api_key,
     )
+    # Only show chunks that score above the display threshold as sources.
+    # Chunks between retrieval min_score and this threshold still reach the model
+    # as context but are not presented as citations (they may be borderline matches
+    # that the model ignored in favour of general knowledge).
+    display_chunks = [c for c in result.chunks if c.score >= _SOURCE_DISPLAY_MIN_SCORE]
     return QueryResponse(
         answer=result.answer,
-        sources=[Source(title=c.title, url=c.url, score=round(c.score, 4)) for c in result.chunks],
+        sources=[Source(title=c.title, url=c.url, score=round(c.score, 4)) for c in display_chunks],
         model="togolm-rag-v1",
         latency_ms=latency_ms,
     )
@@ -136,7 +159,8 @@ def stream_query(
         if gemini_available():
             try:
                 for event_type, text in generation.stream_answer(
-                    request.question, chunks, request.history or []
+                    request.question, chunks, request.history or [],
+                    max_output_tokens=request.max_tokens,
                 ):
                     yield _sse(event_type, text)
             except Exception:
@@ -163,7 +187,8 @@ def stream_query(
             latency_ms,
             api_key,
         )
-        yield f"data: {json.dumps({'type': 'sources', 'sources': sources, 'latency_ms': latency_ms})}\n\n"
+        display_sources = [s for s in sources if s["score"] >= _SOURCE_DISPLAY_MIN_SCORE]
+        yield f"data: {json.dumps({'type': 'sources', 'sources': display_sources, 'latency_ms': latency_ms})}\n\n"
         yield "data: [DONE]\n\n"
 
     return StreamingResponse(
@@ -176,13 +201,10 @@ def stream_query(
 @router.post("/embed", response_model=EmbedResponse)
 async def embed_text(request: EmbedRequest):
     """Generate an embedding vector for the provided text."""
-    from rag.indexation.embedder import LocalEmbedder
-
     try:
         # Always use the local model for real-time inference: no rate limits,
         # no API key required, and the model is pre-baked into the Docker image.
-        embedder = LocalEmbedder()
-        vector = embedder.encode_one(request.text)
+        vector = await asyncio.to_thread(_get_local_embedder().encode_one, request.text)
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Embedding error: {e}")
 

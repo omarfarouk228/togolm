@@ -40,13 +40,26 @@ PLAN_QUOTAS: dict[str, int] = {k: v[0] for k, v in _LIMITS.items()}
 
 _STATS_TTL = 35 * 86_400  # keep 35 days of stats
 
+# Module-level singleton — one ConnectionPool shared across all workers in the process
+_redis_client: redis.Redis | None = None
+
 
 def _get_redis() -> redis.Redis:
-    url = os.getenv("REDIS_URL") or os.getenv("CELERY_BROKER_URL", "redis://localhost:6379/0")
-    return redis.from_url(url, decode_responses=True)
+    global _redis_client
+    if _redis_client is None:
+        url = os.getenv("REDIS_URL") or os.getenv("CELERY_BROKER_URL", "redis://localhost:6379/0")
+        _redis_client = redis.from_url(url, decode_responses=True)
+    return _redis_client
 
 
 def _get_client_ip(request: Request) -> str:
+    # X-Real-IP is set by Nginx ($remote_addr) and cannot be forged by the client.
+    # In production this is the authoritative source; prefer it over X-Forwarded-For.
+    real_ip = request.headers.get("X-Real-IP")
+    if real_ip:
+        return real_ip.strip()
+    # Fallback for dev/non-Nginx environments: use the leftmost X-Forwarded-For entry.
+    # This is the original client IP as reported by the first proxy.
     forwarded = request.headers.get("X-Forwarded-For")
     if forwarded:
         return forwarded.split(",")[0].strip()
