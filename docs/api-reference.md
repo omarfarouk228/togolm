@@ -39,8 +39,7 @@ Query the Togolese corpus via RAG.
 {
   "question": "How to register a company in Togo?",
   "category": "legal",
-  "language": "fr",
-  "max_tokens": 500
+  "language": "fr"
 }
 ```
 
@@ -55,7 +54,7 @@ Query the Togolese corpus via RAG.
       "score": 0.92
     }
   ],
-  "model": "togolm-7b-v1",
+  "model": "togolm-rag-v1",
   "latency_ms": 340
 }
 ```
@@ -88,6 +87,7 @@ data: [DONE]
 
 | Type | Fields | Description |
 |------|--------|-------------|
+| `thinking` | `text: str` | Reasoning tokens (Gemini thinking mode) |
 | `chunk` | `text: str` | Next token(s) of the answer |
 | `sources` | `sources: list`, `latency_ms: int` | Retrieved sources (sent after generation) |
 | `error` | `message: str` | Error during retrieval or generation |
@@ -112,8 +112,7 @@ Generate an embedding vector for a text.
 **Request**
 ```json
 {
-  "text": "Agricultural policy in Togo 2025",
-  "model": "togolm-embed-v1"
+  "text": "Agricultural policy in Togo 2025"
 }
 ```
 
@@ -121,7 +120,7 @@ Generate an embedding vector for a text.
 ```json
 {
   "embedding": [0.023, -0.411, ...],
-  "model": "togolm-embed-v1",
+  "model": "paraphrase-multilingual-MiniLM-L12-v2",
   "token_count": 8
 }
 ```

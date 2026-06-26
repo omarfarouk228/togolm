@@ -1,3 +1,4 @@
+import pytest
 from fastapi.testclient import TestClient
 
 from api.app.main import app
@@ -38,6 +39,7 @@ def test_query_returns_answer():
 
 
 def test_embed_returns_vector():
+    pytest.importorskip("sentence_transformers")
     response = client.post("/v1/embed", json={"text": "Test text"})
     assert response.status_code == 200
     data = response.json()

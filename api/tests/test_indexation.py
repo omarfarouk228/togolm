@@ -45,6 +45,10 @@ def test_chunker_respects_word_budget():
 
 
 def _model_cached() -> bool:
+    try:
+        import sentence_transformers  # noqa: F401
+    except ImportError:
+        return False
     cache = Path.home() / ".cache" / "huggingface" / "hub"
     return any(cache.glob(f"models--*{MODEL_NAME.split('/')[-1]}*")) if cache.exists() else False
 

@@ -46,9 +46,7 @@ class TestQueryEndpoint:
     def test_returns_expected_shape(self):
         with (
             patch("rag.retrieval.retrieve", return_value=[FAKE_CHUNK]),
-            patch(
-                "rag.generation.build_answer", return_value="Réponse test"
-            ),
+            patch("rag.generation.build_answer", return_value="Réponse test"),
         ):
             resp = client.post("/v1/query", json={"question": "Quel est le régime du Togo ?"})
         assert resp.status_code == 200

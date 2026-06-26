@@ -39,7 +39,7 @@ OFF_TOPIC_FALLBACK = (
 STREAM_OFF_TOPIC_FALLBACK = (
     "Bonjour ! Je suis TogoLM, spécialisé dans les connaissances togolaises."
 )
-NO_CORPUS_ANSWER = "No relevant information found in the TogoLM corpus for this question."
+NO_CORPUS_ANSWER = "Je n'ai pas trouvé de documents pertinents dans le corpus pour cette question."
 
 
 # --- Routing (agentic intent classification) ----------------------------------
@@ -164,9 +164,12 @@ def answer_without_corpus(question: str, history: History) -> str:
         return OFF_TOPIC_GREETING
     chain = OFF_TOPIC_PROMPT | get_chat_model(max_output_tokens=200) | StrOutputParser()
     try:
-        return chain.invoke(
-            {"question": question, "history": _history_messages(history, limit=4, truncate=300)}
-        ) or ""
+        return (
+            chain.invoke(
+                {"question": question, "history": _history_messages(history, limit=4, truncate=300)}
+            )
+            or ""
+        )
     except Exception:
         return OFF_TOPIC_FALLBACK
 

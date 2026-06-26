@@ -8,9 +8,8 @@ response. Classification, generation, retrieval and logging live elsewhere.
 """
 
 import json
+import logging
 import time
-
-logger = logging.getLogger(__name__)
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 from fastapi.responses import StreamingResponse
@@ -30,6 +29,8 @@ from rag.generation.llm import gemini_available
 from rag.orchestration.classification import is_trivially_off_topic
 from rag.orchestration.graph import run_query_graph
 from rag.retrieval.enrichment import enrich_query
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["Query"])
 
@@ -139,8 +140,10 @@ def stream_query(
                 ):
                     yield _sse(event_type, text)
             except Exception:
-                events = generation.stream_extractive(chunks) if chunks else iter(
-                    [("chunk", _NO_RESULTS)]
+                events = (
+                    generation.stream_extractive(chunks)
+                    if chunks
+                    else iter([("chunk", _NO_RESULTS)])
                 )
                 for event_type, text in events:
                     yield _sse(event_type, text)

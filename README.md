@@ -36,24 +36,25 @@ Togolese public data is scattered across dozens of government portals and absent
 togolm/
 ├── corpus/
 │   ├── scrapers/
-│   │   └── spiders/          # 29 Scrapy spiders — one per source
-│   ├── processors/
-│   │   ├── cleaner.py        # HTML → clean text
-│   │   ├── chunker.py        # Split into 400-word chunks
-│   │   ├── embedder.py       # Local (MiniLM) or Gemini embeddings
-│   │   └── ingestor.py       # JSONL → PostgreSQL + pgvector
+│   │   └── spiders/          # 35 Scrapy spiders — one per source
 │   └── datasets/             # Scraped JSONL files (gitignored)
+├── rag/
+│   ├── generation/           # LangChain LCEL chains, prompts, LLM config
+│   ├── retrieval/            # Vector + fulltext search, query enrichment
+│   ├── indexation/           # Chunker, cleaner, embedder, ingestor
+│   └── orchestration/        # LangGraph query graph, intent classification
+├── db/                       # Shared PostgreSQL connection (get_conn)
 ├── api/
 │   ├── app/
 │   │   ├── main.py           # FastAPI entry point
-│   │   ├── core/             # db.py, auth.py, rate_limit.py, models.py
+│   │   ├── core/             # auth.py, rate_limit.py, models.py
 │   │   └── features/
 │   │       ├── admin/        # router.py, service.py, schemas.py
 │   │       ├── auth/         # register, me
 │   │       ├── corpus/       # public stats
 │   │       ├── documents/    # list, detail, search
-│   │       └── query/        # RAG service + router
-│   └── tests/                # pytest integration tests (80 tests)
+│   │       └── query/        # HTTP layer — delegates to rag/
+│   └── tests/                # pytest integration tests
 ├── alembic/                  # Database migrations (Alembic)
 │   └── versions/
 ├── finetuning/
