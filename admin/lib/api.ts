@@ -1,4 +1,4 @@
-import { getToken } from "./auth";
+import { getToken, removeToken } from "./auth";
 
 const BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
