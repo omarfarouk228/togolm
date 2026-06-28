@@ -209,9 +209,7 @@ def stream_answer(
     question: str, chunks: list[Any], history: History | None = None, max_output_tokens: int = 2048
 ) -> Iterator[tuple[str, str]]:
     """Stream a RAG answer. Raises on LLM failure so the caller can fall back."""
-    model = get_chat_model(
-        max_output_tokens=max_output_tokens, thinking_budget=0, streaming=True
-    )
+    model = get_chat_model(max_output_tokens=max_output_tokens, thinking_budget=0, streaming=True)
     chain = RAG_ANSWER_PROMPT | model
     for chunk in chain.stream(
         {
