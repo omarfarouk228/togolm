@@ -142,7 +142,7 @@ export async function* queryRAGStream(
   apiKey?: string,
   history?: HistoryMessage[],
 ): AsyncGenerator<StreamEvent> {
-  const body: Record<string, unknown> = { question, max_tokens: 1500 };
+  const body: Record<string, unknown> = { question, max_tokens: 3000 };
   if (history && history.length > 0) {
     body.history = history.map((m) => ({
       role: m.role,

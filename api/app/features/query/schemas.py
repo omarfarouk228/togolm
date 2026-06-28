@@ -12,7 +12,7 @@ class QueryRequest(BaseModel):
     question: str = Field(..., min_length=3, max_length=4000)
     category: str | None = None
     language: str = "fr"
-    max_tokens: int = Field(1500, ge=50, le=2000)
+    max_tokens: int = Field(3000, ge=50, le=4096)
     history: list[HistoryMessage] = Field(default_factory=list, max_length=20)
 
 
