@@ -96,7 +96,10 @@ class TestQueryEndpoint:
         assert resp.status_code == 422
 
     def test_retrieval_error_returns_500(self):
-        with patch("rag.retrieval.retrieve", side_effect=Exception("DB error")):
+        with (
+            patch("rag.generation.route_query", return_value="on_topic"),
+            patch("rag.retrieval.retrieve", side_effect=Exception("DB error")),
+        ):
             resp = client.post("/v1/query", json={"question": "Question valide ?"})
         assert resp.status_code == 500
 
@@ -179,7 +182,10 @@ class TestStreamEndpoint:
         assert "trouvé de documents pertinents" in chunk_events[0]["text"]
 
     def test_stream_retrieval_error_yields_error_event(self):
-        with patch("rag.retrieval.retrieve", side_effect=Exception("DB down")):
+        with (
+            patch("rag.generation.route_query", return_value="on_topic"),
+            patch("rag.retrieval.retrieve", side_effect=Exception("DB down")),
+        ):
             resp = client.post("/v1/query/stream", json={"question": "Question erreur ?"})
         events = _parse_sse(resp.text)
         error_events = [e for e in events if e.get("type") == "error"]
