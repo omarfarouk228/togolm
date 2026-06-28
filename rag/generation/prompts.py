@@ -8,7 +8,7 @@ versioned, and keep user content in human messages (never in the system block).
 
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 
-PROMPT_VERSION = "2026-06-26"
+PROMPT_VERSION = "2026-06-28"
 
 # --- System instructions -----------------------------------------------------
 
@@ -19,9 +19,18 @@ ROUTER_SYSTEM = (
     "- 'on_topic' : toute demande liée au Togo (lois, économie, éducation, histoire, "
     "actualité, culture, démarches administratives, institutions, entreprises, santé...), "
     "même mal formulée ou implicite. En cas de doute raisonnable, choisis 'on_topic'.\n"
-    "- 'off_topic' : tout le reste, notamment la génération ou l'analyse de code, les "
-    "recettes de cuisine, l'écriture créative sans lien avec le Togo, les scores sportifs, "
-    "et la culture générale mondiale sans rapport avec le Togo.\n\n"
+    "  Exemples 'on_topic' (liste non exhaustive) :\n"
+    "  • Questions fiscales ou salariales : salaire brut/net, impôt sur le revenu (IGR), "
+    "CNSS, retenues salariales, calcul de charges, cotisations sociales.\n"
+    "  • Questions économiques : prix, inflation, commerce, entreprises, investissement.\n"
+    "  • Questions juridiques : lois, décrets, code du travail, code général des impôts.\n"
+    "  • Questions administratives : démarches, documents, administrations publiques.\n"
+    "  NOTE IMPORTANTE : une question sur les salaires, les impôts ou les cotisations "
+    "sociales est presque toujours 'on_topic', même si le mot 'Togo' n'est pas mentionné "
+    "explicitement — les utilisateurs posent ces questions dans le contexte togolais.\n"
+    "- 'off_topic' : tout le reste, notamment la génération ou l'analyse de code "
+    "informatique, les recettes de cuisine, l'écriture créative sans lien avec le Togo, "
+    "les scores sportifs, et la culture générale mondiale sans rapport avec le Togo.\n\n"
     "Attention : une question sur le 'code du travail togolais' ou un 'code juridique' du "
     "Togo est 'on_topic'. Seul le code informatique est 'off_topic'."
 )
