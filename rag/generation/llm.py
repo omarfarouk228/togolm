@@ -31,11 +31,13 @@ def get_chat_model(
     LangChain as ``thinking`` content blocks so callers can stream them apart
     from the answer.
     """
-    return ChatGoogleGenerativeAI(
-        model=DEFAULT_MODEL,
-        google_api_key=os.environ["GEMINI_API_KEY"],
-        max_output_tokens=max_output_tokens,
-        thinking_budget=thinking_budget,
-        include_thoughts=thinking_budget > 0,
-        streaming=streaming,
-    )
+    kwargs: dict = {
+        "model": DEFAULT_MODEL,
+        "google_api_key": os.environ["GEMINI_API_KEY"],
+        "max_output_tokens": max_output_tokens,
+        "streaming": streaming,
+    }
+    if thinking_budget > 0:
+        kwargs["thinking_budget"] = thinking_budget
+        kwargs["include_thoughts"] = True
+    return ChatGoogleGenerativeAI(**kwargs)
