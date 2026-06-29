@@ -209,15 +209,14 @@ def stream_answer(
     question: str, chunks: list[Any], history: History | None = None, max_output_tokens: int = 2048
 ) -> Iterator[tuple[str, str]]:
     """Stream a RAG answer. Raises on LLM failure so the caller can fall back."""
-    model = get_chat_model(max_output_tokens=max_output_tokens, thinking_budget=0, streaming=True)
-    chain = RAG_ANSWER_PROMPT | model
-    for chunk in chain.stream(
-        {
-            "context": _format_context(chunks),
-            "question": question,
-            "history": _history_messages(history or [], limit=6, truncate=400),
-        }
-    ):
+    history_msgs = _history_messages(history or [], limit=6, truncate=400)
+    messages = RAG_ANSWER_PROMPT.format_messages(
+        context=_format_context(chunks),
+        question=question,
+        history=history_msgs,
+    )
+    model = get_chat_model(max_output_tokens=max_output_tokens, streaming=True)
+    for chunk in model.stream(messages):
         yield from _iter_chunk_events(chunk)
 
 
@@ -229,14 +228,12 @@ def stream_without_corpus(
         yield ("chunk", OFF_TOPIC_GREETING)
         return
     model = get_chat_model(max_output_tokens=200, streaming=True)
-    chain = OFF_TOPIC_PROMPT | model
+    messages = OFF_TOPIC_PROMPT.format_messages(
+        question=question,
+        history=_history_messages(history or [], limit=4, truncate=300),
+    )
     try:
-        for chunk in chain.stream(
-            {
-                "question": question,
-                "history": _history_messages(history or [], limit=4, truncate=300),
-            }
-        ):
+        for chunk in model.stream(messages):
             yield from _iter_chunk_events(chunk)
     except Exception:
         yield ("chunk", STREAM_OFF_TOPIC_FALLBACK)
