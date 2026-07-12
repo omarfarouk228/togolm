@@ -561,7 +561,7 @@ function DocsSidebar({ active }: { active: string }) {
   }
 
   return (
-    <aside className="fixed top-14 left-0 w-64 h-[calc(100vh-3.5rem)] bg-white border-r border-slate-200 overflow-y-auto flex flex-col z-10">
+    <aside className="hidden md:flex fixed top-14 left-0 w-64 h-[calc(100vh-3.5rem)] bg-white border-r border-slate-200 overflow-y-auto flex-col z-10">
       <div className="flex-1 py-6 px-3 space-y-5">
         {SIDEBAR_SECTIONS.map((section) => (
           <div key={section.label.fr}>
@@ -694,8 +694,8 @@ export default function DevelopersPage() {
     <div className="min-h-screen bg-white">
       <DocsSidebar active={active} />
 
-      <div className="ml-64 min-h-screen">
-        <div className="px-10 py-10 space-y-14">
+      <div className="md:ml-64 min-h-screen">
+        <div className="px-5 py-8 sm:px-8 md:px-10 md:py-10 space-y-14">
 
           {/* ── Overview ── */}
           <section id="overview" className="scroll-mt-8">
@@ -742,27 +742,29 @@ export default function DevelopersPage() {
               {lang === "fr" ? "En-têtes HTTP" : "HTTP headers"}
             </h3>
             <div className="rounded-xl border border-slate-200 overflow-hidden mb-10">
-              <table className="w-full text-sm">
-                <thead className="bg-slate-50">
-                  <tr className="border-b border-slate-200">
-                    <th className="text-left px-5 py-2.5 text-[10px] font-bold tracking-widest uppercase text-slate-400 w-44">Header</th>
-                    <th className="text-left px-5 py-2.5 text-[10px] font-bold tracking-widest uppercase text-slate-400">Description</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100 bg-white">
-                  {[
-                    { key: "X-API-Key",    desc: lang === "fr" ? "Clé API TogoLM — optionnelle sur les endpoints publics, augmente le quota" : "TogoLM API key — optional on public endpoints, increases quota" },
-                    { key: "Content-Type", desc: "application/json — " + (lang === "fr" ? "requis pour les requêtes POST" : "required for POST requests") },
-                  ].map(({ key, desc }) => (
-                    <tr key={key}>
-                      <td className="px-5 py-3">
-                        <code className="text-xs font-mono font-semibold" style={{ color: "var(--togo-green)" }}>{key}</code>
-                      </td>
-                      <td className="px-5 py-3 text-slate-500 text-xs">{desc}</td>
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead className="bg-slate-50">
+                    <tr className="border-b border-slate-200">
+                      <th className="text-left px-5 py-2.5 text-[10px] font-bold tracking-widest uppercase text-slate-400 w-44">Header</th>
+                      <th className="text-left px-5 py-2.5 text-[10px] font-bold tracking-widest uppercase text-slate-400">Description</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100 bg-white">
+                    {[
+                      { key: "X-API-Key",    desc: lang === "fr" ? "Clé API TogoLM — optionnelle sur les endpoints publics, augmente le quota" : "TogoLM API key — optional on public endpoints, increases quota" },
+                      { key: "Content-Type", desc: "application/json — " + (lang === "fr" ? "requis pour les requêtes POST" : "required for POST requests") },
+                    ].map(({ key, desc }) => (
+                      <tr key={key}>
+                        <td className="px-5 py-3">
+                          <code className="text-xs font-mono font-semibold" style={{ color: "var(--togo-green)" }}>{key}</code>
+                        </td>
+                        <td className="px-5 py-3 text-slate-500 text-xs">{desc}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             </div>
 
             {/* 4 steps */}
@@ -896,32 +898,34 @@ export default function DevelopersPage() {
             title={lang === "fr" ? "Codes d'erreur" : "Error codes"}
           >
             <div className="rounded-xl border border-slate-200 overflow-hidden shadow-sm">
-              <table className="w-full text-sm">
-                <thead className="bg-slate-50">
-                  <tr className="border-b border-slate-200">
-                    <th className="text-left px-5 py-2.5 text-[10px] font-bold tracking-widest uppercase text-slate-400 w-20">Code</th>
-                    <th className="text-left px-5 py-2.5 text-[10px] font-bold tracking-widest uppercase text-slate-400">
-                      {lang === "fr" ? "Signification" : "Meaning"}
-                    </th>
-                  </tr>
-                </thead>
-                <tbody className="bg-white divide-y divide-slate-100">
-                  {[
-                    { code: "200", meaning: { fr: "Succès",                                             en: "Success" } },
-                    { code: "400", meaning: { fr: "Requête invalide (paramètre manquant ou malformé)",  en: "Bad request (missing or malformed parameter)" } },
-                    { code: "401", meaning: { fr: "Clé API invalide ou absente",                        en: "Invalid or missing API key" } },
-                    { code: "409", meaning: { fr: "Email déjà enregistré",                              en: "Email already registered" } },
-                    { code: "422", meaning: { fr: "Validation échouée (corps de requête invalide)",     en: "Validation failed (invalid request body)" } },
-                    { code: "429", meaning: { fr: "Quota journalier dépassé",                           en: "Daily quota exceeded" } },
-                    { code: "500", meaning: { fr: "Erreur serveur interne",                             en: "Internal server error" } },
-                  ].map(({ code, meaning }) => (
-                    <tr key={code} className="hover:bg-slate-50/60 transition-colors">
-                      <td className="px-5 py-3 font-mono text-xs font-bold text-slate-700">{code}</td>
-                      <td className="px-5 py-3 text-slate-500 text-sm">{meaning[lang as "fr" | "en"]}</td>
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead className="bg-slate-50">
+                    <tr className="border-b border-slate-200">
+                      <th className="text-left px-5 py-2.5 text-[10px] font-bold tracking-widest uppercase text-slate-400 w-20">Code</th>
+                      <th className="text-left px-5 py-2.5 text-[10px] font-bold tracking-widest uppercase text-slate-400">
+                        {lang === "fr" ? "Signification" : "Meaning"}
+                      </th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody className="bg-white divide-y divide-slate-100">
+                    {[
+                      { code: "200", meaning: { fr: "Succès",                                             en: "Success" } },
+                      { code: "400", meaning: { fr: "Requête invalide (paramètre manquant ou malformé)",  en: "Bad request (missing or malformed parameter)" } },
+                      { code: "401", meaning: { fr: "Clé API invalide ou absente",                        en: "Invalid or missing API key" } },
+                      { code: "409", meaning: { fr: "Email déjà enregistré",                              en: "Email already registered" } },
+                      { code: "422", meaning: { fr: "Validation échouée (corps de requête invalide)",     en: "Validation failed (invalid request body)" } },
+                      { code: "429", meaning: { fr: "Quota journalier dépassé",                           en: "Daily quota exceeded" } },
+                      { code: "500", meaning: { fr: "Erreur serveur interne",                             en: "Internal server error" } },
+                    ].map(({ code, meaning }) => (
+                      <tr key={code} className="hover:bg-slate-50/60 transition-colors">
+                        <td className="px-5 py-3 font-mono text-xs font-bold text-slate-700">{code}</td>
+                        <td className="px-5 py-3 text-slate-500 text-sm">{meaning[lang as "fr" | "en"]}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             </div>
           </Section>
 
