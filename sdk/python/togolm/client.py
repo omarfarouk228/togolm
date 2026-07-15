@@ -84,11 +84,13 @@ class TogoLM:
         body = self._query_body(question, category, language, max_tokens, history)
         with self._client.stream("POST", "/query/stream", json=body) as res:
             if res.is_error:
-                raise TogoLMError(f"TogoLM API error: {res.status_code}", res.status_code, res.read().decode())
+                raise TogoLMError(
+                    f"TogoLM API error: {res.status_code}", res.status_code, res.read().decode()
+                )
             for line in res.iter_lines():
                 if not line.startswith("data: "):
                     continue
-                payload = line[len("data: "):]
+                payload = line[len("data: ") :]
                 if payload == "[DONE]":
                     return
                 yield json.loads(payload)
@@ -125,7 +127,9 @@ class TogoLM:
             "source": source,
             "language": language,
         }
-        return self._request("GET", "/documents", params={k: v for k, v in params.items() if v is not None})
+        return self._request(
+            "GET", "/documents", params={k: v for k, v in params.items() if v is not None}
+        )
 
     def document(self, doc_id: str) -> dict:
         """Document detail, including chunks."""
