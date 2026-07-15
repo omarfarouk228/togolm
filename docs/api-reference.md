@@ -2,6 +2,10 @@
 
 Base URL: `https://api.togolm.kofcorporation.com/v1` (production) / `http://localhost:8000/v1` (local)
 
+## SDKs
+
+Official minimal clients: [`sdk/js`](../sdk/js) (`npm install @togolm/sdk`) and [`sdk/python`](../sdk/python) (`pip install togolm`). Both cover every endpoint below, including SSE streaming.
+
 ## Authentication
 
 ```
@@ -92,12 +96,14 @@ data: [DONE]
 | `sources` | `sources: list`, `latency_ms: int` | Retrieved sources (sent after generation) |
 | `error` | `message: str` | Error during retrieval or generation |
 
-**TypeScript client (using the built-in `queryRAGStream` in `showcase/lib/api.ts`):**
+**Using the [`@togolm/sdk`](../sdk/js) client:**
 
 ```typescript
-import { queryRAGStream } from "@/lib/api";
+import { TogoLM } from "@togolm/sdk";
 
-for await (const event of queryRAGStream("Comment créer une entreprise au Togo ?")) {
+const client = new TogoLM();
+
+for await (const event of client.queryStream({ question: "Comment créer une entreprise au Togo ?" })) {
   if (event.type === "chunk") process.stdout.write(event.text);
   if (event.type === "sources") console.log("Sources:", event.sources);
 }

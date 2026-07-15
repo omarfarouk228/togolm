@@ -1,0 +1,15 @@
+[project]
+name = "togolm"
+version = "0.1.0"
+description = "Minimal Python client for the TogoLM API"
+readme = "README.md"
+requires-python = ">=3.9"
+license = { text = "MIT" }
+dependencies = ["httpx>=0.27"]
+
+[project.urls]
+Repository = "https://github.com/omarfarouk228/togolm"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
