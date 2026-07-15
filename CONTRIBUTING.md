@@ -171,7 +171,7 @@ uv run python -m corpus.processors.ingestor corpus/datasets/example.jsonl
 | `corpus` | New data source or corpus correction |
 | `api` | API endpoint or backend logic |
 | `finetuning` | Training scripts or instruction datasets |
-| `showcase` | Next.js frontend |
+| `sdk` | JS/Python client libraries |
 | `bug` | Something is broken |
 | `enhancement` | Improvement to an existing feature |
 | `good first issue` | Good for first-time contributors |
@@ -185,4 +185,4 @@ Be respectful, constructive, and welcoming to contributors from all backgrounds.
 
 ---
 
-**Contact:** komarf28@gmail.com · [GitHub Issues](https://github.com/togolm/togolm/issues)
+**Contact:** komarf28@gmail.com · [GitHub Issues](https://github.com/omarfarouk228/togolm/issues)

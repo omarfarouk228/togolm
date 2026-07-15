@@ -1,0 +1,16 @@
+{
+  "name": "@togolm/sdk",
+  "version": "0.1.2",
+  "description": "Minimal JavaScript/TypeScript client for the TogoLM API",
+  "type": "module",
+  "main": "src/index.js",
+  "types": "src/index.d.ts",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/omarfarouk228/togolm.git",
+    "directory": "sdk/js"
+  },
+  "homepage": "https://github.com/omarfarouk228/togolm/blob/main/sdk/js/README.md",
+  "keywords": ["togolm", "rag", "togo", "llm"]
+}
