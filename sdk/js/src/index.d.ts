@@ -9,6 +9,11 @@ export interface Source {
   score: number;
 }
 
+export interface HistoryMessage {
+  role: "user" | "assistant";
+  content: string;
+}
+
 export interface QueryResponse {
   answer: string;
   sources: Source[];
@@ -27,17 +32,37 @@ export declare class TogoLMError extends Error {
   body: string;
 }
 
+export interface QueryParams {
+  question: string;
+  category?: string;
+  language?: string;
+  maxTokens?: number;
+  history?: HistoryMessage[];
+}
+
 export declare class TogoLM {
   constructor(options?: TogoLMOptions);
-  query(params: { question: string; category?: string; language?: string }): Promise<QueryResponse>;
-  queryStream(params: { question: string; category?: string; language?: string }): AsyncGenerator<StreamEvent>;
+  query(params: QueryParams): Promise<QueryResponse>;
+  queryStream(params: QueryParams): AsyncGenerator<StreamEvent>;
   embed(text: string): Promise<{ embedding: number[]; model: string; token_count: number }>;
   search(q: string): Promise<unknown>;
   categories(): Promise<{ categories: string[]; total: number }>;
   stats(): Promise<unknown>;
-  documents(params?: { page?: number; limit?: number; category?: string }): Promise<unknown>;
+  documents(params?: {
+    page?: number;
+    pageSize?: number;
+    category?: string;
+    source?: string;
+    language?: string;
+  }): Promise<unknown>;
   document(id: string): Promise<unknown>;
-  registerKey(params?: { email?: string; name?: string }): Promise<unknown>;
+  registerKey(params: { email: string; name: string; useCase?: string }): Promise<{
+    api_key: string;
+    key_prefix: string;
+    plan: string;
+    quota_per_day: number;
+    message: string;
+  }>;
   me(): Promise<unknown>;
 }
 

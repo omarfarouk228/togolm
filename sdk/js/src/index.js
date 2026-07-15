@@ -43,21 +43,29 @@ export class TogoLM {
     return res.json();
   }
 
-  /** RAG query, full (non-streamed) response. */
-  query({ question, category, language }) {
-    return this._request("POST", "/query", { body: { question, category, language } });
+  /**
+   * RAG query, full (non-streamed) response.
+   * `history` is a list of {role: "user"|"assistant", content: string}, oldest
+   * first, for multi-turn conversations (max 20 messages).
+   */
+  query({ question, category, language, maxTokens, history }) {
+    return this._request("POST", "/query", {
+      body: { question, category, language, max_tokens: maxTokens, history },
+    });
   }
 
   /**
    * RAG query streamed via SSE. Yields `{type, ...}` events:
    * "thinking" | "chunk" | "sources" | "error".
+   * `history` is a list of {role: "user"|"assistant", content: string}, oldest
+   * first, for multi-turn conversations (max 20 messages).
    * @returns {AsyncGenerator<object>}
    */
-  async *queryStream({ question, category, language }) {
+  async *queryStream({ question, category, language, maxTokens, history }) {
     const res = await fetch(`${this.baseUrl}/query/stream`, {
       method: "POST",
       headers: this._headers(),
-      body: JSON.stringify({ question, category, language }),
+      body: JSON.stringify({ question, category, language, max_tokens: maxTokens, history }),
     });
     if (!res.ok || !res.body) {
       const text = await res.text().catch(() => "");
@@ -106,8 +114,10 @@ export class TogoLM {
   }
 
   /** Paginated document list. */
-  documents({ page, limit, category } = {}) {
-    return this._request("GET", "/documents", { params: { page, limit, category } });
+  documents({ page, pageSize, category, source, language } = {}) {
+    return this._request("GET", "/documents", {
+      params: { page, page_size: pageSize, category, source, language },
+    });
   }
 
   /** Document detail, including chunks. */
@@ -115,9 +125,11 @@ export class TogoLM {
     return this._request("GET", `/documents/${id}`);
   }
 
-  /** Request a free API key. */
-  registerKey({ email, name } = {}) {
-    return this._request("POST", "/auth/register", { body: { email, name } });
+  /** Request a free API key. The plain-text key is returned once — save it immediately. */
+  registerKey({ email, name, useCase }) {
+    return this._request("POST", "/auth/register", {
+      body: { email, name, use_case: useCase },
+    });
   }
 
   /** Current API key info and usage. */

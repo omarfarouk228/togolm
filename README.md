@@ -4,7 +4,6 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 [![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://python.org)
-[![Next.js](https://img.shields.io/badge/Next.js-15-black)](https://nextjs.org)
 [![PostgreSQL](https://img.shields.io/badge/PostgreSQL-pgvector-336791)](https://github.com/pgvector/pgvector)
 [![HuggingFace](https://img.shields.io/badge/🤗-togolm-yellow)](https://huggingface.co/togolm)
 
@@ -21,8 +20,7 @@ TogoLM is an open-source AI knowledge layer for Togo — a complete pipeline fro
 | **Public API** | REST endpoints consumable by any developer or app |
 | **Admin API** | Protected endpoints for corpus management, API key CRUD, query analytics |
 | **Fine-tuned LLM** | Mistral 7B adapted to the Togolese context (training in progress) |
-| **Showcase** | Next.js public interface to explore and query the corpus |
-| **Admin Dashboard** | Next.js 15 private dashboard to monitor and manage the platform |
+| **SDKs** | Official JS/TS and Python clients (`sdk/`) for the public API |
 
 ## Why
 
@@ -69,21 +67,9 @@ togolm/
 │   │   └── push_model_card.py
 │   └── notebooks/
 │       └── train_colab.ipynb # Google Colab training notebook
-├── showcase/                 # Next.js public frontend
-│   ├── app/
-│   │   ├── page.tsx          # Homepage — stats + source table
-│   │   ├── corpus/page.tsx   # Browse corpus by source/category
-│   │   ├── search/page.tsx   # Full-text search UI
-│   │   └── chat/page.tsx     # Streaming RAG chat UI
-│   └── lib/api.ts
-├── admin/                    # Next.js 15 admin dashboard (EN/FR)
-│   ├── app/
-│   │   ├── (auth)/login/     # Admin login (JWT)
-│   │   └── (dashboard)/      # Dashboard, corpus, keys, queries, health
-│   └── lib/
-│       ├── api.ts            # Typed admin API client
-│       ├── auth.ts           # JWT helpers
-│       └── i18n.ts           # EN/FR translations
+├── sdk/
+│   ├── js/                    # @togolm/sdk — npm package
+│   └── python/                # togolm — PyPI package
 ├── scripts/
 │   ├── corpus/
 │   │   ├── run_scrapers.py   # Master scraping + ingest + embed pipeline
@@ -108,13 +94,14 @@ togolm/
 
 ### Prerequisites
 
-- Python 3.11+, [uv](https://github.com/astral-sh/uv), Node.js 20+, pnpm
+- Python 3.11+, [uv](https://github.com/astral-sh/uv)
 - PostgreSQL with [pgvector](https://github.com/pgvector/pgvector) extension
+- Node.js 18+ (optional — only needed to use `sdk/js`)
 
 ### 1 — Clone and configure
 
 ```bash
-git clone https://github.com/togolm/togolm.git
+git clone https://github.com/omarfarouk228/togolm.git
 cd togolm
 cp .env.example .env
 # Edit .env — set POSTGRES_USER, POSTGRES_PASSWORD, POSTGRES_DB, GEMINI_API_KEY
@@ -155,22 +142,21 @@ curl -X POST http://localhost:8000/v1/query \
   -d '{"question": "Comment créer une entreprise au Togo ?"}'
 ```
 
-### 6 — Start the showcase
+### 6 — Use a client SDK
 
 ```bash
-cd showcase && pnpm install && pnpm dev   # http://localhost:3000
+npm install @togolm/sdk       # JS/TS
+pip install togolm            # Python
 ```
 
-### 7 — Start the admin dashboard
+```ts
+import { TogoLM } from "@togolm/sdk";
 
-```bash
-cd admin
-cp .env.local.example .env.local
-# Edit .env.local: NEXT_PUBLIC_API_URL=http://localhost:8000
-pnpm install && pnpm dev   # http://localhost:3001
+const client = new TogoLM({ baseUrl: "http://localhost:8000/v1" });
+const { answer } = await client.query({ question: "Comment créer une entreprise au Togo ?" });
 ```
 
-Login with your `API_SECRET_KEY` from `.env`.
+See [`sdk/js`](sdk/js) and [`sdk/python`](sdk/python) for full usage, including SSE streaming.
 
 ---
 
@@ -325,7 +311,7 @@ We welcome contributions — new corpus sources, scrapers, API improvements, tra
 
 → [CONTRIBUTING.md](CONTRIBUTING.md)
 
-**Issue labels:** `corpus` · `api` · `admin` · `finetuning` · `showcase` · `bug` · `enhancement`
+**Issue labels:** `corpus` · `api` · `finetuning` · `sdk` · `bug` · `enhancement`
 
 ---
 

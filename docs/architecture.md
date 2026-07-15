@@ -51,17 +51,9 @@
            │                              │
            ▼                              ▼
 ┌─────────────────────┐      ┌────────────────────────────────────┐
-│   SHOWCASE          │      │    CONSOMMATEURS EXTERNES           │
-│   showcase/         │      │    Apps · Institutions · Devs      │
-│   Next.js · Vercel  │      │                                    │
+│ SDK (public)        │      │    CONSOMMATEURS EXTERNES          │
+│ sdk/js · sdk/python │      │    Apps · Institutions · Devs      │
 └─────────────────────┘      └────────────────────────────────────┘
-           │
-           ▼
-┌─────────────────────────────────────────────────────────────────┐
-│               ADMIN DASHBOARD (privé)                            │
-│  admin/   —   Next.js 15 + TanStack Query + Recharts            │
-│  JWT auth · corpus stats · CRUD clés · analytics queries        │
-└─────────────────────────────────────────────────────────────────┘
 ```
 
 ---
@@ -297,48 +289,28 @@ python finetuning/scripts/publish.py --model outputs/togolm-7b-v1 --repo togolm/
 
 ---
 
-### 5. Showcase (`showcase/`)
+### 5. SDK (`sdk/`)
 
-Next.js app déployée sur Vercel / VPS.
+Clients officiels minimalistes pour l'API publique — aucune dépendance aux apps privées.
 
-Variables d'environnement :
-```bash
-NEXT_PUBLIC_API_URL=https://api.togolm.ai
-NEXT_PUBLIC_API_KEY=<clé_publique>
 ```
+sdk/
+├── js/          # @togolm/sdk (npm) — fetch-based, streaming SSE via ReadableStream
+└── python/      # togolm (PyPI) — httpx-based, streaming SSE via iter_lines
+```
+
+```ts
+import { TogoLM } from "@togolm/sdk";
+
+const client = new TogoLM({ apiKey });
+const { answer } = await client.query({ question: "Comment créer une entreprise au Togo ?" });
+```
+
+Voir [`sdk/js/README.md`](../sdk/js/README.md) et [`sdk/python/README.md`](../sdk/python/README.md) pour l'usage complet (streaming inclus).
 
 ---
 
-### 6. Admin Dashboard (`admin/`)
-
-Next.js 15 app privée — gestion de la plateforme.
-
-```
-admin/
-├── app/
-│   ├── (auth)/login/         # Connexion JWT
-│   └── (dashboard)/
-│       ├── page.tsx          # Stats globales + graphique activité
-│       ├── corpus/           # Sources, documents récents
-│       ├── keys/             # CRUD clés API
-│       ├── queries/          # Historique requêtes
-│       └── health/           # Santé DB, Redis, embeddings
-└── lib/
-    ├── api.ts                # Client typé pour les 12 endpoints admin
-    ├── auth.ts               # Gestion JWT (localStorage)
-    └── i18n.ts               # Traductions EN/FR
-```
-
-Variables d'environnement :
-```bash
-NEXT_PUBLIC_API_URL=http://localhost:8000
-```
-
-Authentification : `POST /v1/admin/login` avec la valeur de `API_SECRET_KEY`. Retourne un JWT valable 24h.
-
----
-
-### 8. Gestion des clés API
+### 6. Gestion des clés API
 
 ```bash
 # Créer une nouvelle clé
