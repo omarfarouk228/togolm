@@ -36,6 +36,16 @@ _CATEGORY_KEYWORDS: dict[str, tuple[str, ...]] = {
         "service public",
     ),
     "agriculture": ("agriculture", "cacao", "cafe", "coton", "elevage", "mais"),
+    "culinary": (
+        "ayimolou",
+        "cuisine togolaise",
+        "fufu",
+        "gboma",
+        "plat togolais",
+        "recette",
+        "sauce",
+        "wagashi",
+    ),
     "economy": (
         "bceao",
         "budget",
