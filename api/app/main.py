@@ -55,7 +55,7 @@ app.include_router(auth_router, prefix="/v1")  # no rate limit on register/me
 app.include_router(corpus_router, prefix="/v1")  # public read-only stats, no rate limit
 app.include_router(query_router, prefix="/v1", dependencies=_security)
 app.include_router(documents_router, prefix="/v1", dependencies=_security)
-app.include_router(feedback_router, prefix="/v1")  # bounded write, no rate limit — see feedback/router.py
+app.include_router(feedback_router, prefix="/v1")  # bounded write, no rate limit
 
 
 @app.get("/", include_in_schema=False)

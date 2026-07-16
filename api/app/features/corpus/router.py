@@ -139,7 +139,9 @@ async def recent_documents(limit: int = Query(6, ge=1, le=RECENT_DOCUMENTS_MAX_L
 
     return RecentDocumentsResponse(
         documents=[
-            RecentDocument(id=str(row[0]), source=row[1] or "", url=row[2], title=row[3], category=row[4])
+            RecentDocument(
+                id=str(row[0]), source=row[1] or "", url=row[2], title=row[3], category=row[4]
+            )
             for row in rows
         ]
     )
