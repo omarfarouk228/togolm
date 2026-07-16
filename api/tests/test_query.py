@@ -261,7 +261,8 @@ class TestImageStreamQuery:
     """POST /v1/query/stream with an attached image bypasses the off-topic guard
     entirely and routes through the vision-assisted flow."""
 
-    def test_uses_corpus_when_retrieval_succeeds(self):
+    def test_uses_corpus_when_retrieval_succeeds(self, monkeypatch):
+        monkeypatch.setenv("GEMINI_API_KEY", "AQ.fake-key")
         with (
             patch("rag.generation.describe_image_question", return_value="requête dérivée"),
             patch("rag.retrieval.retrieve", return_value=[FAKE_CHUNK]),
@@ -277,7 +278,8 @@ class TestImageStreamQuery:
         mock_stream.assert_called_once()
         mock_vision.assert_not_called()
 
-    def test_falls_back_to_vision_when_corpus_empty(self):
+    def test_falls_back_to_vision_when_corpus_empty(self, monkeypatch):
+        monkeypatch.setenv("GEMINI_API_KEY", "AQ.fake-key")
         with (
             patch("rag.generation.describe_image_question", return_value="requête dérivée"),
             patch("rag.retrieval.retrieve", return_value=[]),
@@ -292,9 +294,10 @@ class TestImageStreamQuery:
         assert "Reponse vision" in resp.text
         mock_vision.assert_called_once()
 
-    def test_skips_off_topic_guard(self):
+    def test_skips_off_topic_guard(self, monkeypatch):
         # A trivially off-topic question (e.g. a greeting) still runs the vision
         # flow when an image is attached, instead of the canned redirect reply.
+        monkeypatch.setenv("GEMINI_API_KEY", "AQ.fake-key")
         with (
             patch("rag.generation.describe_image_question", return_value="requête dérivée"),
             patch("rag.retrieval.retrieve", return_value=[FAKE_CHUNK]),
