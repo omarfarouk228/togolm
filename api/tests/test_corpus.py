@@ -101,3 +101,25 @@ def test_search():
     assert "results" in data
     assert "total" in data
     assert data["query"] == "budget togo"
+
+
+def test_recent_documents():
+    response = client.get("/v1/documents/recent")
+    assert response.status_code == 200
+    data = response.json()
+    assert "documents" in data
+    assert len(data["documents"]) <= 6  # default limit
+    if data["documents"]:
+        doc = data["documents"][0]
+        assert {"id", "source", "url", "title", "category"} <= doc.keys()
+
+
+def test_recent_documents_respects_limit():
+    response = client.get("/v1/documents/recent?limit=2")
+    assert response.status_code == 200
+    assert len(response.json()["documents"]) <= 2
+
+
+def test_recent_documents_rejects_limit_over_max():
+    response = client.get("/v1/documents/recent?limit=999")
+    assert response.status_code == 422
