@@ -69,6 +69,20 @@ def _run_image_query(request: QueryRequest) -> QueryGraphResult:
     search_question = generation.describe_image_question(
         image.mime_type, image.data, request.question
     )
+    # The off-topic guard runs on what the image actually shows, not on request.question:
+    # a trivial/empty typed question ("salut", "c'est quoi ?") is fine to answer from the
+    # image, but an image whose content is itself off-topic (e.g. a code screenshot) must
+    # still be redirected like a text-only off-topic message would be.
+    if generation.route_query(search_question) == "off_topic":
+        answer = generation.answer_without_corpus(request.question, request.history or [])
+        return QueryGraphResult(
+            answer=answer,
+            chunks=[],
+            is_off_topic=True,
+            search_question=search_question,
+            search_category=request.category,
+            added_terms=(),
+        )
     enriched = enrich_query(search_question, category=request.category)
     chunks = retrieval.retrieve(question=enriched.search_query, category=enriched.category, top_k=5)
     if chunks:
@@ -147,6 +161,20 @@ def _stream_image_query(
     search_question = generation.describe_image_question(
         image.mime_type, image.data, request.question
     )
+    # See _run_image_query: guard on what the image shows, not on request.question.
+    if generation.route_query(search_question) == "off_topic":
+        for event_type, text in generation.stream_without_corpus(
+            request.question, request.history or []
+        ):
+            yield _sse(event_type, text)
+        latency_ms = int((time.monotonic() - t0) * 1000)
+        log_query(
+            request.question, request.language, request.category, True, 0, latency_ms, api_key
+        )
+        yield f"data: {json.dumps({'type': 'sources', 'sources': [], 'latency_ms': latency_ms})}\n\n"
+        yield "data: [DONE]\n\n"
+        return
+
     enriched = enrich_query(search_question, category=request.category)
 
     try:
