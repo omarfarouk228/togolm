@@ -1,6 +1,6 @@
 # TogoLM Admin API Reference
 
-Base URL: `https://api.togolm.kofcorporation.com/v1` (production) / `http://localhost:8000/v1` (local)
+Base URL: `https://api.togolm.com/v1` (production) / `http://localhost:8000/v1` (local)
 
 The admin API is intended for platform operators and the admin dashboard. It is not part of the public developer API.
 

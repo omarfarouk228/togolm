@@ -4,7 +4,7 @@ from typing import Any
 
 import httpx
 
-DEFAULT_BASE_URL = "https://api.togolm.kofcorporation.com/v1"
+DEFAULT_BASE_URL = "https://api.togolm.com/v1"
 
 
 class TogoLMError(Exception):

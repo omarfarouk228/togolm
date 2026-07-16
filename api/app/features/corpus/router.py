@@ -1,14 +1,17 @@
 """
-GET /v1/categories — List corpus categories
-GET /v1/stats      — Public corpus statistics
+GET /v1/categories       — List corpus categories
+GET /v1/stats            — Public corpus statistics
+GET /v1/documents/recent — Small fixed-size list of recent documents for display
 """
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Query
 from pydantic import BaseModel
 
 from db import get_conn
 
 router = APIRouter(tags=["Corpus"])
+
+RECENT_DOCUMENTS_MAX_LIMIT = 12
 
 CATEGORIES = [
     "administrative",
@@ -31,6 +34,18 @@ class SourceStat(BaseModel):
     source: str
     documents: int
     chunks: int
+
+
+class RecentDocument(BaseModel):
+    id: str
+    source: str
+    url: str | None
+    title: str | None
+    category: str | None
+
+
+class RecentDocumentsResponse(BaseModel):
+    documents: list[RecentDocument]
 
 
 class StatsResponse(BaseModel):
@@ -97,4 +112,36 @@ async def corpus_stats():
         sources=sources,
         last_updated=last_updated.isoformat() if last_updated else None,
         model_version="togolm-embed-v1",
+    )
+
+
+@router.get("/documents/recent", response_model=RecentDocumentsResponse)
+async def recent_documents(limit: int = Query(6, ge=1, le=RECENT_DOCUMENTS_MAX_LIMIT)):
+    """Small, unauthenticated, non-rate-limited feed of recent documents for display
+    (homepage, marketing surfaces). Not paginated or filterable — use GET /v1/documents
+    for browsing, which stays behind the rate limit."""
+    conn = get_conn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT id, source, url, title, category
+                FROM documents
+                WHERE status = 'active'
+                ORDER BY collected_at DESC
+                LIMIT %s
+                """,
+                (limit,),
+            )
+            rows = cur.fetchall()
+    finally:
+        conn.close()
+
+    return RecentDocumentsResponse(
+        documents=[
+            RecentDocument(
+                id=str(row[0]), source=row[1] or "", url=row[2], title=row[3], category=row[4]
+            )
+            for row in rows
+        ]
     )

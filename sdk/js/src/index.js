@@ -1,4 +1,4 @@
-const DEFAULT_BASE_URL = "https://api.togolm.kofcorporation.com/v1";
+const DEFAULT_BASE_URL = "https://api.togolm.com/v1";
 
 export class TogoLMError extends Error {
   constructor(message, status, body) {
