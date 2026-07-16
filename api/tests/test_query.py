@@ -175,6 +175,36 @@ class TestImageQuery:
         mock_vision.assert_called_once()
         mock_build.assert_not_called()
 
+    def test_redirects_when_image_content_is_off_topic(self, monkeypatch):
+        # Same guard as the streaming endpoint: a code screenshot must be
+        # redirected even though the image is otherwise a valid attachment.
+        monkeypatch.setenv("GEMINI_API_KEY", "AQ.fake-key")
+        with (
+            patch(
+                "rag.generation.describe_image_question",
+                return_value="explication d'un extrait de code Python",
+            ),
+            patch("rag.generation.route_query", return_value="off_topic") as mock_route,
+            patch("rag.retrieval.retrieve") as mock_retrieve,
+            patch(
+                "rag.generation.answer_without_corpus",
+                return_value="Je suis spécialisé dans les connaissances togolaises.",
+            ) as mock_off_topic,
+            patch("rag.generation.build_answer_with_image") as mock_build,
+            patch("rag.generation.answer_from_image") as mock_vision,
+        ):
+            resp = client.post(
+                "/v1/query", json={"question": "explique ce code", "image": FAKE_IMAGE}
+            )
+        assert resp.status_code == 200
+        assert resp.json()["answer"] == "Je suis spécialisé dans les connaissances togolaises."
+        assert resp.json()["sources"] == []
+        mock_route.assert_called_once_with("explication d'un extrait de code Python")
+        mock_off_topic.assert_called_once()
+        mock_retrieve.assert_not_called()
+        mock_build.assert_not_called()
+        mock_vision.assert_not_called()
+
 
 # ---------------------------------------------------------------------------
 # POST /v1/query/stream (SSE)
@@ -273,6 +303,7 @@ class TestImageStreamQuery:
         monkeypatch.setenv("GEMINI_API_KEY", "AQ.fake-key")
         with (
             patch("rag.generation.describe_image_question", return_value="requête dérivée"),
+            patch("rag.generation.route_query", return_value="on_topic"),
             patch("rag.retrieval.retrieve", return_value=[FAKE_CHUNK]),
             patch(
                 "rag.generation.stream_answer_with_image",
@@ -295,6 +326,7 @@ class TestImageStreamQuery:
         monkeypatch.setenv("GEMINI_API_KEY", "AQ.fake-key")
         with (
             patch("rag.generation.describe_image_question", return_value="requête dérivée"),
+            patch("rag.generation.route_query", return_value="on_topic"),
             patch("rag.retrieval.retrieve", return_value=[]),
             patch(
                 "rag.generation.stream_answer_from_image",
@@ -308,11 +340,13 @@ class TestImageStreamQuery:
         mock_vision.assert_called_once()
 
     def test_skips_off_topic_guard(self, monkeypatch):
-        # A trivially off-topic question (e.g. a greeting) still runs the vision
-        # flow when an image is attached, instead of the canned redirect reply.
+        # A trivially off-topic *typed question* (e.g. a greeting) still runs the
+        # vision flow when an image is attached, instead of the canned redirect
+        # reply — the guard below only looks at what the image itself shows.
         monkeypatch.setenv("GEMINI_API_KEY", "AQ.fake-key")
         with (
             patch("rag.generation.describe_image_question", return_value="requête dérivée"),
+            patch("rag.generation.route_query", return_value="on_topic"),
             patch("rag.retrieval.retrieve", return_value=[FAKE_CHUNK]),
             patch(
                 "rag.generation.stream_answer_with_image",
@@ -323,6 +357,32 @@ class TestImageStreamQuery:
             resp = client.post("/v1/query/stream", json={"question": "salut", "image": FAKE_IMAGE})
         assert "Reponse RAG" in resp.text
         mock_off_topic.assert_not_called()
+
+    def test_redirects_when_image_content_is_off_topic(self, monkeypatch):
+        # A screenshot of source code is off-topic regardless of the typed
+        # question — TogoLM must never explain/review code (see OFF_TOPIC_SYSTEM).
+        monkeypatch.setenv("GEMINI_API_KEY", "AQ.fake-key")
+        with (
+            patch(
+                "rag.generation.describe_image_question",
+                return_value="explication d'un extrait de code Python",
+            ),
+            patch("rag.generation.route_query", return_value="off_topic") as mock_route,
+            patch("rag.retrieval.retrieve") as mock_retrieve,
+            patch(
+                "rag.generation.stream_without_corpus",
+                return_value=iter([("chunk", "Reponse hors-sujet")]),
+            ) as mock_off_topic,
+            patch("rag.generation.stream_answer_with_image") as mock_stream,
+        ):
+            resp = client.post(
+                "/v1/query/stream", json={"question": "explique ce code", "image": FAKE_IMAGE}
+            )
+        assert "Reponse hors-sujet" in resp.text
+        mock_route.assert_called_once_with("explication d'un extrait de code Python")
+        mock_off_topic.assert_called_once()
+        mock_retrieve.assert_not_called()
+        mock_stream.assert_not_called()
 
 
 # ---------------------------------------------------------------------------
