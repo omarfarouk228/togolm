@@ -16,7 +16,12 @@ from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, System
 from langchain_core.output_parsers import StrOutputParser
 from pydantic import BaseModel, Field
 
-from rag.generation.llm import gemini_available, get_chat_model
+from rag.generation.llm import (
+    gemini_available,
+    get_chat_model,
+    get_chat_model_with_fallback,
+    has_distinct_fallback_model,
+)
 from rag.generation.prompts import (
     IMAGE_ANSWER_SYSTEM,
     IMAGE_CONTEXT_ANSWER_SYSTEM,
@@ -58,12 +63,20 @@ class QueryRoute(BaseModel):
 def route_query(question: str) -> Intent:
     """Classify a non-trivial message as on/off topic via a structured LLM call.
 
-    Fails open: if Gemini is unavailable or the call fails, returns 'on_topic' so a
-    genuine question is never wrongly redirected.
+    Fails open: if Gemini is unavailable or the call fails on both the primary
+    and fallback model, returns 'on_topic' so a genuine question is never
+    wrongly redirected. with_structured_output isn't a plain Runnable method,
+    so the fallback chain is built here rather than via
+    get_chat_model_with_fallback.
     """
     if not gemini_available():
         return "on_topic"
     model = get_chat_model(max_output_tokens=100).with_structured_output(QueryRoute)
+    if has_distinct_fallback_model():
+        fallback_model = get_chat_model(
+            max_output_tokens=100, use_fallback_model=True
+        ).with_structured_output(QueryRoute)
+        model = model.with_fallbacks([fallback_model])
     try:
         result = (ROUTER_PROMPT | model).invoke({"question": question})
         return result.intent
@@ -161,7 +174,9 @@ def _generate_answer(
     question: str, chunks: list[Any], history: History, max_output_tokens: int = 2048
 ) -> str:
     chain = (
-        RAG_ANSWER_PROMPT | get_chat_model(max_output_tokens=max_output_tokens) | StrOutputParser()
+        RAG_ANSWER_PROMPT
+        | get_chat_model_with_fallback(max_output_tokens=max_output_tokens)
+        | StrOutputParser()
     )
     return chain.invoke(
         {
@@ -176,7 +191,9 @@ def answer_without_corpus(question: str, history: History) -> str:
     """Answer an off-topic message without corpus context (graph off_topic_node)."""
     if not gemini_available():
         return OFF_TOPIC_GREETING
-    chain = OFF_TOPIC_PROMPT | get_chat_model(max_output_tokens=200) | StrOutputParser()
+    chain = (
+        OFF_TOPIC_PROMPT | get_chat_model_with_fallback(max_output_tokens=200) | StrOutputParser()
+    )
     try:
         return (
             chain.invoke(
@@ -195,7 +212,7 @@ def rewrite_question_with_history(question: str, history: History) -> str:
     """
     if not history or not gemini_available():
         return question
-    chain = REWRITE_PROMPT | get_chat_model(max_output_tokens=150) | StrOutputParser()
+    chain = REWRITE_PROMPT | get_chat_model_with_fallback(max_output_tokens=150) | StrOutputParser()
     try:
         rewritten = chain.invoke(
             {"history_text": _history_text(history), "question": question}
@@ -225,7 +242,7 @@ def describe_image_question(mime_type: str, data: str, question: str) -> str:
         text = question.strip() or "Que puis-je savoir sur cette image ?"
         content: list[Any] = [_image_content_block(mime_type, data), {"type": "text", "text": text}]
         messages = [SystemMessage(IMAGE_UNDERSTANDING_SYSTEM), HumanMessage(content=content)]
-        result = get_chat_model(max_output_tokens=150).invoke(messages)
+        result = get_chat_model_with_fallback(max_output_tokens=150).invoke(messages)
         rewritten = str(result.content).strip()
         return rewritten or fallback
     except Exception:
@@ -243,7 +260,7 @@ def answer_from_image(
     if gemini_available():
         try:
             messages = _image_answer_messages(mime_type, data, question, history or [])
-            model = get_chat_model(max_output_tokens=max_output_tokens)
+            model = get_chat_model_with_fallback(max_output_tokens=max_output_tokens)
             return str(model.invoke(messages).content) or NO_CORPUS_ANSWER
         except Exception:
             pass
@@ -284,7 +301,7 @@ def build_answer_with_image(
             messages = _image_context_answer_messages(
                 question, chunks, mime_type, data, history or []
             )
-            model = get_chat_model(max_output_tokens=max_output_tokens)
+            model = get_chat_model_with_fallback(max_output_tokens=max_output_tokens)
             return str(model.invoke(messages).content) or NO_CORPUS_ANSWER
         except Exception:
             pass
@@ -321,7 +338,7 @@ def stream_answer(
         question=question,
         history=history_msgs,
     )
-    model = get_chat_model(max_output_tokens=max_output_tokens, streaming=True)
+    model = get_chat_model_with_fallback(max_output_tokens=max_output_tokens, streaming=True)
     for chunk in model.stream(messages):
         yield from _iter_chunk_events(chunk)
 
@@ -333,7 +350,7 @@ def stream_without_corpus(
     if not gemini_available():
         yield ("chunk", OFF_TOPIC_GREETING)
         return
-    model = get_chat_model(max_output_tokens=200, streaming=True)
+    model = get_chat_model_with_fallback(max_output_tokens=200, streaming=True)
     messages = OFF_TOPIC_PROMPT.format_messages(
         question=question,
         history=_history_messages(history or [], limit=4, truncate=300),
@@ -360,7 +377,7 @@ def stream_answer_from_image(
     """Stream an answer grounded directly on the image. Raises on LLM failure so the
     caller can fall back, matching stream_answer's contract."""
     messages = _image_answer_messages(mime_type, data, question, history or [])
-    model = get_chat_model(max_output_tokens=max_output_tokens, streaming=True)
+    model = get_chat_model_with_fallback(max_output_tokens=max_output_tokens, streaming=True)
     for chunk in model.stream(messages):
         yield from _iter_chunk_events(chunk)
 
@@ -378,6 +395,6 @@ def stream_answer_with_image(
     build_answer_with_image for why the image must stay in the loop here).
     Raises on LLM failure so the caller can fall back."""
     messages = _image_context_answer_messages(question, chunks, mime_type, data, history or [])
-    model = get_chat_model(max_output_tokens=max_output_tokens, streaming=True)
+    model = get_chat_model_with_fallback(max_output_tokens=max_output_tokens, streaming=True)
     for chunk in model.stream(messages):
         yield from _iter_chunk_events(chunk)
