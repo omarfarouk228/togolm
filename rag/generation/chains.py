@@ -12,12 +12,14 @@ tokens and ``"thinking"`` for reasoning tokens — leaving SSE framing to the ro
 from collections.abc import Iterator
 from typing import Any, Literal
 
-from langchain_core.messages import AIMessage, BaseMessage, HumanMessage
+from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, SystemMessage
 from langchain_core.output_parsers import StrOutputParser
 from pydantic import BaseModel, Field
 
 from rag.generation.llm import gemini_available, get_chat_model
 from rag.generation.prompts import (
+    IMAGE_ANSWER_SYSTEM,
+    IMAGE_UNDERSTANDING_SYSTEM,
     OFF_TOPIC_PROMPT,
     RAG_ANSWER_PROMPT,
     REWRITE_PROMPT,
@@ -202,6 +204,63 @@ def rewrite_question_with_history(question: str, history: History) -> str:
         return question
 
 
+# --- Image-grounded generation -------------------------------------------------
+
+
+def _image_content_block(mime_type: str, data: str) -> dict[str, Any]:
+    return {"type": "image_url", "image_url": {"url": f"data:{mime_type};base64,{data}"}}
+
+
+def describe_image_question(mime_type: str, data: str, question: str) -> str:
+    """Turn an attached image (+ optional typed question) into a standalone search query.
+
+    Falls back to the raw question when Gemini is unavailable or the call fails, so
+    retrieval still runs on whatever text the user typed.
+    """
+    fallback = question.strip() or "Décris cette image."
+    if not gemini_available():
+        return fallback
+    try:
+        text = question.strip() or "Que puis-je savoir sur cette image ?"
+        content: list[Any] = [_image_content_block(mime_type, data), {"type": "text", "text": text}]
+        messages = [SystemMessage(IMAGE_UNDERSTANDING_SYSTEM), HumanMessage(content=content)]
+        result = get_chat_model(max_output_tokens=150).invoke(messages)
+        rewritten = str(result.content).strip()
+        return rewritten or fallback
+    except Exception:
+        return fallback
+
+
+def answer_from_image(
+    mime_type: str,
+    data: str,
+    question: str,
+    history: History | None = None,
+    max_output_tokens: int = 2048,
+) -> str:
+    """Answer directly from the image when corpus retrieval found nothing."""
+    if gemini_available():
+        try:
+            messages = _image_answer_messages(mime_type, data, question, history or [])
+            model = get_chat_model(max_output_tokens=max_output_tokens)
+            return str(model.invoke(messages).content) or NO_CORPUS_ANSWER
+        except Exception:
+            pass
+    return NO_CORPUS_ANSWER
+
+
+def _image_answer_messages(
+    mime_type: str, data: str, question: str, history: History
+) -> list[BaseMessage]:
+    text = question.strip() or "Décris cette image et explique ce qu'elle représente."
+    content: list[Any] = [_image_content_block(mime_type, data), {"type": "text", "text": text}]
+    return [
+        SystemMessage(IMAGE_ANSWER_SYSTEM),
+        *_history_messages(history, limit=6, truncate=400),
+        HumanMessage(content=content),
+    ]
+
+
 # --- Streaming generation -----------------------------------------------------
 
 
@@ -242,3 +301,18 @@ def stream_without_corpus(
 def stream_extractive(chunks: list[Any]) -> Iterator[tuple[str, str]]:
     """Yield the top extractive passage as a single chunk event."""
     yield ("chunk", extractive_answer(chunks))
+
+
+def stream_answer_from_image(
+    mime_type: str,
+    data: str,
+    question: str,
+    history: History | None = None,
+    max_output_tokens: int = 2048,
+) -> Iterator[tuple[str, str]]:
+    """Stream an answer grounded directly on the image. Raises on LLM failure so the
+    caller can fall back, matching stream_answer's contract."""
+    messages = _image_answer_messages(mime_type, data, question, history or [])
+    model = get_chat_model(max_output_tokens=max_output_tokens, streaming=True)
+    for chunk in model.stream(messages):
+        yield from _iter_chunk_events(chunk)
