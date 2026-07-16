@@ -102,6 +102,14 @@ IMAGE_ANSWER_SYSTEM = RAG_SYSTEM + (
     "pour répondre le plus précisément possible."
 )
 
+IMAGE_CONTEXT_ANSWER_SYSTEM = RAG_SYSTEM + (
+    "\n\n11. Une image jointe par l'utilisateur accompagne cette question, ainsi qu'un contexte "
+    "documentaire potentiellement pertinent. Regarde d'abord l'image : n'utilise le contexte "
+    "documentaire que s'il correspond réellement à ce qu'elle montre. S'il ne correspond pas, "
+    "ignore-le complètement, ne l'invente jamais comme lien avec l'image, et réponds uniquement "
+    "à partir de l'image et de tes connaissances générales."
+)
+
 # --- Templates ----------------------------------------------------------------
 
 # Real conversation history is injected as alternating messages, not concatenated
