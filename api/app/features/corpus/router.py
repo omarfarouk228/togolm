@@ -22,6 +22,7 @@ CATEGORIES = [
     "agriculture",
     "politics",
     "press",
+    "culinary",
 ]
 
 
