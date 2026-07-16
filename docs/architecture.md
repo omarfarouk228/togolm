@@ -338,6 +338,8 @@ Stockage : SHA-256 hash dans la table `api_keys` (clé en clair jamais stockée)
 | `POSTGRES_USER` | Utilisateur | `postgres` |
 | `POSTGRES_PASSWORD` | Mot de passe | — |
 | `GEMINI_API_KEY` | Clé API Gemini | `AQ...` |
+| `GEMINI_MODEL` | Modèle de chat Gemini (optionnel) | `gemini-2.5-flash` (défaut) |
+| `GEMINI_FALLBACK_MODEL` | Modèle de secours si `GEMINI_MODEL` échoue (quota, indisponibilité...) (optionnel) | `gemini-3-flash-preview` (défaut) |
 | `API_SECRET_KEY` | Secret interne | SHA-256 hex |
 | `API_KEYS` | Clés dev (virgule-séparées) | vide = dev mode |
 | `CELERY_BROKER_URL` | Redis broker | `redis://localhost:6379/0` |
