@@ -138,7 +138,7 @@ class LegalPdfSpider(BaseTogoSpider):
         "DEFAULT_REQUEST_HEADERS": {
             "Accept": "application/pdf,text/html,*/*;q=0.8",
             "Accept-Language": "fr-FR,fr;q=0.9",
-            "User-Agent": "Mozilla/5.0 (compatible; TogoLM-Research-Bot/1.0; +https://togolm.ai/bot)",
+            "User-Agent": "Mozilla/5.0 (compatible; TogoLM-Research-Bot/1.0; +https://togolm.com/bot)",
         },
         # Cap the spider so it never runs more than 20 minutes
         "CLOSESPIDER_TIMEOUT": 1200,

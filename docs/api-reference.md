@@ -1,6 +1,6 @@
 # TogoLM API Reference
 
-Base URL: `https://api.togolm.kofcorporation.com/v1` (production) / `http://localhost:8000/v1` (local)
+Base URL: `https://api.togolm.com/v1` (production) / `http://localhost:8000/v1` (local)
 
 ## SDKs
 
