@@ -10,6 +10,7 @@ Endpoints:
   GET  /v1/documents        — Paginated document list
   GET  /v1/documents/{id}   — Single document with chunks
   GET  /v1/search           — Full-text keyword search
+  POST /v1/feedback         — Report an issue with a generated answer
 """
 
 import os
@@ -26,6 +27,7 @@ from api.app.features.admin.router import router as admin_router  # noqa: E402
 from api.app.features.auth.router import router as auth_router  # noqa: E402
 from api.app.features.corpus.router import router as corpus_router  # noqa: E402
 from api.app.features.documents.router import router as documents_router  # noqa: E402
+from api.app.features.feedback.router import router as feedback_router  # noqa: E402
 from api.app.features.query.router import router as query_router  # noqa: E402
 
 app = FastAPI(
@@ -53,6 +55,7 @@ app.include_router(auth_router, prefix="/v1")  # no rate limit on register/me
 app.include_router(corpus_router, prefix="/v1")  # public read-only stats, no rate limit
 app.include_router(query_router, prefix="/v1", dependencies=_security)
 app.include_router(documents_router, prefix="/v1", dependencies=_security)
+app.include_router(feedback_router, prefix="/v1")  # bounded write, no rate limit — see feedback/router.py
 
 
 @app.get("/", include_in_schema=False)
