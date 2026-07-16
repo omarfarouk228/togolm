@@ -6,6 +6,7 @@ Endpoints:
   POST /v1/embed            — Generate embeddings via TogoLM
   GET  /v1/categories       — List available corpus categories
   GET  /v1/stats            — Public corpus statistics
+  GET  /v1/documents/recent — Small fixed-size recent-documents feed (no rate limit)
   GET  /v1/documents        — Paginated document list
   GET  /v1/documents/{id}   — Single document with chunks
   GET  /v1/search           — Full-text keyword search
