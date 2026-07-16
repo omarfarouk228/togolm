@@ -19,6 +19,10 @@ Queries:
   GET  /v1/admin/queries         — paginated query history
   GET  /v1/admin/queries/stats   — off-topic rate, avg latency, totals
 
+Feedback:
+  GET   /v1/admin/feedback        — paginated user-reported answer issues
+  PATCH /v1/admin/feedback/{id}   — mark reviewed / dismissed
+
 Usage stats:
   GET  /v1/admin/stats           — request counts from Redis
 
@@ -35,6 +39,9 @@ from api.app.features.admin.schemas import (
     ApiKeyItem,
     CreateKeyRequest,
     CreateKeyResponse,
+    FeedbackItem,
+    FeedbackListResponse,
+    PatchFeedbackRequest,
     PatchKeyRequest,
     QueryListResponse,
     RecentDocument,
@@ -212,6 +219,41 @@ def query_stats(
     conn = get_conn()
     try:
         return service.get_query_stats(conn, days)
+    finally:
+        conn.close()
+
+
+# ── Feedback ──────────────────────────────────────────────────────────────────
+
+
+@router.get("/admin/feedback", response_model=FeedbackListResponse)
+def list_feedback(
+    page: int = Query(1, ge=1),
+    page_size: int = Query(20, ge=1, le=100),
+    status: str | None = Query(None),
+    category: str | None = Query(None),
+    authorization: str | None = Header(default=None),
+    x_admin_key: str | None = Header(default=None),
+):
+    _auth(authorization, x_admin_key)
+    conn = get_conn()
+    try:
+        return service.list_feedback(conn, page, page_size, status, category)
+    finally:
+        conn.close()
+
+
+@router.patch("/admin/feedback/{feedback_id}", response_model=FeedbackItem)
+def update_feedback(
+    feedback_id: str,
+    req: PatchFeedbackRequest,
+    authorization: str | None = Header(default=None),
+    x_admin_key: str | None = Header(default=None),
+):
+    _auth(authorization, x_admin_key)
+    conn = get_conn()
+    try:
+        return service.update_feedback_status(conn, feedback_id, req)
     finally:
         conn.close()
 

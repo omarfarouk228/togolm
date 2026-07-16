@@ -76,3 +76,32 @@ class QueryListResponse(BaseModel):
     total: int
     page: int
     page_size: int
+
+
+class FeedbackSourceItem(BaseModel):
+    title: str | None = None
+    url: str | None = None
+
+
+class FeedbackItem(BaseModel):
+    id: str
+    category: str
+    status: str
+    question: str
+    answer: str
+    comment: str | None
+    sources: list[FeedbackSourceItem] | None
+    language: str | None
+    api_key_prefix: str | None
+    created_at: str | None
+
+
+class FeedbackListResponse(BaseModel):
+    items: list[FeedbackItem]
+    total: int
+    page: int
+    page_size: int
+
+
+class PatchFeedbackRequest(BaseModel):
+    status: str

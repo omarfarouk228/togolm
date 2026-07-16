@@ -13,12 +13,17 @@ from api.app.features.admin.schemas import (
     ApiKeyItem,
     CreateKeyRequest,
     CreateKeyResponse,
+    FeedbackItem,
+    FeedbackListResponse,
+    PatchFeedbackRequest,
     PatchKeyRequest,
     QueryItem,
     QueryListResponse,
     RecentDocument,
     SourceStat,
 )
+
+_FEEDBACK_STATUSES = ["open", "reviewed", "dismissed"]
 
 _PLANS = ["anon", "free", "dev", "institution"]
 _KEY_PREFIX = "tgolm_"
@@ -511,3 +516,90 @@ def get_health(conn, r: redis.Redis) -> dict:
         "total_chunks": total_chunks,
         "embedding_coverage": round(embedded_chunks / total_chunks * 100, 1) if total_chunks else 0,
     }
+
+
+def list_feedback(
+    conn,
+    page: int,
+    page_size: int,
+    status: str | None = None,
+    category: str | None = None,
+) -> FeedbackListResponse:
+    offset = (page - 1) * page_size
+    conditions: list[str] = []
+    params: list = []
+
+    if status:
+        conditions.append("status = %s")
+        params.append(status)
+    if category:
+        conditions.append("category = %s")
+        params.append(category)
+
+    where = ("WHERE " + " AND ".join(conditions)) if conditions else ""
+
+    with conn.cursor() as cur:
+        cur.execute(f"SELECT COUNT(*) FROM response_feedback {where}", params)
+        total = cur.fetchone()[0]
+        cur.execute(
+            f"""
+            SELECT id::text, category, status, question, answer, comment,
+                   sources, language, api_key_prefix, created_at::text
+            FROM response_feedback
+            {where}
+            ORDER BY created_at DESC
+            LIMIT %s OFFSET %s
+        """,
+            params + [page_size, offset],
+        )
+        items = [
+            FeedbackItem(
+                id=r[0],
+                category=r[1],
+                status=r[2],
+                question=r[3],
+                answer=r[4],
+                comment=r[5],
+                sources=r[6],
+                language=r[7],
+                api_key_prefix=r[8],
+                created_at=r[9],
+            )
+            for r in cur.fetchall()
+        ]
+    return FeedbackListResponse(items=items, total=total, page=page, page_size=page_size)
+
+
+def update_feedback_status(conn, feedback_id: str, req: PatchFeedbackRequest) -> FeedbackItem:
+    if req.status not in _FEEDBACK_STATUSES:
+        raise HTTPException(
+            status_code=400, detail=f"Invalid status. Choose from: {_FEEDBACK_STATUSES}"
+        )
+
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            UPDATE response_feedback SET status = %s
+            WHERE id::text = %s
+            RETURNING id::text, category, status, question, answer, comment,
+                      sources, language, api_key_prefix, created_at::text
+        """,
+            (req.status, feedback_id),
+        )
+        row = cur.fetchone()
+        if row is None:
+            raise HTTPException(status_code=404, detail="Feedback not found")
+        conn.commit()
+
+    return FeedbackItem(
+        id=row[0],
+        category=row[1],
+        status=row[2],
+        question=row[3],
+        answer=row[4],
+        comment=row[5],
+        sources=row[6],
+        language=row[7],
+        api_key_prefix=row[8],
+        created_at=row[9],
+    )
