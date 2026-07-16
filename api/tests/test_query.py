@@ -114,7 +114,7 @@ class TestImageQuery:
         with (
             patch("rag.generation.describe_image_question", return_value="requête dérivée"),
             patch("rag.retrieval.retrieve", return_value=[FAKE_CHUNK]),
-            patch("rag.generation.build_answer", return_value="Réponse"),
+            patch("rag.generation.build_answer_with_image", return_value="Réponse"),
         ):
             resp = client.post("/v1/query", json={"question": "", "image": FAKE_IMAGE})
         assert resp.status_code == 200
@@ -139,7 +139,9 @@ class TestImageQuery:
                 "rag.generation.describe_image_question", return_value="requête dérivée"
             ) as mock_d,
             patch("rag.retrieval.retrieve", return_value=[FAKE_CHUNK]),
-            patch("rag.generation.build_answer", return_value="Reponse RAG") as mock_build,
+            patch(
+                "rag.generation.build_answer_with_image", return_value="Reponse RAG"
+            ) as mock_build,
             patch("rag.generation.answer_from_image") as mock_vision,
         ):
             resp = client.post(
@@ -149,13 +151,19 @@ class TestImageQuery:
         assert resp.json()["answer"] == "Reponse RAG"
         mock_d.assert_called_once()
         mock_build.assert_called_once()
+        # The image must still reach the answer step even though corpus chunks
+        # were found — a query derived from an unrelated image can coincidentally
+        # match chunks, and only the image lets the model notice the mismatch.
+        args, kwargs = mock_build.call_args
+        assert FAKE_IMAGE["mime_type"] in args or FAKE_IMAGE["mime_type"] in kwargs.values()
+        assert FAKE_IMAGE["data"] in args or FAKE_IMAGE["data"] in kwargs.values()
         mock_vision.assert_not_called()
 
     def test_falls_back_to_vision_when_corpus_empty(self):
         with (
             patch("rag.generation.describe_image_question", return_value="requête dérivée"),
             patch("rag.retrieval.retrieve", return_value=[]),
-            patch("rag.generation.build_answer") as mock_build,
+            patch("rag.generation.build_answer_with_image") as mock_build,
             patch("rag.generation.answer_from_image", return_value="Reponse vision") as mock_vision,
         ):
             resp = client.post(
@@ -267,7 +275,8 @@ class TestImageStreamQuery:
             patch("rag.generation.describe_image_question", return_value="requête dérivée"),
             patch("rag.retrieval.retrieve", return_value=[FAKE_CHUNK]),
             patch(
-                "rag.generation.stream_answer", return_value=iter([("chunk", "Reponse RAG")])
+                "rag.generation.stream_answer_with_image",
+                return_value=iter([("chunk", "Reponse RAG")]),
             ) as mock_stream,
             patch("rag.generation.stream_answer_from_image") as mock_vision,
         ):
@@ -276,6 +285,10 @@ class TestImageStreamQuery:
             )
         assert "Reponse RAG" in resp.text
         mock_stream.assert_called_once()
+        # The image must reach the streaming answer step too, for the same reason
+        # as the non-streaming path (see build_answer_with_image).
+        args, kwargs = mock_stream.call_args
+        assert FAKE_IMAGE["mime_type"] in args or FAKE_IMAGE["mime_type"] in kwargs.values()
         mock_vision.assert_not_called()
 
     def test_falls_back_to_vision_when_corpus_empty(self, monkeypatch):
@@ -301,7 +314,10 @@ class TestImageStreamQuery:
         with (
             patch("rag.generation.describe_image_question", return_value="requête dérivée"),
             patch("rag.retrieval.retrieve", return_value=[FAKE_CHUNK]),
-            patch("rag.generation.stream_answer", return_value=iter([("chunk", "Reponse RAG")])),
+            patch(
+                "rag.generation.stream_answer_with_image",
+                return_value=iter([("chunk", "Reponse RAG")]),
+            ),
             patch("rag.generation.stream_without_corpus") as mock_off_topic,
         ):
             resp = client.post("/v1/query/stream", json={"question": "salut", "image": FAKE_IMAGE})

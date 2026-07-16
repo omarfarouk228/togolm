@@ -19,6 +19,7 @@ from pydantic import BaseModel, Field
 from rag.generation.llm import gemini_available, get_chat_model
 from rag.generation.prompts import (
     IMAGE_ANSWER_SYSTEM,
+    IMAGE_CONTEXT_ANSWER_SYSTEM,
     IMAGE_UNDERSTANDING_SYSTEM,
     OFF_TOPIC_PROMPT,
     RAG_ANSWER_PROMPT,
@@ -261,6 +262,52 @@ def _image_answer_messages(
     ]
 
 
+def build_answer_with_image(
+    question: str,
+    chunks: list[Any],
+    mime_type: str,
+    data: str,
+    history: History | None = None,
+    max_output_tokens: int = 2048,
+) -> str:
+    """Answer an image query whose derived search found corpus matches.
+
+    The image must still reach the model here: a search query derived from an
+    image can retrieve chunks that score above the retrieval threshold by pure
+    embedding coincidence while having nothing to do with what the image
+    actually shows. Passing chunks alone (as build_answer does) leaves the model
+    no way to notice the mismatch, so it confidently answers from irrelevant
+    context. Grounding on the image lets it discard context that doesn't match.
+    """
+    if gemini_available():
+        try:
+            messages = _image_context_answer_messages(
+                question, chunks, mime_type, data, history or []
+            )
+            model = get_chat_model(max_output_tokens=max_output_tokens)
+            return str(model.invoke(messages).content) or NO_CORPUS_ANSWER
+        except Exception:
+            pass
+    if not chunks:
+        return NO_CORPUS_ANSWER
+    return extractive_answer(chunks)
+
+
+def _image_context_answer_messages(
+    question: str, chunks: list[Any], mime_type: str, data: str, history: History
+) -> list[BaseMessage]:
+    text = (
+        f"CONTEXTE :\n{_format_context(chunks)}\n\n"
+        f"QUESTION : {question.strip() or 'Que puis-je savoir sur cette image ?'}\n\nRÉPONSE :"
+    )
+    content: list[Any] = [_image_content_block(mime_type, data), {"type": "text", "text": text}]
+    return [
+        SystemMessage(IMAGE_CONTEXT_ANSWER_SYSTEM),
+        *_history_messages(history, limit=6, truncate=400),
+        HumanMessage(content=content),
+    ]
+
+
 # --- Streaming generation -----------------------------------------------------
 
 
@@ -313,6 +360,24 @@ def stream_answer_from_image(
     """Stream an answer grounded directly on the image. Raises on LLM failure so the
     caller can fall back, matching stream_answer's contract."""
     messages = _image_answer_messages(mime_type, data, question, history or [])
+    model = get_chat_model(max_output_tokens=max_output_tokens, streaming=True)
+    for chunk in model.stream(messages):
+        yield from _iter_chunk_events(chunk)
+
+
+def stream_answer_with_image(
+    question: str,
+    chunks: list[Any],
+    mime_type: str,
+    data: str,
+    history: History | None = None,
+    max_output_tokens: int = 2048,
+) -> Iterator[tuple[str, str]]:
+    """Stream an answer for an image query whose derived search found corpus
+    matches, grounded in both the image and the retrieved chunks (see
+    build_answer_with_image for why the image must stay in the loop here).
+    Raises on LLM failure so the caller can fall back."""
+    messages = _image_context_answer_messages(question, chunks, mime_type, data, history or [])
     model = get_chat_model(max_output_tokens=max_output_tokens, streaming=True)
     for chunk in model.stream(messages):
         yield from _iter_chunk_events(chunk)

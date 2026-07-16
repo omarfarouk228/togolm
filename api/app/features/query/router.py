@@ -72,7 +72,9 @@ def _run_image_query(request: QueryRequest) -> QueryGraphResult:
     enriched = enrich_query(search_question, category=request.category)
     chunks = retrieval.retrieve(question=enriched.search_query, category=enriched.category, top_k=5)
     if chunks:
-        answer = generation.build_answer(request.question, chunks, history=request.history)
+        answer = generation.build_answer_with_image(
+            request.question, chunks, image.mime_type, image.data, history=request.history
+        )
     else:
         answer = generation.answer_from_image(
             image.mime_type, image.data, request.question, history=request.history
@@ -161,9 +163,11 @@ def _stream_image_query(
     if gemini_available():
         try:
             events = (
-                generation.stream_answer(
+                generation.stream_answer_with_image(
                     request.question,
                     chunks,
+                    image.mime_type,
+                    image.data,
                     request.history or [],
                     max_output_tokens=request.max_tokens,
                 )
