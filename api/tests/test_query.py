@@ -104,6 +104,70 @@ class TestQueryEndpoint:
         assert resp.status_code == 500
 
 
+FAKE_IMAGE = {"mime_type": "image/jpeg", "data": "ZmFrZS1pbWFnZS1ieXRlcw=="}
+
+
+class TestImageQuery:
+    """POST /v1/query with an attached image (vision-assisted RAG)."""
+
+    def test_empty_question_allowed_with_image(self):
+        with (
+            patch("rag.generation.describe_image_question", return_value="requête dérivée"),
+            patch("rag.retrieval.retrieve", return_value=[FAKE_CHUNK]),
+            patch("rag.generation.build_answer", return_value="Réponse"),
+        ):
+            resp = client.post("/v1/query", json={"question": "", "image": FAKE_IMAGE})
+        assert resp.status_code == 200
+
+    def test_empty_question_rejected_without_image(self):
+        resp = client.post("/v1/query", json={"question": ""})
+        assert resp.status_code == 422
+
+    def test_invalid_mime_type_rejected(self):
+        resp = client.post(
+            "/v1/query",
+            json={
+                "question": "Question valide ?",
+                "image": {"mime_type": "image/gif", "data": "xx"},
+            },
+        )
+        assert resp.status_code == 422
+
+    def test_uses_corpus_when_retrieval_succeeds(self):
+        with (
+            patch(
+                "rag.generation.describe_image_question", return_value="requête dérivée"
+            ) as mock_d,
+            patch("rag.retrieval.retrieve", return_value=[FAKE_CHUNK]),
+            patch("rag.generation.build_answer", return_value="Reponse RAG") as mock_build,
+            patch("rag.generation.answer_from_image") as mock_vision,
+        ):
+            resp = client.post(
+                "/v1/query", json={"question": "Que dit ce document ?", "image": FAKE_IMAGE}
+            )
+        assert resp.status_code == 200
+        assert resp.json()["answer"] == "Reponse RAG"
+        mock_d.assert_called_once()
+        mock_build.assert_called_once()
+        mock_vision.assert_not_called()
+
+    def test_falls_back_to_vision_when_corpus_empty(self):
+        with (
+            patch("rag.generation.describe_image_question", return_value="requête dérivée"),
+            patch("rag.retrieval.retrieve", return_value=[]),
+            patch("rag.generation.build_answer") as mock_build,
+            patch("rag.generation.answer_from_image", return_value="Reponse vision") as mock_vision,
+        ):
+            resp = client.post(
+                "/v1/query", json={"question": "Que dit ce document ?", "image": FAKE_IMAGE}
+            )
+        assert resp.status_code == 200
+        assert resp.json()["answer"] == "Reponse vision"
+        assert resp.json()["sources"] == []
+        mock_vision.assert_called_once()
+        mock_build.assert_not_called()
+
+
 # ---------------------------------------------------------------------------
 # POST /v1/query/stream (SSE)
 # ---------------------------------------------------------------------------
@@ -191,6 +255,58 @@ class TestStreamEndpoint:
         error_events = [e for e in events if e.get("type") == "error"]
         assert len(error_events) == 1
         assert "DB down" in error_events[0]["message"]
+
+
+class TestImageStreamQuery:
+    """POST /v1/query/stream with an attached image bypasses the off-topic guard
+    entirely and routes through the vision-assisted flow."""
+
+    def test_uses_corpus_when_retrieval_succeeds(self, monkeypatch):
+        monkeypatch.setenv("GEMINI_API_KEY", "AQ.fake-key")
+        with (
+            patch("rag.generation.describe_image_question", return_value="requête dérivée"),
+            patch("rag.retrieval.retrieve", return_value=[FAKE_CHUNK]),
+            patch(
+                "rag.generation.stream_answer", return_value=iter([("chunk", "Reponse RAG")])
+            ) as mock_stream,
+            patch("rag.generation.stream_answer_from_image") as mock_vision,
+        ):
+            resp = client.post(
+                "/v1/query/stream", json={"question": "Que dit ce document ?", "image": FAKE_IMAGE}
+            )
+        assert "Reponse RAG" in resp.text
+        mock_stream.assert_called_once()
+        mock_vision.assert_not_called()
+
+    def test_falls_back_to_vision_when_corpus_empty(self, monkeypatch):
+        monkeypatch.setenv("GEMINI_API_KEY", "AQ.fake-key")
+        with (
+            patch("rag.generation.describe_image_question", return_value="requête dérivée"),
+            patch("rag.retrieval.retrieve", return_value=[]),
+            patch(
+                "rag.generation.stream_answer_from_image",
+                return_value=iter([("chunk", "Reponse vision")]),
+            ) as mock_vision,
+        ):
+            resp = client.post(
+                "/v1/query/stream", json={"question": "Que dit ce document ?", "image": FAKE_IMAGE}
+            )
+        assert "Reponse vision" in resp.text
+        mock_vision.assert_called_once()
+
+    def test_skips_off_topic_guard(self, monkeypatch):
+        # A trivially off-topic question (e.g. a greeting) still runs the vision
+        # flow when an image is attached, instead of the canned redirect reply.
+        monkeypatch.setenv("GEMINI_API_KEY", "AQ.fake-key")
+        with (
+            patch("rag.generation.describe_image_question", return_value="requête dérivée"),
+            patch("rag.retrieval.retrieve", return_value=[FAKE_CHUNK]),
+            patch("rag.generation.stream_answer", return_value=iter([("chunk", "Reponse RAG")])),
+            patch("rag.generation.stream_without_corpus") as mock_off_topic,
+        ):
+            resp = client.post("/v1/query/stream", json={"question": "salut", "image": FAKE_IMAGE})
+        assert "Reponse RAG" in resp.text
+        mock_off_topic.assert_not_called()
 
 
 # ---------------------------------------------------------------------------

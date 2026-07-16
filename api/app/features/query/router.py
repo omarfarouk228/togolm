@@ -11,6 +11,7 @@ import asyncio
 import json
 import logging
 import time
+from collections.abc import Iterator
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 from fastapi.responses import StreamingResponse
@@ -29,7 +30,7 @@ from rag.generation import rewrite_question_with_history
 from rag.generation.llm import gemini_available
 from rag.indexation.embedder import LocalEmbedder
 from rag.orchestration.classification import is_trivially_off_topic
-from rag.orchestration.graph import run_query_graph
+from rag.orchestration.graph import QueryGraphResult, run_query_graph
 from rag.retrieval.enrichment import enrich_query
 
 logger = logging.getLogger(__name__)
@@ -59,6 +60,33 @@ def _sse(event_type: str, text: str) -> str:
     return f"data: {json.dumps({'type': event_type, 'text': text})}\n\n"
 
 
+def _run_image_query(request: QueryRequest) -> QueryGraphResult:
+    """Image branch of /query: understand the image, search the corpus, then fall
+    back to a vision-grounded answer when nothing relevant is found (bypasses the
+    text-only graph, mirroring how /query/stream already handles its own flow)."""
+    image = request.image
+    assert image is not None
+    search_question = generation.describe_image_question(
+        image.mime_type, image.data, request.question
+    )
+    enriched = enrich_query(search_question, category=request.category)
+    chunks = retrieval.retrieve(question=enriched.search_query, category=enriched.category, top_k=5)
+    if chunks:
+        answer = generation.build_answer(request.question, chunks, history=request.history)
+    else:
+        answer = generation.answer_from_image(
+            image.mime_type, image.data, request.question, history=request.history
+        )
+    return QueryGraphResult(
+        answer=answer,
+        chunks=chunks,
+        is_off_topic=False,
+        search_question=enriched.search_query,
+        search_category=enriched.category,
+        added_terms=enriched.added_terms,
+    )
+
+
 @router.post("/query", response_model=QueryResponse)
 async def query_corpus(
     request: QueryRequest,
@@ -69,13 +97,16 @@ async def query_corpus(
     t0 = time.monotonic()
 
     try:
-        result = await asyncio.to_thread(
-            run_query_graph,
-            question=request.question,
-            category=request.category,
-            language=request.language,
-            history=request.history,
-        )
+        if request.image:
+            result = await asyncio.to_thread(_run_image_query, request)
+        else:
+            result = await asyncio.to_thread(
+                run_query_graph,
+                question=request.question,
+                category=request.category,
+                language=request.language,
+                history=request.history,
+            )
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Retrieval error: {e}")
 
@@ -104,6 +135,76 @@ async def query_corpus(
     )
 
 
+def _stream_image_query(
+    request: QueryRequest, api_key: APIKeyRecord | str | None, t0: float
+) -> Iterator[str]:
+    """Image branch of /query/stream: understand the image, search the corpus, then
+    fall back to a vision-grounded answer when nothing relevant is found."""
+    image = request.image
+    assert image is not None
+    search_question = generation.describe_image_question(
+        image.mime_type, image.data, request.question
+    )
+    enriched = enrich_query(search_question, category=request.category)
+
+    try:
+        chunks = retrieval.retrieve(
+            question=enriched.search_query, category=enriched.category, top_k=5
+        )
+    except Exception as e:
+        yield f"data: {json.dumps({'type': 'error', 'message': str(e)})}\n\n"
+        yield "data: [DONE]\n\n"
+        return
+
+    sources = [{"title": c.title, "url": c.url, "score": round(c.score, 4)} for c in chunks]
+
+    if gemini_available():
+        try:
+            events = (
+                generation.stream_answer(
+                    request.question,
+                    chunks,
+                    request.history or [],
+                    max_output_tokens=request.max_tokens,
+                )
+                if chunks
+                else generation.stream_answer_from_image(
+                    image.mime_type,
+                    image.data,
+                    request.question,
+                    request.history or [],
+                    max_output_tokens=request.max_tokens,
+                )
+            )
+            for event_type, text in events:
+                yield _sse(event_type, text)
+        except Exception:
+            events = (
+                generation.stream_extractive(chunks) if chunks else iter([("chunk", _NO_RESULTS)])
+            )
+            for event_type, text in events:
+                yield _sse(event_type, text)
+    elif chunks:
+        for event_type, text in generation.stream_extractive(chunks):
+            yield _sse(event_type, text)
+    else:
+        yield _sse("chunk", _NO_RESULTS)
+
+    latency_ms = int((time.monotonic() - t0) * 1000)
+    log_query(
+        request.question,
+        request.language,
+        enriched.category,
+        False,
+        len(chunks),
+        latency_ms,
+        api_key,
+    )
+    display_sources = [s for s in sources if s["score"] >= _SOURCE_DISPLAY_MIN_SCORE]
+    yield f"data: {json.dumps({'type': 'sources', 'sources': display_sources, 'latency_ms': latency_ms})}\n\n"
+    yield "data: [DONE]\n\n"
+
+
 @router.post("/query/stream")
 def stream_query(
     request: QueryRequest,
@@ -121,6 +222,10 @@ def stream_query(
 
     def generate():
         t0 = time.monotonic()
+
+        if request.image:
+            yield from _stream_image_query(request, api_key, t0)
+            return
 
         off_topic = is_trivially_off_topic(request.question) or (
             generation.route_query(request.question) == "off_topic"
