@@ -117,6 +117,32 @@ def embed_batch(texts: list[str]) -> list[list[float]]:
     return _embedder.encode(texts)
 
 
+def fetch_existing_document(cur, url: str) -> tuple[str, str] | None:
+    """Return (id, clean_content) for an existing document by URL, or None."""
+    if not url:
+        return None
+    cur.execute("SELECT id, clean_content FROM documents WHERE url = %s", (url,))
+    row = cur.fetchone()
+    return (row[0], row[1] or "") if row else None
+
+
+def needs_reindex(cur, document_id: str, embed: bool) -> bool:
+    """True if the document has no chunks yet, or (when embedding) any chunk
+    is missing its embedding. Used to skip re-chunk/re-embed work for content
+    that hasn't changed and is already fully indexed."""
+    cur.execute("SELECT COUNT(*) FROM chunks WHERE document_id = %s", (document_id,))
+    total = cur.fetchone()[0]
+    if total == 0:
+        return True
+    if not embed:
+        return False
+    cur.execute(
+        "SELECT COUNT(*) FROM chunks WHERE document_id = %s AND embedding IS NULL",
+        (document_id,),
+    )
+    return cur.fetchone()[0] > 0
+
+
 def upsert_document(cur, doc: dict) -> str:
     """Insert or update a document row, return its UUID."""
     clean = doc.get("clean_content", "")
@@ -171,10 +197,10 @@ def upsert_chunks(
         )
 
 
-def process_file(jsonl_path: Path, embed: bool, conn) -> tuple[int, int, int]:
+def process_file(jsonl_path: Path, embed: bool, conn) -> tuple[int, int, int, int]:
     """
     Process one JSONL file.
-    Returns (total, inserted, skipped) counts.
+    Returns (total, inserted, skipped, unchanged) counts.
     """
     with open(jsonl_path, encoding="utf-8") as f:
         raw_docs = [json.loads(line) for line in f if line.strip()]
@@ -182,6 +208,7 @@ def process_file(jsonl_path: Path, embed: bool, conn) -> tuple[int, int, int]:
     total = len(raw_docs)
     inserted = 0
     skipped = 0
+    unchanged = 0
 
     # Clean all documents first
     cleaned_docs = []
@@ -194,10 +221,22 @@ def process_file(jsonl_path: Path, embed: bool, conn) -> tuple[int, int, int]:
         cleaned_docs.append(doc)
 
     if not cleaned_docs:
-        return total, 0, skipped
+        return total, 0, skipped, unchanged
 
     with conn.cursor() as cur:
         for doc in tqdm(cleaned_docs, desc=jsonl_path.name):
+            existing = fetch_existing_document(cur, doc.get("url", ""))
+            if (
+                existing is not None
+                and existing[1] == doc["clean_content"]
+                and not needs_reindex(cur, existing[0], embed)
+            ):
+                # Content unchanged and already fully (re)indexed — skip the
+                # expensive delete+rechunk+reembed cycle for this document.
+                unchanged += 1
+                conn.commit()
+                continue
+
             doc_id = upsert_document(cur, doc)
 
             # Split into chunks
@@ -223,7 +262,7 @@ def process_file(jsonl_path: Path, embed: bool, conn) -> tuple[int, int, int]:
             inserted += 1
             conn.commit()  # commit per-document so partial progress survives crashes
 
-    return total, inserted, skipped
+    return total, inserted, skipped, unchanged
 
 
 def main():
@@ -241,7 +280,7 @@ def main():
         f"Connected to PostgreSQL — {'embeddings ON' if not args.no_embed else 'embeddings OFF'}\n"
     )
 
-    total_all = inserted_all = skipped_all = 0
+    total_all = inserted_all = skipped_all = unchanged_all = 0
 
     failed_files = []
     for path in args.files:
@@ -250,11 +289,15 @@ def main():
             continue
         print(f"Processing {path}...")
         try:
-            t, i, s = process_file(path, embed=not args.no_embed, conn=conn)
-            print(f"  Done: {i} inserted, {s} skipped (below min length), {t} total\n")
+            t, i, s, u = process_file(path, embed=not args.no_embed, conn=conn)
+            print(
+                f"  Done: {i} inserted/reindexed, {u} unchanged (skipped), "
+                f"{s} skipped (below min length), {t} total\n"
+            )
             total_all += t
             inserted_all += i
             skipped_all += s
+            unchanged_all += u
         except Exception as exc:
             conn.rollback()
             print(f"  [ERROR] {path.name} failed: {exc}\n")
@@ -264,7 +307,10 @@ def main():
         print(f"Failed files ({len(failed_files)}): {', '.join(failed_files)}")
 
     conn.close()
-    print(f"Summary: {inserted_all}/{total_all} documents ingested ({skipped_all} skipped)")
+    print(
+        f"Summary: {inserted_all}/{total_all} documents ingested "
+        f"({unchanged_all} unchanged, {skipped_all} skipped)"
+    )
 
 
 if __name__ == "__main__":

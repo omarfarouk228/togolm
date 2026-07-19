@@ -32,7 +32,11 @@ ROUTER_SYSTEM = (
     "informatique, les recettes de cuisine, l'écriture créative sans lien avec le Togo, "
     "les scores sportifs, et la culture générale mondiale sans rapport avec le Togo.\n\n"
     "Attention : une question sur le 'code du travail togolais' ou un 'code juridique' du "
-    "Togo est 'on_topic'. Seul le code informatique est 'off_topic'."
+    "Togo est 'on_topic'. Seul le code informatique est 'off_topic'.\n\n"
+    "Un historique de conversation peut précéder le message. Un message court ou elliptique "
+    "('Explique', 'Développe', 'Et Ewe ?', 'Cite les') qui fait suite à un échange 'on_topic' "
+    "est presque toujours une relance sur le même sujet : classe-le 'on_topic', pas 'off_topic', "
+    "sauf s'il change clairement de sujet vers quelque chose de hors-Togo."
 )
 
 RAG_SYSTEM = (
@@ -146,6 +150,7 @@ REWRITE_PROMPT = ChatPromptTemplate.from_messages(
 ROUTER_PROMPT = ChatPromptTemplate.from_messages(
     [
         ("system", ROUTER_SYSTEM),
+        MessagesPlaceholder("history", optional=True),
         ("human", "Message : {question}"),
     ]
 )

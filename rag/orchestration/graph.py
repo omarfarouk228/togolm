@@ -47,8 +47,8 @@ class QueryGraphResult:
 
 def build_query_graph(
     *,
-    is_trivially_off_topic: Callable[[str], bool],
-    route_query: Callable[[str], str],
+    is_trivially_off_topic: Callable[[str, bool], bool],
+    route_query: Callable[[str, HistoryMessages], str],
     answer_without_corpus: Callable[[str, HistoryMessages], str],
     rewrite_question: Callable[[str, HistoryMessages], str],
     retriever: Callable[..., list[Any]],
@@ -58,17 +58,21 @@ def build_query_graph(
     """Build a compiled graph with injectable side-effecting dependencies.
 
     Routing is two-stage: a deterministic micro-guard handles the obvious cases
-    for free, then an agentic LLM router classifies the rest.
+    for free, then an agentic LLM router classifies the rest. Both stages see
+    conversation history so a short follow-up isn't judged as a standalone
+    non-sequitur.
     """
 
     def guard_node(state: QueryGraphState) -> dict:
-        return {"is_off_topic": is_trivially_off_topic(state["question"])}
+        has_history = bool(state.get("history"))
+        return {"is_off_topic": is_trivially_off_topic(state["question"], has_history)}
 
     def route_after_guard(state: QueryGraphState) -> Literal["off_topic", "route"]:
         return "off_topic" if state.get("is_off_topic") else "route"
 
     def router_node(state: QueryGraphState) -> dict:
-        return {"is_off_topic": route_query(state["question"]) == "off_topic"}
+        history = state.get("history", [])
+        return {"is_off_topic": route_query(state["question"], history) == "off_topic"}
 
     def route_after_router(state: QueryGraphState) -> Literal["off_topic", "enrich"]:
         return "off_topic" if state.get("is_off_topic") else "enrich"
@@ -155,8 +159,8 @@ def _get_default_graph(top_k: int = 5):
             import rag.retrieval as _ret
 
             _default_graph = build_query_graph(
-                is_trivially_off_topic=lambda q: _cls.is_trivially_off_topic(q),
-                route_query=lambda q: _gen.route_query(q),
+                is_trivially_off_topic=lambda q, h: _cls.is_trivially_off_topic(q, h),
+                route_query=lambda q, h: _gen.route_query(q, h),
                 answer_without_corpus=lambda q, h: _gen.answer_without_corpus(q, h),
                 rewrite_question=lambda q, h: _gen.rewrite_question_with_history(q, h),
                 retriever=lambda **kwargs: _ret.retrieve(**kwargs),

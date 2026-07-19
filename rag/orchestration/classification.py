@@ -18,14 +18,21 @@ _GREETINGS_RE = re.compile(
 _MATH_RE = re.compile(r"^\s*[\d\s\+\-\*\/\^\(\)=.,]+\s*$")
 
 
-def is_trivially_off_topic(question: str) -> bool:
+def is_trivially_off_topic(question: str, has_history: bool = False) -> bool:
     """Return True only for obvious non-domain messages: greetings, bare math,
-    or messages too short to carry a real question (< 3 words)."""
+    or messages too short to carry a real question (< 3 words).
+
+    The short-message rule only applies with no prior conversation: inside an
+    ongoing exchange, a short reply ("Explique", "Et Ewe ?") is almost always
+    a follow-up on the previous on-topic turn, not a standalone non-sequitur,
+    so it's left to the agentic router (which does see history) instead of
+    being trivially rejected here.
+    """
     q = question.strip()
     if _GREETINGS_RE.match(q):
         return True
     if _MATH_RE.match(q):
         return True
-    if len(q.split()) < 3:
+    if not has_history and len(q.split()) < 3:
         return True
     return False

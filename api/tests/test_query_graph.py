@@ -32,8 +32,8 @@ def test_query_graph_enriches_before_retrieval():
         category=None,
         language="fr",
         history=[],
-        is_trivially_off_topic=lambda _question: False,
-        route_query=lambda _question: "on_topic",
+        is_trivially_off_topic=lambda _question, _has_history: False,
+        route_query=lambda _question, _history: "on_topic",
         answer_without_corpus=lambda _question, _history: "off topic",
         rewrite_question=lambda question, _history: question,
         retriever=retriever,
@@ -56,8 +56,8 @@ def test_query_graph_router_redirects_off_topic_without_retrieval():
         category=None,
         language="fr",
         history=[],
-        is_trivially_off_topic=lambda _question: False,
-        route_query=lambda _question: "off_topic",
+        is_trivially_off_topic=lambda _question, _has_history: False,
+        route_query=lambda _question, _history: "off_topic",
         answer_without_corpus=lambda _question, _history: "Posez-moi une question sur le Togo.",
         rewrite_question=lambda question, _history: question,
         retriever=retriever,
@@ -70,7 +70,7 @@ def test_query_graph_router_redirects_off_topic_without_retrieval():
 
 
 def test_query_graph_trivial_guard_skips_router_and_retrieval():
-    def route_query(_question):
+    def route_query(_question, _history):
         raise AssertionError("router should not be called for trivial messages")
 
     def retriever(**_kwargs):
@@ -81,7 +81,7 @@ def test_query_graph_trivial_guard_skips_router_and_retrieval():
         category=None,
         language="fr",
         history=[],
-        is_trivially_off_topic=lambda _question: True,
+        is_trivially_off_topic=lambda _question, _has_history: True,
         route_query=route_query,
         answer_without_corpus=lambda _question, _history: "Posez-moi une question sur le Togo.",
         rewrite_question=lambda question, _history: question,
@@ -105,8 +105,8 @@ def test_query_graph_uses_history_rewriter():
         category=None,
         language="fr",
         history=[{"role": "user", "content": "Je veux creer une entreprise"}],
-        is_trivially_off_topic=lambda _question: False,
-        route_query=lambda _question: "on_topic",
+        is_trivially_off_topic=lambda _question, _has_history: False,
+        route_query=lambda _question, _history: "on_topic",
         answer_without_corpus=lambda _question, _history: "off topic",
         rewrite_question=lambda _question, _history: "Comment creer une SARL au Togo ?",
         retriever=retriever,

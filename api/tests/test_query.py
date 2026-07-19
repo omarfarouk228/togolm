@@ -412,7 +412,18 @@ class TestTrivialGuard:
     def test_too_short(self):
         assert is_trivially_off_topic("ok merci")
 
+    def test_too_short_still_trivial_without_history(self):
+        assert is_trivially_off_topic("Explique", has_history=False)
+
     # ── NOT trivial: deferred to the router, guard must not pre-judge ─────────
+
+    def test_short_followup_deferred_to_router_when_history_present(self):
+        # A one-word reply inside an ongoing conversation ("Explique",
+        # "Développe") is almost always a follow-up, not a non-sequitur — the
+        # guard must not trivially reject it without letting the (history-aware)
+        # router judge it in context.
+        assert not is_trivially_off_topic("Explique", has_history=True)
+        assert not is_trivially_off_topic("Et Ewe ?", has_history=True)
 
     def test_recipe_deferred_to_router(self):
         assert not is_trivially_off_topic("Donne-moi une recette de poulet yassa")

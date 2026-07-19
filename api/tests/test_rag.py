@@ -155,3 +155,60 @@ class TestRetrieve:
 
         assert len(result) == 1
         assert result[0].title == "Titre FT"
+
+    def test_ordinary_question_keeps_one_chunk_per_document(self):
+        # Same document URL twice — the second chunk must be dropped for a
+        # plain fact question (source diversification stays the default).
+        rows = [
+            (
+                "Article gouvernement",
+                "https://presidence.tg/a",
+                "presidence.tg",
+                "politics",
+                "Chunk 1.",
+                0.9,
+            ),
+            (
+                "Article gouvernement",
+                "https://presidence.tg/a",
+                "presidence.tg",
+                "politics",
+                "Chunk 2.",
+                0.85,
+            ),
+        ]
+        mock_conn = self._mock_conn(rows, chunk_count=2)
+
+        with (
+            patch("rag.retrieval.search.get_conn", return_value=mock_conn),
+            patch("rag.retrieval.search._get_embedder") as mock_emb,
+        ):
+            mock_emb.return_value.encode_one.return_value = [0.1] * 384
+            result = retrieve("Qui dirige ce ministère ?", top_k=5)
+
+        assert len(result) == 1
+
+    def test_enumeration_question_keeps_multiple_chunks_from_same_document(self):
+        # A "liste des ministres"-style query needs several chunks of the one
+        # authoritative document (the roster is split across small chunks).
+        rows = [
+            (
+                "Composition du gouvernement",
+                "https://presidence.tg/gouvernement",
+                "presidence.tg",
+                "politics",
+                f"Chunk {i}.",
+                0.9 - i * 0.01,
+            )
+            for i in range(4)
+        ]
+        mock_conn = self._mock_conn(rows, chunk_count=len(rows))
+
+        with (
+            patch("rag.retrieval.search.get_conn", return_value=mock_conn),
+            patch("rag.retrieval.search._get_embedder") as mock_emb,
+        ):
+            mock_emb.return_value.encode_one.return_value = [0.1] * 384
+            result = retrieve("liste des ministres du gouvernement togolais", top_k=9)
+
+        assert len(result) == 4

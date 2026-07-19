@@ -14,6 +14,7 @@ from dataclasses import dataclass
 
 from db import get_conn
 from rag.indexation.embedder import get_embedder
+from rag.retrieval.enrichment import is_enumeration_query
 
 _embedder = None
 
@@ -48,6 +49,14 @@ def retrieve(
     embedder = _get_embedder()
     query_vector = embedder.encode_one(question)
 
+    # Enumeration questions ("liste des ministres", "composition du...") tend to
+    # have their answer spread across several small chunks of one authoritative
+    # document — widen the search and allow more than one chunk per document so
+    # the model doesn't see just a fragment of the list.
+    enumeration = is_enumeration_query(question)
+    effective_top_k = max(top_k, 9) if enumeration else top_k
+    max_chunks_per_document = 4 if enumeration else 1
+
     conn = get_conn(vector=True)
     try:
         with conn.cursor() as cur:
@@ -55,7 +64,14 @@ def retrieve(
             has_chunks = cur.fetchone()[0] > 0
 
             if has_chunks:
-                return _chunk_vector_search(cur, query_vector, category, top_k, min_score)
+                return _chunk_vector_search(
+                    cur,
+                    query_vector,
+                    category,
+                    effective_top_k,
+                    min_score,
+                    max_chunks_per_document=max_chunks_per_document,
+                )
             else:
                 return _fulltext_search(cur, question, category, top_k)
     finally:
@@ -68,8 +84,15 @@ def _chunk_vector_search(
     category: str | None,
     top_k: int,
     min_score: float,
+    max_chunks_per_document: int = 1,
 ) -> list[RetrievedChunk]:
-    """Vector search over chunks, joining back to documents for metadata."""
+    """Vector search over chunks, joining back to documents for metadata.
+
+    At most ``max_chunks_per_document`` chunks are kept per source URL: 1 by
+    default (diversify sources for ordinary fact questions), higher for
+    enumeration questions where the full answer lives in one document split
+    across several chunks (see ``retrieve``).
+    """
     base_sql = """
         SELECT
             d.title, d.url, d.source, d.category, c.content,
@@ -86,24 +109,27 @@ def _chunk_vector_search(
         base_sql += " AND d.category = %s"
         params.append(category)
 
+    # Fetch extra candidates so there's enough headroom to pull several chunks
+    # from the same top document when max_chunks_per_document > 1.
     base_sql += " ORDER BY c.embedding <=> %s::vector LIMIT %s"
-    params += [query_vector, top_k * 2]
+    params += [query_vector, top_k * 4]
 
     cur.execute(base_sql, params)
     rows = cur.fetchall()
 
-    seen_urls: set[str] = set()
+    doc_chunk_counts: dict[str, int] = {}
     results: list[RetrievedChunk] = []
     for row in rows:
         score = float(row[5])
         if score < min_score:
             continue
         url = row[1]
-        # Only deduplicate documents that have a URL; null-URL docs are always distinct
-        if url and url in seen_urls:
-            continue
+        # Only cap documents that have a URL; null-URL docs are always distinct
         if url:
-            seen_urls.add(url)
+            count = doc_chunk_counts.get(url, 0)
+            if count >= max_chunks_per_document:
+                continue
+            doc_chunk_counts[url] = count + 1
         results.append(
             RetrievedChunk(
                 title=row[0] or "",
