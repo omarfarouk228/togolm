@@ -67,7 +67,24 @@ class ServicePublicSpider(BaseTogoSpider):
 
         content_parts = []
 
-        # Structured content sections (server-rendered)
+        # Structured content sections (server-rendered). Older markup split these
+        # into separate .wp-description/.wp-pieces/.wp-steps classes; the current
+        # template nests all of them (Description, Conditions, Pièces à fournir,
+        # Étapes) as sibling <div><h4>Label</h4>...</div> blocks inside a single
+        # .service-description container instead — extract per sub-block so each
+        # section still gets its own label.
+        for block in response.css(".service-description > div"):
+            label = block.css("h4::text").get("").strip()
+            text = self.html_to_text(block.get())
+            if label and text:
+                # The label itself repeats at the start of text (it's the <h4>
+                # inside the block) — drop that duplicate before prefixing it.
+                if text.startswith(label):
+                    text = text[len(label) :].strip()
+                if text:
+                    content_parts.append(f"{label}: {text}")
+
+        # Legacy selectors, kept in case any page still uses the older markup.
         section_selectors = [
             (".wp-description", "Description"),
             (".wp-who", "Personnes concernées"),

@@ -61,6 +61,15 @@ class SearchResponse(BaseModel):
     query: str
 
 
+class LinkPreview(BaseModel):
+    url: str
+    title: str | None
+    description: str | None
+    source: str
+    category: str | None
+    favicon: str
+
+
 @router.get("/documents", response_model=DocumentListResponse)
 def list_documents(
     source: str | None = Query(None, description="Filter by source domain"),
@@ -148,6 +157,52 @@ def list_documents(
         page=page,
         page_size=page_size,
         pages=(total + page_size - 1) // page_size,
+    )
+
+
+@router.get("/documents/preview", response_model=LinkPreview)
+def preview_document(
+    url: str = Query(..., min_length=1, max_length=2048, description="Exact corpus document URL"),
+):
+    """Return preview metadata (title, description, favicon) for a URL cited as a
+    RAG source, so the frontend can render a rich link card instead of a bare link.
+
+    Looked up directly from documents already in our own corpus, never fetched
+    live from the target URL: the model can only ever cite URLs that came from
+    retrieval, and resolving previews this way means there's no outbound request
+    to attacker-influenced input (no SSRF surface) and no dependency on the
+    target site's availability or markup.
+    """
+    conn = get_conn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT url, title, clean_content, source, category
+                FROM documents
+                WHERE url = %s AND status = 'active'
+                LIMIT 1
+                """,
+                (url,),
+            )
+            row = cur.fetchone()
+    finally:
+        conn.close()
+
+    if not row:
+        raise HTTPException(status_code=404, detail="No corpus document matches this URL")
+
+    doc_url, title, clean_content, source, category = row
+    content = (clean_content or "").strip()
+    description = (content[:220].rsplit(" ", 1)[0] + "…") if len(content) > 220 else content or None
+
+    return LinkPreview(
+        url=doc_url,
+        title=title,
+        description=description,
+        source=source or "",
+        category=category,
+        favicon=f"https://www.google.com/s2/favicons?sz=64&domain={source}",
     )
 
 
