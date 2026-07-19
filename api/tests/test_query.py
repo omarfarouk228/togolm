@@ -199,7 +199,7 @@ class TestImageQuery:
         assert resp.status_code == 200
         assert resp.json()["answer"] == "Je suis spécialisé dans les connaissances togolaises."
         assert resp.json()["sources"] == []
-        mock_route.assert_called_once_with("explication d'un extrait de code Python")
+        mock_route.assert_called_once_with("explication d'un extrait de code Python", [])
         mock_off_topic.assert_called_once()
         mock_retrieve.assert_not_called()
         mock_build.assert_not_called()
@@ -294,6 +294,36 @@ class TestStreamEndpoint:
         assert len(error_events) == 1
         assert "DB down" in error_events[0]["message"]
 
+    def test_stream_short_followup_not_trivially_off_topic_with_history(self, monkeypatch):
+        # Regression: /v1/query/stream has its own off-topic check, separate from
+        # the LangGraph orchestration, and used to call is_trivially_off_topic /
+        # route_query with the question only — so a one-word follow-up like
+        # "Développe" was always rejected as off-topic even mid-conversation,
+        # silently falling back to the 200-token off-topic responder instead of
+        # answering the real follow-up.
+        monkeypatch.setenv("GEMINI_API_KEY", "AQ.fake-key")
+        history = [
+            {"role": "user", "content": "Comment fonctionne le système éducatif au Togo ?"},
+            {"role": "assistant", "content": "Le système comprend le primaire..."},
+        ]
+        with (
+            patch("rag.generation.route_query", return_value="on_topic") as mock_route,
+            patch("rag.generation.rewrite_question_with_history", return_value="Développe X"),
+            patch("rag.retrieval.retrieve", return_value=[FAKE_CHUNK]),
+            patch(
+                "rag.generation.stream_answer", return_value=iter([("chunk", "Reponse detaillee")])
+            ),
+            patch("rag.generation.stream_without_corpus") as mock_off_topic,
+        ):
+            resp = client.post(
+                "/v1/query/stream", json={"question": "Développe", "history": history}
+            )
+        assert "Reponse detaillee" in resp.text
+        mock_off_topic.assert_not_called()
+        # route_query must receive the conversation history, not just the bare question.
+        assert mock_route.call_args.args[0] == "Développe"
+        assert len(mock_route.call_args.args[1]) == 2
+
 
 class TestImageStreamQuery:
     """POST /v1/query/stream with an attached image bypasses the off-topic guard
@@ -379,7 +409,7 @@ class TestImageStreamQuery:
                 "/v1/query/stream", json={"question": "explique ce code", "image": FAKE_IMAGE}
             )
         assert "Reponse hors-sujet" in resp.text
-        mock_route.assert_called_once_with("explication d'un extrait de code Python")
+        mock_route.assert_called_once_with("explication d'un extrait de code Python", [])
         mock_off_topic.assert_called_once()
         mock_retrieve.assert_not_called()
         mock_stream.assert_not_called()
