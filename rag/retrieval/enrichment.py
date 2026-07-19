@@ -12,6 +12,12 @@ from dataclasses import dataclass
 
 _SPACE_RE = re.compile(r"\s+")
 
+_ENUMERATION_RE = re.compile(
+    r"\b(liste|listes|composition|membres|tous\s+les|toutes\s+les|"
+    r"qui\s+sont|quels\s+sont|quelles\s+sont|ensemble\s+des|combien\s+de)\b",
+    re.IGNORECASE,
+)
+
 _ALIASES: dict[str, tuple[str, ...]] = {
     "anpe": ("agence nationale pour l emploi", "emploi", "travail"),
     "bceao": ("banque centrale des etats de l afrique de l ouest", "uemoa", "monnaie"),
@@ -50,17 +56,44 @@ _CATEGORY_KEYWORDS: dict[str, tuple[str, ...]] = {
         "bceao",
         "budget",
         "commerce",
+        "demographie",
+        "developpement",
         "economie",
         "entreprise",
+        "entreprises",
         "impot",
         "impots",
         "investissement",
+        "pib",
+        "pme",
         "port autonome",
+        "population",
+        "recensement",
+        "rgph",
+        "secteur prive",
+        "statistique",
+        "statistiques",
         "taxe",
         "taxes",
         "uemoa",
     ),
-    "education": ("bac", "baccalaureat", "campus", "diplome", "ecole", "education", "universite"),
+    "education": (
+        "bac",
+        "baccalaureat",
+        "campus",
+        "diplome",
+        "ecole",
+        "ecoles",
+        "education",
+        "educatif",
+        "eleve",
+        "eleves",
+        "enseignement",
+        "etudiant",
+        "etudiants",
+        "universite",
+        "universites",
+    ),
     "health": ("assurance maladie", "hopital", "inam", "maladie", "sante", "vaccin"),
     "legal": (
         "acte uniforme",
@@ -69,6 +102,7 @@ _CATEGORY_KEYWORDS: dict[str, tuple[str, ...]] = {
         "contrat",
         "justice",
         "loi",
+        "lois",
         "ohada",
         "rccm",
         "sarl",
@@ -76,8 +110,12 @@ _CATEGORY_KEYWORDS: dict[str, tuple[str, ...]] = {
     ),
     "politics": (
         "assemblee nationale",
+        "election",
+        "elections",
         "gouvernement",
         "ministre",
+        "ministres",
+        "parti politique",
         "presidence",
         "president",
         "republique",
@@ -93,6 +131,18 @@ class EnrichedQuery:
     search_query: str
     category: str | None
     added_terms: tuple[str, ...]
+
+
+def is_enumeration_query(text: str) -> bool:
+    """True when a question asks for a list/roster/full set of items rather
+    than a single fact (e.g. "liste des ministres du gouvernement togolais").
+
+    Such answers are often split across many small chunks of the same source
+    document (a 27-name cabinet list, a full list of universities...) — the
+    retriever needs to know to keep several chunks from that one document
+    instead of applying its usual one-chunk-per-document diversification.
+    """
+    return bool(_ENUMERATION_RE.search(text))
 
 
 def normalize_query(text: str) -> str:

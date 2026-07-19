@@ -60,8 +60,12 @@ class QueryRoute(BaseModel):
     reason: str = Field(default="", description="Short justification, for observability")
 
 
-def route_query(question: str) -> Intent:
+def route_query(question: str, history: History | None = None) -> Intent:
     """Classify a non-trivial message as on/off topic via a structured LLM call.
+
+    History is passed through so a short follow-up ("Explique", "Et Ewe ?") is
+    judged in the context of the ongoing conversation instead of in isolation,
+    where it would look like a non-sequitur.
 
     Fails open: if Gemini is unavailable or the call fails on both the primary
     and fallback model, returns 'on_topic' so a genuine question is never
@@ -78,7 +82,12 @@ def route_query(question: str) -> Intent:
         ).with_structured_output(QueryRoute)
         model = model.with_fallbacks([fallback_model])
     try:
-        result = (ROUTER_PROMPT | model).invoke({"question": question})
+        result = (ROUTER_PROMPT | model).invoke(
+            {
+                "question": question,
+                "history": _history_messages(history or [], limit=4, truncate=300),
+            }
+        )
         return result.intent
     except Exception:
         return "on_topic"

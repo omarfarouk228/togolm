@@ -2,7 +2,12 @@
 Unit tests for deterministic query enrichment.
 """
 
-from rag.retrieval.enrichment import enrich_query, infer_category, normalize_query
+from rag.retrieval.enrichment import (
+    enrich_query,
+    infer_category,
+    is_enumeration_query,
+    normalize_query,
+)
 
 
 def test_normalize_query_strips_accents_and_collapses_spaces():
@@ -33,3 +38,46 @@ def test_explicit_category_is_preserved():
 
 def test_infer_category_returns_none_without_match():
     assert infer_category("question generale sans mot cle") is None
+
+
+def test_is_enumeration_query_detects_list_intent():
+    assert is_enumeration_query("liste des ministres du gouvernement togolais")
+    assert is_enumeration_query("Quels sont les membres du gouvernement ?")
+    assert is_enumeration_query("Composition du gouvernement togolais")
+
+
+def test_is_enumeration_query_false_for_single_fact_question():
+    assert not is_enumeration_query("Qui est le président du Togo ?")
+    assert not is_enumeration_query("Quel est le budget de l'Etat togolais ?")
+
+
+# ---------------------------------------------------------------------------
+# Category coverage — regression guard for the most frequent production
+# queries that used to fall through to category=None (audit, 2026-07-19).
+# ---------------------------------------------------------------------------
+
+
+def test_infer_category_covers_top_production_queries():
+    assert (
+        infer_category(
+            normalize_query(
+                "Quels sont les résultats du dernier recensement général de la "
+                "population du Togo (RGPH-5) ?"
+            )
+        )
+        == "economy"
+    )
+    assert infer_category(normalize_query("Comment fonctionne le système éducatif au Togo ?")) == (
+        "education"
+    )
+    assert (
+        infer_category(
+            normalize_query(
+                "Comment le Togo soutient-il le développement des PME et le secteur privé ?"
+            )
+        )
+        == "economy"
+    )
+    assert infer_category(normalize_query("liste des ministres du gouvernement togolais")) == (
+        "politics"
+    )

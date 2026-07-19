@@ -74,11 +74,18 @@ NEWS_SPIDERS = [
 ]
 
 
-@app.task(bind=True, max_retries=0, soft_time_limit=1800, time_limit=1860)
+# Spider subprocess budget. The corpus has grown enough (68k+ docs) that most
+# spiders now run past the old 1790s ceiling and get killed mid-crawl every
+# time — raised so a full crawl actually has room to finish. Revisit if the
+# corpus keeps growing and this stops being enough.
+SPIDER_TIMEOUT_S = 2990
+
+
+@app.task(bind=True, max_retries=0, soft_time_limit=3000, time_limit=3060)
 def run_spider(self, spider_name: str) -> dict:
     """
     Run a single Scrapy spider. Returns {spider, success, output_kb}.
-    Soft limit = 30 min, hard limit = 31 min.
+    Soft limit = 50 min, hard limit = 51 min.
     """
     output_file = DATASETS_DIR / f"{spider_name}.jsonl"
     DATASETS_DIR.mkdir(exist_ok=True)
@@ -95,7 +102,7 @@ def run_spider(self, spider_name: str) -> dict:
         "WARNING",
     ]
 
-    result = subprocess.run(cmd, cwd=str(SCRAPY_DIR), timeout=1790)
+    result = subprocess.run(cmd, cwd=str(SCRAPY_DIR), timeout=SPIDER_TIMEOUT_S)
     size_kb = output_file.stat().st_size / 1024 if output_file.exists() else 0
 
     return {
@@ -139,10 +146,23 @@ def run_news_spiders(self, embed: bool = False) -> dict:
     }
 
 
-@app.task(bind=True, max_retries=0, time_limit=3600)
+# Per-file ingest budget. Previously all ~26 dataset files were ingested in a
+# single subprocess call with one global timeout — on a corpus this size that
+# call reliably ran past the limit and got killed mid-file, silently leaving
+# every document after the cutoff (and any partially-embedded one) without an
+# embedding. Ingesting one file per subprocess means a slow/stuck source
+# (e.g. icilome.jsonl, ~22k docs) can time out without blocking the other 25,
+# and each run makes real incremental progress instead of restarting from
+# scratch. Combined with the unchanged-content skip in the ingestor, repeat
+# runs only pay for what actually changed.
+INGEST_FILE_TIMEOUT_S = 1800
+
+
+@app.task(bind=True, max_retries=0, soft_time_limit=21000, time_limit=21600)
 def ingest_datasets(self, embed: bool = True) -> dict:
     """
-    Ingest all JSONL files in corpus/datasets/ into PostgreSQL.
+    Ingest all JSONL files in corpus/datasets/ into PostgreSQL, one subprocess
+    per file so a single slow file can't block the rest of the batch.
     """
     jsonl_files = sorted(DATASETS_DIR.glob("*.jsonl"))
     non_empty = [f for f in jsonl_files if f.stat().st_size > 0]
@@ -150,12 +170,19 @@ def ingest_datasets(self, embed: bool = True) -> dict:
     if not non_empty:
         return {"success": False, "reason": "no JSONL files found"}
 
-    cmd = [PYTHON, "-m", "rag.indexation.ingestor"] + [str(f) for f in non_empty]
-    if not embed:
-        cmd.append("--no-embed")
+    results = []
+    for f in non_empty:
+        cmd = [PYTHON, "-m", "rag.indexation.ingestor", str(f)]
+        if not embed:
+            cmd.append("--no-embed")
+        try:
+            result = subprocess.run(cmd, cwd=str(ROOT), timeout=INGEST_FILE_TIMEOUT_S)
+            results.append({"file": f.name, "success": result.returncode == 0, "timed_out": False})
+        except subprocess.TimeoutExpired:
+            results.append({"file": f.name, "success": False, "timed_out": True})
 
-    result = subprocess.run(cmd, cwd=str(ROOT), timeout=3590)
     return {
-        "success": result.returncode == 0,
+        "success": all(r["success"] for r in results),
         "files_processed": len(non_empty),
+        "results": results,
     }
