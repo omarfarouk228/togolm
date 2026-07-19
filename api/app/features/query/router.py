@@ -73,7 +73,7 @@ def _run_image_query(request: QueryRequest) -> QueryGraphResult:
     # a trivial/empty typed question ("salut", "c'est quoi ?") is fine to answer from the
     # image, but an image whose content is itself off-topic (e.g. a code screenshot) must
     # still be redirected like a text-only off-topic message would be.
-    if generation.route_query(search_question) == "off_topic":
+    if generation.route_query(search_question, request.history or []) == "off_topic":
         answer = generation.answer_without_corpus(request.question, request.history or [])
         return QueryGraphResult(
             answer=answer,
@@ -162,7 +162,7 @@ def _stream_image_query(
         image.mime_type, image.data, request.question
     )
     # See _run_image_query: guard on what the image shows, not on request.question.
-    if generation.route_query(search_question) == "off_topic":
+    if generation.route_query(search_question, request.history or []) == "off_topic":
         for event_type, text in generation.stream_without_corpus(
             request.question, request.history or []
         ):
@@ -259,8 +259,8 @@ def stream_query(
             yield from _stream_image_query(request, api_key, t0)
             return
 
-        off_topic = is_trivially_off_topic(request.question) or (
-            generation.route_query(request.question) == "off_topic"
+        off_topic = is_trivially_off_topic(request.question, has_history=bool(request.history)) or (
+            generation.route_query(request.question, request.history or []) == "off_topic"
         )
         if off_topic:
             for event_type, text in generation.stream_without_corpus(
