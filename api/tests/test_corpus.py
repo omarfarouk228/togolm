@@ -94,6 +94,28 @@ def test_get_document_not_found():
     assert response.status_code == 404
 
 
+def test_preview_document():
+    list_resp = client.get("/v1/documents?page_size=1")
+    doc = list_resp.json()["documents"][0]
+    if not doc["url"]:
+        pytest.skip("sampled document has no url")
+
+    response = client.get("/v1/documents/preview", params={"url": doc["url"]})
+    assert response.status_code == 200
+    data = response.json()
+    assert data["url"] == doc["url"]
+    assert data["source"] == doc["source"]
+    # Favicon is derived from our own source field, never fetched from the target URL.
+    assert data["favicon"] == f"https://www.google.com/s2/favicons?sz=64&domain={doc['source']}"
+
+
+def test_preview_document_not_found():
+    response = client.get(
+        "/v1/documents/preview", params={"url": "https://example.com/does-not-exist"}
+    )
+    assert response.status_code == 404
+
+
 def test_search():
     response = client.get("/v1/search?q=budget+togo")
     assert response.status_code == 200

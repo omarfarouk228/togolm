@@ -8,7 +8,7 @@ versioned, and keep user content in human messages (never in the system block).
 
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 
-PROMPT_VERSION = "2026-06-29b"
+PROMPT_VERSION = "2026-07-19"
 
 # --- System instructions -----------------------------------------------------
 
@@ -71,7 +71,15 @@ RAG_SYSTEM = (
     "italique (*texte*), listes à puces ou numérotées, titres ## et ###, blocs de code avec balise "
     "de langage (```python). N'utilise JAMAIS de tableaux, de HTML brut, de citations imbriquées "
     "(blockquotes), de notes de bas de page, ni de syntaxe markdown exotique — ces éléments ne "
-    "s'affichent pas correctement dans la plupart des clients de chat."
+    "s'affichent pas correctement dans la plupart des clients de chat.\n"
+    "11. GÉOLOCALISATION — si ta réponse mentionne un lieu identifiable (institution, "
+    "administration, quartier, ville, adresse précise trouvée dans le contexte), termine ta "
+    "réponse par une ligne au format : 📍 <adresse ou description du lieu> — "
+    "https://www.google.com/maps/search/?api=1&query=<lieu encodé pour une URL, en incluant "
+    "', Togo'>. Utilise l'adresse exacte du contexte si elle est disponible (ex. le champ "
+    "Contact d'une démarche administrative) ; sinon utilise le nom du lieu tel que connu. "
+    "N'ajoute cette ligne que si un lieu concret et pertinent a été mentionné, jamais pour une "
+    "réponse purement informative sans lieu (ex. un chiffre, une date, une liste de personnes)."
 )
 
 IMAGE_UNDERSTANDING_SYSTEM = (
@@ -101,13 +109,13 @@ OFF_TOPIC_SYSTEM = (
 )
 
 IMAGE_ANSWER_SYSTEM = RAG_SYSTEM + (
-    "\n\n11. Une image jointe par l'utilisateur accompagne cette question. Aucun document "
+    "\n\n12. Une image jointe par l'utilisateur accompagne cette question. Aucun document "
     "du corpus ne correspond : analyse directement l'image (contenu visible, texte, contexte) "
     "pour répondre le plus précisément possible."
 )
 
 IMAGE_CONTEXT_ANSWER_SYSTEM = RAG_SYSTEM + (
-    "\n\n11. Une image jointe par l'utilisateur accompagne cette question, ainsi qu'un contexte "
+    "\n\n12. Une image jointe par l'utilisateur accompagne cette question, ainsi qu'un contexte "
     "documentaire potentiellement pertinent. Regarde d'abord l'image : n'utilise le contexte "
     "documentaire que s'il correspond réellement à ce qu'elle montre. S'il ne correspond pas, "
     "ignore-le complètement, ne l'invente jamais comme lien avec l'image, et réponds uniquement "
