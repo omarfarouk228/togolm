@@ -215,3 +215,70 @@ class TestRetrieve:
             result = retrieve("liste des ministres du gouvernement togolais", top_k=9)
 
         assert len(result) == 4
+
+    def test_identity_query_prepends_office_title_boost(self):
+        # "qui est l'actuel président de la République ?" — regression found
+        # live 2026-07-20: the correct officeholder article ranked hundreds of
+        # positions below generic commentary on pure embedding similarity.
+        # The office-title boost query must run first (most recent title
+        # match), then the ordinary vector search fills the rest, excluding
+        # whatever the boost already surfaced.
+        boost_row = (
+            "Le Président de la République honore les citoyens les plus méritants",
+            "https://presidence.gouv.tg/a",
+            "presidence.gouv.tg",
+            "politics",
+            "Le Président de la République, Jean-Lucien Savi de Tové, a décerné...",
+            "2026-04-29",
+            0.77,
+        )
+        fill_row = (
+            "Faure Gnassingbé",
+            "https://fr.wikipedia.org/wiki/Faure_Gnassingbe",
+            "fr.wikipedia.org",
+            "politics",
+            "Faure Gnassingbé est...",
+            0.85,
+            None,
+        )
+
+        mock_cur = MagicMock()
+        mock_cur.__enter__ = lambda s: s
+        mock_cur.__exit__ = MagicMock(return_value=False)
+        mock_cur.fetchone.return_value = (1,)
+        mock_cur.fetchall.side_effect = [[boost_row], [fill_row]]
+        mock_conn = MagicMock()
+        mock_conn.cursor.return_value = mock_cur
+        mock_conn.__enter__ = lambda s: s
+        mock_conn.__exit__ = MagicMock(return_value=False)
+
+        with (
+            patch("rag.retrieval.search.get_conn", return_value=mock_conn),
+            patch("rag.retrieval.search._get_embedder") as mock_emb,
+        ):
+            mock_emb.return_value.encode_one.return_value = [0.1] * 384
+            result = retrieve("qui est l'actuel président de la République ?", top_k=5)
+
+        assert len(result) == 2
+        assert (
+            result[0].title
+            == "Le Président de la République honore les citoyens les plus méritants"
+        )
+        assert result[0].published_at == "2026-04-29"
+        assert result[1].title == "Faure Gnassingbé"
+
+    def test_non_identity_query_skips_office_title_boost(self):
+        # No known office named in the question — must fall straight through
+        # to the ordinary vector search with a single execute() call.
+        row = ("Titre doc", "https://test.tg", "test.tg", "legal", "Contenu.", 0.9, None)
+        mock_conn = self._mock_conn([row], chunk_count=1)
+
+        with (
+            patch("rag.retrieval.search.get_conn", return_value=mock_conn),
+            patch("rag.retrieval.search._get_embedder") as mock_emb,
+        ):
+            mock_emb.return_value.encode_one.return_value = [0.1] * 384
+            result = retrieve("quel est le budget de l'Etat togolais ?", top_k=5)
+
+        assert len(result) == 1
+        assert result[0].title == "Titre doc"

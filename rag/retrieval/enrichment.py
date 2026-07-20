@@ -18,6 +18,25 @@ _ENUMERATION_RE = re.compile(
     re.IGNORECASE,
 )
 
+_IDENTITY_RE = re.compile(
+    r"\b(qui\s+est|qui\s+dirige|qui\s+preside|qui\s+occupe|qui\s+a\s+succede|"
+    r"qui\s+remplace|qui\s+incarne|actuel(?:le)?\s+president|actuellement\s+president)\b",
+    re.IGNORECASE,
+)
+
+# Normalized (accent-stripped) trigger -> the accented phrase as it actually
+# appears in document titles, used for an ILIKE title-match boost. Kept
+# separate from _ALIASES: these aren't search-term expansions, they identify
+# a specific office so the retriever can fetch the most recently published
+# document naming its holder (see is_identity_query).
+_OFFICE_PHRASES: dict[str, str] = {
+    "president de la republique": "président de la République",
+    "president du conseil": "président du Conseil",
+    "premier ministre": "Premier ministre",
+    "president de l assemblee nationale": "président de l'Assemblée nationale",
+    "president du senat": "président du Sénat",
+}
+
 _ALIASES: dict[str, tuple[str, ...]] = {
     "anpe": ("agence nationale pour l emploi", "emploi", "travail"),
     "bceao": ("banque centrale des etats de l afrique de l ouest", "uemoa", "monnaie"),
@@ -143,6 +162,28 @@ def is_enumeration_query(text: str) -> bool:
     instead of applying its usual one-chunk-per-document diversification.
     """
     return bool(_ENUMERATION_RE.search(text))
+
+
+def is_identity_query(text: str) -> bool:
+    """True for "who currently holds office X" questions (e.g. "qui est
+    l'actuel président de la République ?").
+
+    Pure embedding similarity is unreliable here: a short, name-specific
+    article ("X élu président de la République") can rank hundreds of
+    positions below generic commentary that happens to repeat the same
+    office words many times without ever naming a holder. See
+    detect_office_phrase for the companion title-match boost.
+    """
+    return bool(_IDENTITY_RE.search(text))
+
+
+def detect_office_phrase(normalized_question: str) -> str | None:
+    """Return the accented title-search phrase for the office named in the
+    (already normalized/ascii) question, if any of the known ones matches."""
+    for trigger, phrase in _OFFICE_PHRASES.items():
+        if _contains_term(normalized_question, trigger):
+            return phrase
+    return None
 
 
 def normalize_query(text: str) -> str:

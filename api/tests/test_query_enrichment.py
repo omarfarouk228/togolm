@@ -3,9 +3,11 @@ Unit tests for deterministic query enrichment.
 """
 
 from rag.retrieval.enrichment import (
+    detect_office_phrase,
     enrich_query,
     infer_category,
     is_enumeration_query,
+    is_identity_query,
     normalize_query,
 )
 
@@ -55,6 +57,40 @@ def test_is_enumeration_query_false_for_single_fact_question():
 # Category coverage — regression guard for the most frequent production
 # queries that used to fall through to category=None (audit, 2026-07-19).
 # ---------------------------------------------------------------------------
+
+
+# ---------------------------------------------------------------------------
+# Identity queries — "qui est l'actuel président de la République ?" (found
+# live, 2026-07-20): pure vector similarity ranked the correct officeholder
+# article hundreds of positions below generic commentary. detect_office_phrase
+# drives a title-match boost in retrieval for this query shape.
+# ---------------------------------------------------------------------------
+
+
+def test_is_identity_query_detects_who_holds_office():
+    assert is_identity_query(normalize_query("qui est l'actuel président de la République ?"))
+    assert is_identity_query(normalize_query("qui dirige le Togo actuellement ?"))
+    assert is_identity_query(normalize_query("qui préside le Conseil des ministres ?"))
+
+
+def test_is_identity_query_false_for_unrelated_question():
+    assert not is_identity_query(normalize_query("liste des ministres du gouvernement togolais"))
+    assert not is_identity_query(normalize_query("quel est le budget de l'Etat togolais ?"))
+
+
+def test_detect_office_phrase_matches_known_offices():
+    assert (
+        detect_office_phrase(normalize_query("qui est l'actuel président de la République ?"))
+        == "président de la République"
+    )
+    assert (
+        detect_office_phrase(normalize_query("qui est le président du Conseil ?"))
+        == "président du Conseil"
+    )
+
+
+def test_detect_office_phrase_none_for_unknown_office():
+    assert detect_office_phrase(normalize_query("qui est le maire de Lomé ?")) is None
 
 
 def test_infer_category_covers_top_production_queries():
