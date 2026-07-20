@@ -122,7 +122,11 @@ def _history_text(history: History, limit: int = 4, truncate: int = 300) -> str:
 
 
 def _format_context(chunks: list[Any]) -> str:
-    context = "\n\n".join(f"[{c.source} — {c.title}]\n{c.content[:600]}" for c in chunks)
+    def _header(c: Any) -> str:
+        date = getattr(c, "published_at", None) or "date inconnue"
+        return f"[{c.source} — {c.title} — {date}]"
+
+    context = "\n\n".join(f"{_header(c)}\n{c.content[:600]}" for c in chunks)
     return context or "(aucun document disponible)"
 
 

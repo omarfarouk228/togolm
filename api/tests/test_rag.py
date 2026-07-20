@@ -114,7 +114,7 @@ class TestRetrieve:
         return mock_conn
 
     def test_returns_retrieved_chunks(self):
-        row = ("Titre doc", "https://test.tg", "test.tg", "legal", "Contenu.", 0.9)
+        row = ("Titre doc", "https://test.tg", "test.tg", "legal", "Contenu.", 0.9, "2026-01-01")
         mock_conn = self._mock_conn([row], chunk_count=1)
 
         with (
@@ -143,7 +143,7 @@ class TestRetrieve:
         assert result == []
 
     def test_falls_back_to_fulltext_when_no_chunks(self):
-        row = ("Titre FT", "https://test.tg", "test.tg", "legal", "Contenu FT.", 0.5)
+        row = ("Titre FT", "https://test.tg", "test.tg", "legal", "Contenu FT.", 0.5, "2026-01-01")
         mock_conn = self._mock_conn([row], chunk_count=0)
 
         with (
@@ -167,6 +167,7 @@ class TestRetrieve:
                 "politics",
                 "Chunk 1.",
                 0.9,
+                "2026-01-01",
             ),
             (
                 "Article gouvernement",
@@ -175,6 +176,7 @@ class TestRetrieve:
                 "politics",
                 "Chunk 2.",
                 0.85,
+                "2026-01-01",
             ),
         ]
         mock_conn = self._mock_conn(rows, chunk_count=2)
@@ -199,6 +201,7 @@ class TestRetrieve:
                 "politics",
                 f"Chunk {i}.",
                 0.9 - i * 0.01,
+                "2026-01-01",
             )
             for i in range(4)
         ]
