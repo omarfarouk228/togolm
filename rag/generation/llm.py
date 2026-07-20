@@ -67,9 +67,16 @@ def get_chat_model(
         "google_api_key": os.environ["GEMINI_API_KEY"],
         "max_output_tokens": max_output_tokens,
         "streaming": streaming,
+        # Gemini 2.5 models default to *dynamic* thinking (an unbounded, variable
+        # reasoning budget) when thinking_budget is left unset — it isn't the same
+        # as "off". Passing 0 explicitly is required to disable it. Without this,
+        # thinking tokens are drawn from the same max_output_tokens ceiling as the
+        # visible answer, so a request with a lot of context (e.g. an enumeration
+        # question retrieving several chunks) can spend most/all of its budget
+        # thinking and cut the visible answer off mid-sentence.
+        "thinking_budget": thinking_budget,
     }
     if thinking_budget > 0:
-        kwargs["thinking_budget"] = thinking_budget
         kwargs["include_thoughts"] = True
     return ChatGoogleGenerativeAI(**kwargs)
 
