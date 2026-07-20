@@ -34,6 +34,7 @@ class RetrievedChunk:
     category: str
     content: str
     score: float
+    published_at: str | None = None
 
 
 def retrieve(
@@ -96,7 +97,8 @@ def _chunk_vector_search(
     base_sql = """
         SELECT
             d.title, d.url, d.source, d.category, c.content,
-            1 - (c.embedding <=> %s::vector) AS score
+            1 - (c.embedding <=> %s::vector) AS score,
+            d.published_at
         FROM chunks c
         JOIN documents d ON d.id = c.document_id
         WHERE c.embedding IS NOT NULL
@@ -138,6 +140,7 @@ def _chunk_vector_search(
                 category=row[3] or "",
                 content=row[4] or "",
                 score=score,
+                published_at=str(row[6]) if row[6] else None,
             )
         )
         if len(results) >= top_k:
@@ -157,7 +160,8 @@ def _fulltext_search(
         SELECT
             title, url, source, category, clean_content,
             ts_rank(to_tsvector('french', coalesce(clean_content,'')),
-                    plainto_tsquery('french', %s)) AS score
+                    plainto_tsquery('french', %s)) AS score,
+            published_at
         FROM documents
         WHERE status = 'active'
           AND to_tsvector('french', coalesce(clean_content,'')) @@ plainto_tsquery('french', %s)
@@ -182,6 +186,7 @@ def _fulltext_search(
             category=row[3] or "",
             content=row[4] or "",
             score=float(row[5]),
+            published_at=str(row[6]) if row[6] else None,
         )
         for row in rows
     ]

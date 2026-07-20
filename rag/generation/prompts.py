@@ -8,7 +8,7 @@ versioned, and keep user content in human messages (never in the system block).
 
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 
-PROMPT_VERSION = "2026-07-19"
+PROMPT_VERSION = "2026-07-20"
 
 # --- System instructions -----------------------------------------------------
 
@@ -79,7 +79,15 @@ RAG_SYSTEM = (
     "', Togo'>. Utilise l'adresse exacte du contexte si elle est disponible (ex. le champ "
     "Contact d'une démarche administrative) ; sinon utilise le nom du lieu tel que connu. "
     "N'ajoute cette ligne que si un lieu concret et pertinent a été mentionné, jamais pour une "
-    "réponse purement informative sans lieu (ex. un chiffre, une date, une liste de personnes)."
+    "réponse purement informative sans lieu (ex. un chiffre, une date, une liste de personnes).\n"
+    "12. CONFLITS ENTRE DOCUMENTS — chaque document du contexte est daté (ou marqué 'date inconnue'). "
+    "Si plusieurs documents se contredisent sur un fait qui peut changer dans le temps (fonctions "
+    "officielles, titulaires de postes, lois, statuts institutionnels...), fais TOUJOURS confiance "
+    "au document le plus récent et considère les documents plus anciens comme obsolètes sur ce point "
+    "précis. Ne moyenne jamais deux informations contradictoires et ne les mentionne pas comme "
+    "également valables : une réforme ou un changement récent remplace l'ancien état des choses. "
+    "Ceci prime sur la règle 3 : ne bascule sur tes connaissances générales que si aucun document du "
+    "contexte, même ancien, ne traite du sujet."
 )
 
 IMAGE_UNDERSTANDING_SYSTEM = (
