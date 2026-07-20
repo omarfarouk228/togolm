@@ -43,6 +43,23 @@ class TestGetChatModel:
         model = get_chat_model(max_output_tokens=100, use_fallback_model=True)
         assert model.model == "gemini-3-pro-preview"
 
+    def test_thinking_disabled_by_default(self, monkeypatch):
+        # Regression: Gemini 2.5 defaults to *dynamic* (unbounded) thinking when
+        # thinking_budget is left unset, not thinking=off. Left unset, thinking
+        # tokens draw from the same max_output_tokens ceiling as the visible
+        # answer and can silently truncate it for context-heavy requests. Every
+        # answer-generation call site in this codebase relies on the default
+        # (none pass thinking_budget), so the factory must send 0 explicitly.
+        monkeypatch.setenv("GEMINI_API_KEY", "AQ.fake-key")
+        model = get_chat_model(max_output_tokens=100)
+        assert model.thinking_budget == 0
+
+    def test_thinking_enabled_when_budget_requested(self, monkeypatch):
+        monkeypatch.setenv("GEMINI_API_KEY", "AQ.fake-key")
+        model = get_chat_model(max_output_tokens=100, thinking_budget=500)
+        assert model.thinking_budget == 500
+        assert model.include_thoughts is True
+
 
 class TestHasDistinctFallbackModel:
     def test_true_by_default(self, monkeypatch):
