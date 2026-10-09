@@ -134,3 +134,16 @@ class TestRunSpiderTimeout:
             "timed_out": True,
             "output_kb": 0,
         }
+
+
+class TestProjectOnPath:
+    def test_root_is_added_back_after_celery_removed_it(self, monkeypatch):
+        # celery -A only keeps the project root on sys.path while loading the
+        # app; embed_pending_chunks must restore it before importing rag.
+        import sys
+
+        from corpus import tasks
+
+        monkeypatch.setattr(sys, "path", [p for p in sys.path if p != str(tasks.ROOT)])
+        tasks._ensure_project_on_path()
+        assert sys.path[0] == str(tasks.ROOT)
