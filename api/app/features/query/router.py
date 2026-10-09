@@ -120,6 +120,17 @@ def _run_image_query(request: QueryRequest) -> QueryGraphResult:
     )
 
 
+def _run_text_query(request: QueryRequest):
+    """Run the query graph, translating local-language questions to French
+    first; the answer is still written in request.language."""
+    return run_query_graph(
+        question=generation.question_for_pipeline(request.question, request.language),
+        category=request.category,
+        language=request.language,
+        history=request.history,
+    )
+
+
 @router.post("/query", response_model=QueryResponse)
 async def query_corpus(
     request: QueryRequest,
@@ -133,13 +144,7 @@ async def query_corpus(
         if request.image:
             result = await asyncio.to_thread(_run_image_query, request)
         else:
-            result = await asyncio.to_thread(
-                run_query_graph,
-                question=request.question,
-                category=request.category,
-                language=request.language,
-                history=request.history,
-            )
+            result = await asyncio.to_thread(_run_text_query, request)
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Retrieval error: {e}")
 
@@ -278,12 +283,15 @@ def stream_query(
             yield from _stream_image_query(request, api_key, t0)
             return
 
-        off_topic = is_trivially_off_topic(request.question, has_history=bool(request.history)) or (
-            generation.route_query(request.question, request.history or []) == "off_topic"
+        # Éwé/Kabiyè questions go through routing and retrieval in French.
+        question = generation.question_for_pipeline(request.question, request.language)
+
+        off_topic = is_trivially_off_topic(question, has_history=bool(request.history)) or (
+            generation.route_query(question, request.history or []) == "off_topic"
         )
         if off_topic:
             for event_type, text in generation.stream_without_corpus(
-                request.question, request.history or []
+                question, request.history or []
             ):
                 yield _sse(event_type, text)
             latency_ms = int((time.monotonic() - t0) * 1000)
@@ -296,9 +304,9 @@ def stream_query(
 
         # Rewrite the question using conversation history so the vector search
         # operates on a standalone, fully-resolved query instead of a pronoun-laden follow-up.
-        search_question = request.question
+        search_question = question
         if request.history:
-            search_question = rewrite_question_with_history(request.question, request.history)
+            search_question = rewrite_question_with_history(question, request.history)
         enriched = enrich_query(search_question, category=request.category)
 
         try:
@@ -315,10 +323,11 @@ def stream_query(
         if gemini_available():
             try:
                 for event_type, text in generation.stream_answer(
-                    request.question,
+                    question,
                     chunks,
                     request.history or [],
                     max_output_tokens=request.max_tokens,
+                    language=request.language,
                 ):
                     yield _sse(event_type, text)
             except Exception:

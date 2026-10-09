@@ -118,6 +118,7 @@ def build_query_graph(
             state["question"],
             state.get("chunks", []),
             history=history_dicts,
+            language=state.get("language", "fr"),
         )
         return {"answer": answer}
 
