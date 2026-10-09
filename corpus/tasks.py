@@ -100,6 +100,10 @@ def run_spider(self, spider_name: str) -> dict:
         "-L",
         "WARNING",
     ]
+    if spider_name in NEWS_SPIDERS:
+        # Incremental: skip articles already in the database (see
+        # scrapers.middlewares.SkipKnownUrlsMiddleware).
+        cmd += ["-s", "SKIP_KNOWN_URLS=1"]
 
     # A spider that overruns its budget must not raise: the TimeoutExpired
     # exception isn't JSON-serializable, so letting it escape made Celery fail

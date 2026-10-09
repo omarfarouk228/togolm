@@ -138,7 +138,10 @@ RAG_ANSWER_PROMPT = ChatPromptTemplate.from_messages(
     [
         ("system", RAG_SYSTEM),
         MessagesPlaceholder("history", optional=True),
-        ("human", "CONTEXTE :\n{context}\n\nQUESTION : {question}\n\nRÉPONSE :"),
+        (
+            "human",
+            "CONTEXTE :\n{context}\n\nQUESTION : {question}\n\n{language_instruction}RÉPONSE :",
+        ),
     ]
 )
 
@@ -168,5 +171,55 @@ ROUTER_PROMPT = ChatPromptTemplate.from_messages(
         ("system", ROUTER_SYSTEM),
         MessagesPlaceholder("history", optional=True),
         ("human", "Message : {question}"),
+    ]
+)
+
+
+# --- Answer language ------------------------------------------------------------
+#
+# The API's `language` field picks the answer language. French needs no extra
+# instruction (rule 4 of RAG_SYSTEM already defaults to it). Éwé and Kabiyè are
+# Togo's two national languages; the model's command of them is uneven, so the
+# instruction keeps official names in French and asks for simple sentences, and
+# clients flag these answers as experimental.
+
+SUPPORTED_LANGUAGES = ("fr", "en", "ee", "kbp")
+# Languages the question may be typed in that routing, enrichment and
+# full-text search don't understand: translated to French first.
+LOCAL_LANGUAGES = ("ee", "kbp")
+
+LANGUAGE_INSTRUCTIONS = {
+    "fr": "",
+    "en": "CONSIGNE DE LANGUE (prioritaire sur la règle 4) : réponds en anglais.\n\n",
+    "ee": (
+        "CONSIGNE DE LANGUE (prioritaire sur la règle 4) : réponds en éwé (Èʋegbe), "
+        "langue nationale du Togo, avec l'orthographe standard (ɖ, ɛ, ƒ, ɣ, ŋ, ɔ, ʋ). "
+        "Écris des phrases courtes et simples. Garde en français les noms officiels "
+        "d'institutions, de lois, de documents et de démarches administratives, ainsi "
+        "que les montants et les dates.\n\n"
+    ),
+    "kbp": (
+        "CONSIGNE DE LANGUE (prioritaire sur la règle 4) : réponds en kabiyè (Kabɩyɛ), "
+        "langue nationale du Togo, avec l'orthographe standard (ɖ, ɛ, ɩ, ŋ, ɔ, ʊ). "
+        "Écris des phrases courtes et simples. Garde en français les noms officiels "
+        "d'institutions, de lois, de documents et de démarches administratives, ainsi "
+        "que les montants et les dates.\n\n"
+    ),
+}
+
+
+def language_instruction(language: str | None) -> str:
+    return LANGUAGE_INSTRUCTIONS.get((language or "fr").lower(), "")
+
+
+TRANSLATE_TO_FRENCH_PROMPT = ChatPromptTemplate.from_messages(
+    [
+        (
+            "human",
+            "Traduis cette question en français, fidèlement et sans y répondre. "
+            "Elle peut être en éwé, en kabiyè, en français ou mélanger plusieurs langues ; "
+            "si elle est déjà en français, recopie-la telle quelle. "
+            "Réponds UNIQUEMENT avec la question traduite.\n\n{question}",
+        )
     ]
 )

@@ -35,3 +35,10 @@ TELNETCONSOLE_ENABLED = False
 # Close the spider gracefully (flushing its JSONL output) a few minutes before
 # corpus.tasks.SPIDER_TIMEOUT_S kills the subprocess outright.
 CLOSESPIDER_TIMEOUT = 2700
+
+# Incremental crawl for news spiders (enabled per run with -s SKIP_KNOWN_URLS=1
+# by corpus.tasks.run_spider): don't re-download already-ingested articles.
+DOWNLOADER_MIDDLEWARES = {
+    "scrapers.middlewares.SkipKnownUrlsMiddleware": 50,
+}
+SKIP_KNOWN_URLS = False

@@ -79,7 +79,21 @@ class TestQueryEndpoint:
         assert resp.status_code == 200
         kwargs = mock_r.call_args.kwargs
         assert "office togolais des recettes" in kwargs["question"]
-        assert kwargs["category"] == "economy"
+        # The inferred category ("economy") is logged but no longer filters
+        # retrieval: only an explicit request category does.
+        assert kwargs["category"] is None
+
+    def test_explicit_category_filters_retrieval(self):
+        with (
+            patch("rag.retrieval.retrieve", return_value=[FAKE_CHUNK]) as mock_r,
+            patch("rag.generation.build_answer", return_value="OK"),
+        ):
+            resp = client.post(
+                "/v1/query", json={"question": "Quels impots OTR au Togo ?", "category": "legal"}
+            )
+
+        assert resp.status_code == 200
+        assert mock_r.call_args.kwargs["category"] == "legal"
 
     def test_empty_corpus_returns_answer(self):
         with patch("rag.retrieval.retrieve", return_value=[]):

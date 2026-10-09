@@ -26,10 +26,13 @@ from rag.generation.prompts import (
     IMAGE_ANSWER_SYSTEM,
     IMAGE_CONTEXT_ANSWER_SYSTEM,
     IMAGE_UNDERSTANDING_SYSTEM,
+    LOCAL_LANGUAGES,
     OFF_TOPIC_PROMPT,
     RAG_ANSWER_PROMPT,
     REWRITE_PROMPT,
     ROUTER_PROMPT,
+    TRANSLATE_TO_FRENCH_PROMPT,
+    language_instruction,
 )
 
 History = list[Any]
@@ -165,7 +168,11 @@ def _iter_chunk_events(chunk: Any) -> Iterator[tuple[str, str]]:
 
 
 def build_answer(
-    question: str, chunks: list[Any], history: History | None = None, max_output_tokens: int = 2048
+    question: str,
+    chunks: list[Any],
+    history: History | None = None,
+    max_output_tokens: int = 2048,
+    language: str = "fr",
 ) -> str:
     """Assemble an answer from retrieved chunks (graph answer_builder).
 
@@ -175,7 +182,7 @@ def build_answer(
     """
     if gemini_available():
         try:
-            return _generate_answer(question, chunks, history or [], max_output_tokens)
+            return _generate_answer(question, chunks, history or [], max_output_tokens, language)
         except Exception:
             pass
     if not chunks:
@@ -184,7 +191,11 @@ def build_answer(
 
 
 def _generate_answer(
-    question: str, chunks: list[Any], history: History, max_output_tokens: int = 2048
+    question: str,
+    chunks: list[Any],
+    history: History,
+    max_output_tokens: int = 2048,
+    language: str = "fr",
 ) -> str:
     chain = (
         RAG_ANSWER_PROMPT
@@ -196,6 +207,7 @@ def _generate_answer(
             "context": _format_context(chunks),
             "question": question,
             "history": _history_messages(history, limit=6, truncate=400),
+            "language_instruction": language_instruction(language),
         }
     )
 
@@ -231,6 +243,28 @@ def rewrite_question_with_history(question: str, history: History) -> str:
             {"history_text": _history_text(history), "question": question}
         ).strip()
         return rewritten or question
+    except Exception:
+        return question
+
+
+def question_for_pipeline(question: str, language: str) -> str:
+    """French version of a question typed in a local language (Éwé, Kabiyè).
+
+    Routing, query enrichment and French full-text search only understand
+    French; the answer is still written in the requested language (see
+    prompts.LANGUAGE_INSTRUCTIONS). Returns the question unchanged for other
+    languages, or when Gemini is unavailable or the call fails.
+    """
+    if language not in LOCAL_LANGUAGES or not question.strip() or not gemini_available():
+        return question
+    chain = (
+        TRANSLATE_TO_FRENCH_PROMPT
+        | get_chat_model_with_fallback(max_output_tokens=300)
+        | StrOutputParser()
+    )
+    try:
+        translated = chain.invoke({"question": question}).strip()
+        return translated or question
     except Exception:
         return question
 
@@ -342,7 +376,11 @@ def _image_context_answer_messages(
 
 
 def stream_answer(
-    question: str, chunks: list[Any], history: History | None = None, max_output_tokens: int = 2048
+    question: str,
+    chunks: list[Any],
+    history: History | None = None,
+    max_output_tokens: int = 2048,
+    language: str = "fr",
 ) -> Iterator[tuple[str, str]]:
     """Stream a RAG answer. Raises on LLM failure so the caller can fall back."""
     history_msgs = _history_messages(history or [], limit=6, truncate=400)
@@ -350,6 +388,7 @@ def stream_answer(
         context=_format_context(chunks),
         question=question,
         history=history_msgs,
+        language_instruction=language_instruction(language),
     )
     model = get_chat_model_with_fallback(max_output_tokens=max_output_tokens, streaming=True)
     for chunk in model.stream(messages):
