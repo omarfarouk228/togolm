@@ -16,6 +16,11 @@ from pathlib import Path
 from corpus.celery_app import app
 
 ROOT = Path(__file__).resolve().parent.parent
+# Tasks that import project packages in-process (e.g. embed_pending_chunks ->
+# rag.indexation.backfill) need the project root on sys.path: the celery
+# worker doesn't add it (the other tasks only shell out to subprocesses).
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
 SCRAPY_DIR = ROOT / "corpus"
 DATASETS_DIR = ROOT / "corpus" / "datasets"
 
