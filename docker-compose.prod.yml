@@ -69,6 +69,11 @@ services:
     volumes:
       # Spider output survives redeploys (it lived in the container layer before).
       - datasets:/app/corpus/datasets
+    labels:
+      # Never route HTTP traffic here. On 2026-10-09 Coolify had api.togolm.com
+      # assigned to the worker and beat too; once the worker became healthy,
+      # Traefik started sending API requests to it and the API returned 502.
+      - traefik.enable=false
     environment:
       POSTGRES_HOST: db
       POSTGRES_PORT: 5432
@@ -115,6 +120,8 @@ services:
     # Only ONE beat may ever run, or every scheduled task fires twice.
     healthcheck:
       disable: true
+    labels:
+      - traefik.enable=false  # see celery-worker
 
 volumes:
   pgdata:
