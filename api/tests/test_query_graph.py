@@ -40,7 +40,7 @@ def test_query_graph_enriches_before_retrieval():
         answer_builder=lambda _question, _chunks, history=None: "answer",
     )
 
-    assert calls["category"] == "legal"
+    assert calls["category"] is None  # inferred category is not a retrieval filter
     assert "societe a responsabilite limitee" in calls["question"]
     assert result.answer == "answer"
     assert result.chunks == [FAKE_CHUNK]
@@ -113,6 +113,6 @@ def test_query_graph_uses_history_rewriter():
         answer_builder=lambda _question, _chunks, history=None: "answer",
     )
 
-    assert calls["category"] == "legal"
+    assert calls["category"] is None  # inferred category is not a retrieval filter
     assert "rccm" in calls["question"]
     assert result.search_category == "legal"

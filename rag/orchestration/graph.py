@@ -103,7 +103,11 @@ def build_query_graph(
     def retrieve_node(state: QueryGraphState) -> dict:
         chunks = retriever(
             question=state["search_question"],
-            category=state.get("search_category"),
+            # Only an explicitly requested category filters retrieval. The
+            # inferred one (search_category, kept for analytics) excluded the
+            # right sources too often: on a 16-question eval, filtering on it
+            # dropped hit@5 from 100% to 88% (e.g. NIF/OTR, CFE questions).
+            category=state.get("category"),
             top_k=top_k,
         )
         return {"chunks": chunks}

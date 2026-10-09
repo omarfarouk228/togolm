@@ -6,6 +6,8 @@ All DB and embedder calls are mocked — no real PostgreSQL needed.
 
 from unittest.mock import MagicMock, patch
 
+import pytest
+
 from rag.generation import build_answer
 from rag.retrieval import RetrievedChunk, retrieve
 
@@ -98,6 +100,15 @@ class TestBuildAnswer:
 # ---------------------------------------------------------------------------
 
 
+@pytest.fixture
+def _stub_fts_query():
+    # The full-text leg builds its tsquery with extra DB round trips; the
+    # retrieve tests below feed one canned row set to every query instead.
+    with patch("rag.retrieval.search._build_or_tsquery", return_value="'test'"):
+        yield
+
+
+@pytest.mark.usefixtures("_stub_fts_query")
 class TestRetrieve:
     def _mock_conn(self, rows: list, chunk_count: int = 1):
         """Build a mock psycopg2 connection that returns given rows."""
@@ -121,7 +132,7 @@ class TestRetrieve:
             patch("rag.retrieval.search.get_conn", return_value=mock_conn),
             patch("rag.retrieval.search._get_embedder") as mock_emb,
         ):
-            mock_emb.return_value.encode_one.return_value = [0.1] * 384
+            mock_emb.return_value.encode_query.return_value = [0.1] * 384
             result = retrieve("question de test", top_k=1)
 
         assert len(result) == 1
@@ -129,15 +140,17 @@ class TestRetrieve:
         assert result[0].score == 0.9
 
     def test_filters_low_score_chunks(self):
-        # Score 0.1 is well below min_score=0.62 → filtered out
+        # Score 0.1 is well below min_score → filtered out of the vector leg
+        # (no full-text match here: full-text hits are kept on lexical evidence).
         row = ("Titre", "https://test.tg", "test.tg", "legal", "Contenu.", 0.1)
         mock_conn = self._mock_conn([row], chunk_count=1)
 
         with (
             patch("rag.retrieval.search.get_conn", return_value=mock_conn),
             patch("rag.retrieval.search._get_embedder") as mock_emb,
+            patch("rag.retrieval.search._build_or_tsquery", return_value=None),
         ):
-            mock_emb.return_value.encode_one.return_value = [0.1] * 384
+            mock_emb.return_value.encode_query.return_value = [0.1] * 384
             result = retrieve("question", top_k=5)
 
         assert result == []
@@ -150,7 +163,7 @@ class TestRetrieve:
             patch("rag.retrieval.search.get_conn", return_value=mock_conn),
             patch("rag.retrieval.search._get_embedder") as mock_emb,
         ):
-            mock_emb.return_value.encode_one.return_value = [0.1] * 384
+            mock_emb.return_value.encode_query.return_value = [0.1] * 384
             result = retrieve("question")
 
         assert len(result) == 1
@@ -185,7 +198,7 @@ class TestRetrieve:
             patch("rag.retrieval.search.get_conn", return_value=mock_conn),
             patch("rag.retrieval.search._get_embedder") as mock_emb,
         ):
-            mock_emb.return_value.encode_one.return_value = [0.1] * 384
+            mock_emb.return_value.encode_query.return_value = [0.1] * 384
             result = retrieve("Qui dirige ce ministère ?", top_k=5)
 
         assert len(result) == 1
@@ -211,7 +224,7 @@ class TestRetrieve:
             patch("rag.retrieval.search.get_conn", return_value=mock_conn),
             patch("rag.retrieval.search._get_embedder") as mock_emb,
         ):
-            mock_emb.return_value.encode_one.return_value = [0.1] * 384
+            mock_emb.return_value.encode_query.return_value = [0.1] * 384
             result = retrieve("liste des ministres du gouvernement togolais", top_k=9)
 
         assert len(result) == 4
@@ -246,7 +259,7 @@ class TestRetrieve:
         mock_cur.__enter__ = lambda s: s
         mock_cur.__exit__ = MagicMock(return_value=False)
         mock_cur.fetchone.return_value = (1,)
-        mock_cur.fetchall.side_effect = [[boost_row], [fill_row]]
+        mock_cur.fetchall.side_effect = [[boost_row], [fill_row], []]
         mock_conn = MagicMock()
         mock_conn.cursor.return_value = mock_cur
         mock_conn.__enter__ = lambda s: s
@@ -256,7 +269,7 @@ class TestRetrieve:
             patch("rag.retrieval.search.get_conn", return_value=mock_conn),
             patch("rag.retrieval.search._get_embedder") as mock_emb,
         ):
-            mock_emb.return_value.encode_one.return_value = [0.1] * 384
+            mock_emb.return_value.encode_query.return_value = [0.1] * 384
             result = retrieve("qui est l'actuel président de la République ?", top_k=5)
 
         assert len(result) == 2
@@ -277,8 +290,118 @@ class TestRetrieve:
             patch("rag.retrieval.search.get_conn", return_value=mock_conn),
             patch("rag.retrieval.search._get_embedder") as mock_emb,
         ):
-            mock_emb.return_value.encode_one.return_value = [0.1] * 384
+            mock_emb.return_value.encode_query.return_value = [0.1] * 384
             result = retrieve("quel est le budget de l'Etat togolais ?", top_k=5)
 
         assert len(result) == 1
         assert result[0].title == "Titre doc"
+
+
+# ---------------------------------------------------------------------------
+# Hybrid retrieval: RRF fusion and full-text fallback
+# ---------------------------------------------------------------------------
+
+
+def _chunk(url: str, content: str = "c", score: float = 0.8):
+    from rag.retrieval import RetrievedChunk
+
+    return RetrievedChunk(
+        title="Titre suffisamment long",
+        url=url,
+        source="test.tg",
+        category="legal",
+        content=content,
+        score=score,
+    )
+
+
+class TestFuseRankings:
+    def test_document_found_by_both_systems_ranks_first(self):
+        from rag.retrieval.search import fuse_rankings
+
+        vector = [_chunk("https://a.tg"), _chunk("https://b.tg"), _chunk("https://c.tg")]
+        fts = [_chunk("https://c.tg", content="autre passage"), _chunk("https://d.tg")]
+        result = fuse_rankings(vector, fts, top_k=4)
+        assert [c.url for c in result] == [
+            "https://c.tg",
+            "https://a.tg",
+            "https://b.tg",
+            "https://d.tg",
+        ]
+        # The vector system's chunk is kept for a document both systems found.
+        assert result[0].content == "c"
+
+    def test_fulltext_only_document_is_kept(self):
+        # The NIF/OTR case: the right page exists only in the full-text ranking.
+        from rag.retrieval.search import fuse_rankings
+
+        result = fuse_rankings([_chunk("https://a.tg")], [_chunk("https://otr.tg/nif")], top_k=5)
+        assert {c.url for c in result} == {"https://a.tg", "https://otr.tg/nif"}
+
+    def test_enumeration_keeps_several_chunks_per_document(self):
+        from rag.retrieval.search import fuse_rankings
+
+        vector = [_chunk("https://gouv.tg/liste", content=f"partie {i}") for i in range(4)]
+        result = fuse_rankings(vector, [], top_k=9, max_chunks_per_document=4)
+        assert len(result) == 4
+
+
+@pytest.mark.usefixtures("_stub_fts_query")
+class TestRetrieveEmbeddingFailure:
+    def test_falls_back_to_fulltext_when_query_cannot_be_embedded(self):
+        row = (
+            "Titre doc OTR",
+            "https://otr.tg/nif",
+            "otr.tg",
+            "administrative",
+            "NIF...",
+            None,
+            None,
+        )
+        mock_cur = MagicMock()
+        mock_cur.__enter__ = lambda s: s
+        mock_cur.__exit__ = MagicMock(return_value=False)
+        mock_cur.fetchone.return_value = (True,)
+        mock_cur.fetchall.return_value = [row]
+        mock_conn = MagicMock()
+        mock_conn.cursor.return_value = mock_cur
+
+        with (
+            patch("rag.retrieval.search.get_conn", return_value=mock_conn),
+            patch("rag.retrieval.search._get_embedder") as mock_emb,
+        ):
+            mock_emb.return_value.encode_query.side_effect = RuntimeError("429")
+            result = retrieve("Comment obtenir un NIF ?")
+
+        from rag.retrieval.search import FTS_ONLY_SCORE
+
+        assert [c.url for c in result] == ["https://otr.tg/nif"]
+        assert result[0].score == FTS_ONLY_SCORE
+
+
+class TestBuildOrTsquery:
+    def test_drops_lexemes_present_in_too_many_documents(self):
+        from rag.retrieval import search
+
+        cur = MagicMock()
+        cur.fetchall.side_effect = [
+            [("obten",), ("nif",), ("otr",)],  # question lexemes
+            [("obten", 9000), ("nif", 40), ("otr", 300)],  # document frequencies
+        ]
+        cur.fetchone.return_value = (70000,)
+        with patch.object(search, "_df_cache", {}), patch.object(search, "_doc_total", None):
+            assert search._build_or_tsquery(cur, "Comment obtenir un NIF à l'OTR ?") == (
+                "'nif' | 'otr'"
+            )
+
+    def test_keeps_two_rarest_when_every_word_is_common(self):
+        from rag.retrieval import search
+
+        cur = MagicMock()
+        cur.fetchall.side_effect = [
+            [("a1",), ("b2",), ("c3",)],
+            [("a1", 9000), ("b2", 5000), ("c3", 7000)],
+        ]
+        cur.fetchone.return_value = (70000,)
+        with patch.object(search, "_df_cache", {}), patch.object(search, "_doc_total", None):
+            assert search._build_or_tsquery(cur, "q") == "'b2' | 'c3'"
