@@ -37,7 +37,7 @@ def test_query_graph_enriches_before_retrieval():
         answer_without_corpus=lambda _question, _history: "off topic",
         rewrite_question=lambda question, _history: question,
         retriever=retriever,
-        answer_builder=lambda _question, _chunks, history=None: "answer",
+        answer_builder=lambda _question, _chunks, **_kwargs: "answer",
     )
 
     assert calls["category"] is None  # inferred category is not a retrieval filter
@@ -61,7 +61,7 @@ def test_query_graph_router_redirects_off_topic_without_retrieval():
         answer_without_corpus=lambda _question, _history: "Posez-moi une question sur le Togo.",
         rewrite_question=lambda question, _history: question,
         retriever=retriever,
-        answer_builder=lambda _question, _chunks, history=None: "answer",
+        answer_builder=lambda _question, _chunks, **_kwargs: "answer",
     )
 
     assert result.answer == "Posez-moi une question sur le Togo."
@@ -86,7 +86,7 @@ def test_query_graph_trivial_guard_skips_router_and_retrieval():
         answer_without_corpus=lambda _question, _history: "Posez-moi une question sur le Togo.",
         rewrite_question=lambda question, _history: question,
         retriever=retriever,
-        answer_builder=lambda _question, _chunks, history=None: "answer",
+        answer_builder=lambda _question, _chunks, **_kwargs: "answer",
     )
 
     assert result.is_off_topic
@@ -110,7 +110,7 @@ def test_query_graph_uses_history_rewriter():
         answer_without_corpus=lambda _question, _history: "off topic",
         rewrite_question=lambda _question, _history: "Comment creer une SARL au Togo ?",
         retriever=retriever,
-        answer_builder=lambda _question, _chunks, history=None: "answer",
+        answer_builder=lambda _question, _chunks, **_kwargs: "answer",
     )
 
     assert calls["category"] is None  # inferred category is not a retrieval filter

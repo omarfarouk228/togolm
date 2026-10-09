@@ -43,6 +43,16 @@ class QueryRequest(BaseModel):
     history: list[HistoryMessage] = Field(default_factory=list, max_length=20)
     image: ImageAttachment | None = None
 
+    @field_validator("language")
+    @classmethod
+    def _normalize_language(cls, v: str) -> str:
+        """'fr', 'en', 'ee' (Éwé) or 'kbp' (Kabiyè); region tags like 'fr-TG'
+        are reduced to the base language, anything else falls back to 'fr'."""
+        from rag.generation.prompts import SUPPORTED_LANGUAGES
+
+        base = (v or "fr").strip().lower().replace("_", "-").split("-")[0]
+        return base if base in SUPPORTED_LANGUAGES else "fr"
+
     @model_validator(mode="after")
     def _validate_question(self) -> "QueryRequest":
         # A photo carries its own intent, so the typed question may be empty.
