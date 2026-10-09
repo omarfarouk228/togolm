@@ -500,7 +500,18 @@ def get_health(conn, r: redis.Redis) -> dict:
     except Exception:
         pass
 
+    # Chunks still waiting on rag.indexation.backfill (missing vector, untagged
+    # legacy vector, or vector from a non-canonical model).
+    embedding_backlog = None
+    try:
+        from rag.indexation.backfill import pending_counts
+
+        embedding_backlog = pending_counts()
+    except Exception:
+        pass
+
     return {
+        "embedding_backlog": embedding_backlog,
         "database": {
             "status": "ok" if db_ok else "error",
             "details": {

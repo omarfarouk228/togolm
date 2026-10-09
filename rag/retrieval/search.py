@@ -10,6 +10,7 @@ Generation (LLM) is kept separate in ``generation``; this module only handles
 retrieval and returns scored chunks with metadata.
 """
 
+import os
 from dataclasses import dataclass
 
 from db import get_conn
@@ -22,6 +23,21 @@ from rag.retrieval.enrichment import (
 )
 
 _embedder = None
+
+# pgvector's ANN indexes default to very low recall at this corpus size: with
+# ivfflat (lists=350) the default probes=1 scans ~1/350 of the vectors, measured
+# on prod at 59% recall@10 vs 95.5% with probes=20. Both settings are harmless
+# when the other index type is in use.
+IVFFLAT_PROBES = int(os.getenv("RAG_IVFFLAT_PROBES", "20"))
+HNSW_EF_SEARCH = int(os.getenv("RAG_HNSW_EF_SEARCH", "100"))
+
+
+def _configure_ann(cur) -> None:
+    cur.execute(f"SET ivfflat.probes = {IVFFLAT_PROBES}")
+    cur.execute(f"SET hnsw.ef_search = {HNSW_EF_SEARCH}")
+    # Keep scanning the HNSW graph when WHERE filters drop candidates, instead
+    # of returning fewer than LIMIT rows (pgvector >= 0.8).
+    cur.execute("SET hnsw.iterative_scan = relaxed_order")
 
 
 def _get_embedder():
@@ -66,11 +82,16 @@ def retrieve(
     conn = get_conn(vector=True)
     try:
         with conn.cursor() as cur:
-            cur.execute("SELECT COUNT(*) FROM chunks WHERE embedding IS NOT NULL")
-            has_chunks = cur.fetchone()[0] > 0
+            # EXISTS stops at the first row; COUNT(*) scanned ~300k rows on
+            # every question (~170 ms on prod).
+            cur.execute("SELECT EXISTS (SELECT 1 FROM chunks WHERE embedding IS NOT NULL)")
+            has_chunks = bool(cur.fetchone()[0])
 
             if not has_chunks:
                 return _fulltext_search(cur, question, category, top_k)
+
+            _configure_ann(cur)
+            model_id = getattr(embedder, "model_id", None)
 
             # "Qui est l'actuel président de la République ?"-style questions:
             # pure embedding similarity is unreliable for "who holds office X
@@ -84,7 +105,7 @@ def retrieve(
                 office_phrase = detect_office_phrase(normalized_question)
                 if office_phrase:
                     boosted = _office_title_boost(
-                        cur, query_vector, office_phrase, category, limit=2
+                        cur, query_vector, office_phrase, category, limit=2, model_id=model_id
                     )
 
             excluded_urls = {c.url for c in boosted if c.url}
@@ -97,6 +118,7 @@ def retrieve(
                 min_score,
                 max_chunks_per_document=max_chunks_per_document,
                 excluded_urls=excluded_urls,
+                model_id=model_id,
             )
             return boosted + vector_results
     finally:
@@ -111,6 +133,7 @@ def _chunk_vector_search(
     min_score: float,
     max_chunks_per_document: int = 1,
     excluded_urls: set[str] | None = None,
+    model_id: str | None = None,
 ) -> list[RetrievedChunk]:
     """Vector search over chunks, joining back to documents for metadata.
 
@@ -136,6 +159,12 @@ def _chunk_vector_search(
           AND length(trim(coalesce(d.title, ''))) > 15
     """
     params: list = [query_vector]
+
+    if model_id:
+        # Skip vectors known to come from another model (meaningless scores);
+        # untagged legacy vectors stay searchable until the backfill sorts them.
+        base_sql += " AND (c.embedding_model IS NULL OR c.embedding_model = %s)"
+        params.append(model_id)
 
     if category:
         base_sql += " AND d.category = %s"
@@ -186,6 +215,7 @@ def _office_title_boost(
     title_phrase: str,
     category: str | None,
     limit: int,
+    model_id: str | None = None,
 ) -> list[RetrievedChunk]:
     """Surface the most recently published document(s) whose title literally
     names the office asked about (see enrichment.detect_office_phrase),
@@ -208,6 +238,10 @@ def _office_title_boost(
               AND d.title ILIKE %s
     """
     params: list = [query_vector, f"%{title_phrase}%"]
+
+    if model_id:
+        sql += " AND (c.embedding_model IS NULL OR c.embedding_model = %s)"
+        params.append(model_id)
 
     if category:
         sql += " AND d.category = %s"

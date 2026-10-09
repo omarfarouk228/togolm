@@ -27,3 +27,11 @@ TWISTED_REACTOR = "twisted.internet.asyncioreactor.AsyncioSelectorReactor"
 FEED_EXPORT_ENCODING = "utf-8"
 
 LOG_LEVEL = "INFO"
+
+# The telnet console is never used, and two crawls starting close together
+# fought over its port ("Address already in use") and crashed the spider.
+TELNETCONSOLE_ENABLED = False
+
+# Close the spider gracefully (flushing its JSONL output) a few minutes before
+# corpus.tasks.SPIDER_TIMEOUT_S kills the subprocess outright.
+CLOSESPIDER_TIMEOUT = 2700

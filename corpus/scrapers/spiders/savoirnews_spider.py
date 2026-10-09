@@ -15,10 +15,11 @@ from scrapers.spiders.base_spider import BaseTogoSpider
 # savoirnews uses simple slugs: /article-slug/ (no date prefix in path)
 ARTICLE_SLUG_RE = re.compile(r"^/[a-z][a-z0-9\-]{14,}/?$")
 
-POST_SITEMAPS = [
-    f"https://www.savoirnews.net/post-sitemap{'' if i == 1 else i}.xml"
-    for i in range(1, 7)  # sitemaps 1..6 = ~1,200 articles
-]
+# The www. host no longer serves the site (TLS name mismatch) and the Yoast
+# post-sitemapN.xml files are gone: start from the WordPress core sitemap
+# index on the bare domain, which lists wp-sitemap-posts-post-N.xml files.
+POST_SITEMAPS = ["https://savoirnews.net/wp-sitemap.xml"]
+POST_SITEMAP_RE = re.compile(r"wp-sitemap-posts-post-\d+\.xml$")
 
 EXCLUDED_PATHS = [
     "/tag/",
@@ -54,7 +55,9 @@ class SavoirnewsSpider(BaseTogoSpider):
             response.selector.remove_namespaces()
             for url in response.xpath("//loc/text()").getall():
                 url = url.strip()
-                if self._is_article_url(url):
+                if POST_SITEMAP_RE.search(url):
+                    yield scrapy.Request(url, callback=self.parse)
+                elif self._is_article_url(url):
                     yield scrapy.Request(url, callback=self.parse_article, priority=10)
         else:
             yield from self.parse_article(response)

@@ -6,6 +6,7 @@ Tasks:
   - run_all_spiders(embed)     : Run all working spiders, then ingest
   - run_news_spiders(embed)    : Run only news/press spiders
   - ingest_datasets(embed)     : Ingest all JSONL files in corpus/datasets/
+  - embed_pending_chunks()     : Embed chunks missing a vector (DB-driven backlog)
 """
 
 import subprocess
@@ -40,7 +41,6 @@ WORKING_SPIDERS = [
     "togofirst",
     "icilome",
     "republicoftogo",
-    "republiquetogolaise",
     "letogolais",
     "savoirnews",
     "wikipedia",
@@ -65,7 +65,6 @@ NEWS_SPIDERS = [
     "togofirst",
     "icilome",
     "republicoftogo",
-    "republiquetogolaise",
     "letogolais",
     "savoirnews",
     "lomeinfos",
@@ -102,12 +101,23 @@ def run_spider(self, spider_name: str) -> dict:
         "WARNING",
     ]
 
-    result = subprocess.run(cmd, cwd=str(SCRAPY_DIR), timeout=SPIDER_TIMEOUT_S)
+    # A spider that overruns its budget must not raise: the TimeoutExpired
+    # exception isn't JSON-serializable, so letting it escape made Celery fail
+    # the parent run_news_spiders/run_all_spiders task with an EncodeError
+    # every day. Whatever the spider wrote before being killed is still ingested.
+    timed_out = False
+    try:
+        result = subprocess.run(cmd, cwd=str(SCRAPY_DIR), timeout=SPIDER_TIMEOUT_S)
+        returncode = result.returncode
+    except subprocess.TimeoutExpired:
+        timed_out = True
+        returncode = None
     size_kb = output_file.stat().st_size / 1024 if output_file.exists() else 0
 
     return {
         "spider": spider_name,
-        "success": result.returncode == 0,
+        "success": returncode == 0,
+        "timed_out": timed_out,
         "output_kb": round(size_kb, 1),
     }
 
@@ -186,3 +196,32 @@ def ingest_datasets(self, embed: bool = True) -> dict:
         "files_processed": len(non_empty),
         "results": results,
     }
+
+
+# Embedding backlog. Embeddings used to be computed only while re-ingesting a
+# JSONL file, so any chunk inserted with --no-embed (the daily news run) or
+# while Gemini was unavailable stayed NULL forever once its source file was
+# overwritten by a later crawl: ~10% of the corpus was invisible to vector
+# search. This task drains the backlog straight from the database instead.
+EMBED_LOCK_KEY = "togolm:lock:embed_pending_chunks"
+EMBED_LOCK_TTL_S = 1500
+
+
+@app.task(bind=True, max_retries=0, soft_time_limit=1380, time_limit=1440)
+def embed_pending_chunks(self, max_chunks: int = 4000) -> dict:
+    """
+    Embed up to ``max_chunks`` chunks that are missing a vector or whose vector
+    came from a different model than the canonical one. Guarded by a Redis lock
+    so overlapping beat runs don't double the embedding API load.
+    """
+    import redis
+
+    from rag.indexation.backfill import embed_pending
+
+    client = redis.Redis.from_url(app.conf.broker_url)
+    if not client.set(EMBED_LOCK_KEY, "1", nx=True, ex=EMBED_LOCK_TTL_S):
+        return {"skipped": True, "reason": "another run holds the lock"}
+    try:
+        return embed_pending(max_chunks=max_chunks, deadline_s=1200)
+    finally:
+        client.delete(EMBED_LOCK_KEY)

@@ -82,12 +82,15 @@ def get_connection() -> psycopg2.extensions.connection:
     return conn
 
 
-def embed_batch(texts: list[str]) -> list[list[float]]:
+def embed_batch(texts: list[str]) -> tuple[list[list[float]] | None, str]:
     """
-    Embed a batch of texts.
-    Uses a module-level cached embedder to avoid re-checking Gemini quota every batch.
-    Retries with exponential backoff on rate limit; permanently falls back to
-    sentence-transformers if Gemini quota is exhausted for the rest of the run.
+    Embed a batch of texts with the canonical embedder.
+
+    Returns (vectors, model_id), or (None, model_id) when the embedding API is
+    unavailable after retries. The chunks are then stored without a vector and
+    picked up later by rag.indexation.backfill. This used to fall back to the
+    local model instead, which silently wrote vectors from a different vector
+    space than the one queries are embedded in, making those chunks unfindable.
     """
     global _embedder
     if _embedder is None:
@@ -95,26 +98,20 @@ def embed_batch(texts: list[str]) -> list[list[float]]:
 
     for attempt in range(4):
         try:
-            return _embedder.encode(texts)
+            return _embedder.encode(texts), _embedder.model_id
         except Exception as e:
             msg = str(e)
             is_rate_limit = "429" in msg or "RESOURCE_EXHAUSTED" in msg
             is_transient = "503" in msg or "UNAVAILABLE" in msg or "502" in msg or "500" in msg
-            if is_rate_limit or is_transient:
-                wait = 2**attempt * 15  # 15s, 30s, 60s, 120s
-                if attempt < 3:
-                    label = "RATE LIMIT" if is_rate_limit else "TRANSIENT ERROR"
-                    print(f"  [{label}] Waiting {wait}s before retry {attempt + 1}/3...")
-                    time.sleep(wait)
-                else:
-                    print("  [GEMINI UNAVAILABLE] Switching to local model for this run")
-                    from rag.indexation.embedder import LocalEmbedder
-
-                    _embedder = LocalEmbedder()
-                    return _embedder.encode(texts)
-            else:
+            if not (is_rate_limit or is_transient):
                 raise
-    return _embedder.encode(texts)
+            if attempt < 3:
+                wait = 2**attempt * 15  # 15s, 30s, 60s
+                label = "RATE LIMIT" if is_rate_limit else "TRANSIENT ERROR"
+                print(f"  [{label}] Waiting {wait}s before retry {attempt + 1}/3...")
+                time.sleep(wait)
+    print("  [EMBEDDINGS UNAVAILABLE] Storing chunks without vectors (backfill will retry)")
+    return None, _embedder.model_id
 
 
 def fetch_existing_document(cur, url: str) -> tuple[str, str] | None:
@@ -183,17 +180,22 @@ def upsert_document(cur, doc: dict) -> str:
 
 
 def upsert_chunks(
-    cur, document_id: str, chunks_text: list[str], embeddings: list[list[float] | None]
+    cur,
+    document_id: str,
+    chunks_text: list[str],
+    embeddings: list[list[float] | None],
+    model_id: str | None = None,
 ) -> None:
     """Delete existing chunks for a document, then insert fresh ones."""
     cur.execute("DELETE FROM chunks WHERE document_id = %s", (document_id,))
     for idx, (text, emb) in enumerate(zip(chunks_text, embeddings)):
         cur.execute(
             """
-            INSERT INTO chunks (document_id, chunk_index, content, word_count, embedding)
-            VALUES (%s, %s, %s, %s, %s)
+            INSERT INTO chunks
+                (document_id, chunk_index, content, word_count, embedding, embedding_model)
+            VALUES (%s, %s, %s, %s, %s, %s)
             """,
-            (document_id, idx, text, len(text.split()), emb),
+            (document_id, idx, text, len(text.split()), emb, model_id if emb else None),
         )
 
 
@@ -249,16 +251,19 @@ def process_file(jsonl_path: Path, embed: bool, conn) -> tuple[int, int, int, in
             chunk_texts = [c.text for c in raw_chunks]
 
             chunk_embeddings: list[list[float] | None] = [None] * len(chunk_texts)
+            model_id = None
             if embed and chunk_texts:
                 for i in range(0, len(chunk_texts), EMBED_BATCH_SIZE):
                     batch = chunk_texts[i : i + EMBED_BATCH_SIZE]
-                    batch_embs = embed_batch(batch)
+                    batch_embs, model_id = embed_batch(batch)
+                    if batch_embs is None:
+                        break  # left NULL for rag.indexation.backfill
                     for j, emb in enumerate(batch_embs):
                         chunk_embeddings[i + j] = emb
                     if i + EMBED_BATCH_SIZE < len(chunk_texts):
                         time.sleep(0.5)  # Rate limit headroom
 
-            upsert_chunks(cur, doc_id, chunk_texts, chunk_embeddings)
+            upsert_chunks(cur, doc_id, chunk_texts, chunk_embeddings, model_id)
             inserted += 1
             conn.commit()  # commit per-document so partial progress survives crashes
 

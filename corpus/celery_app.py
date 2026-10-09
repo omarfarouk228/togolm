@@ -51,7 +51,13 @@ app.conf.update(
         "daily-news-scrape": {
             "task": "corpus.tasks.run_news_spiders",
             "schedule": crontab(hour=6, minute=0),
-            "kwargs": {"embed": False},  # Embeddings done in weekly batch
+            "kwargs": {"embed": False},  # Embeddings done by embed-pending-chunks
+        },
+        # Drain the embedding backlog (new chunks, failed embeds, legacy vectors
+        # from another model) every 15 minutes, in bounded batches.
+        "embed-pending-chunks": {
+            "task": "corpus.tasks.embed_pending_chunks",
+            "schedule": crontab(minute="*/15"),
         },
     },
     worker_prefetch_multiplier=1,
