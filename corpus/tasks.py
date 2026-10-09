@@ -16,11 +16,20 @@ from pathlib import Path
 from corpus.celery_app import app
 
 ROOT = Path(__file__).resolve().parent.parent
-# Tasks that import project packages in-process (e.g. embed_pending_chunks ->
-# rag.indexation.backfill) need the project root on sys.path: the celery
-# worker doesn't add it (the other tasks only shell out to subprocesses).
-if str(ROOT) not in sys.path:
-    sys.path.insert(0, str(ROOT))
+
+
+def _ensure_project_on_path() -> None:
+    """Put the project root on sys.path before an in-process project import.
+
+    `celery -A corpus.celery_app` only adds the working directory (the project
+    root) to sys.path while it loads the app, and removes it afterwards. Doing
+    this at import time therefore doesn't stick: the check sees the temporary
+    entry, and celery then removes it. It has to happen when the task runs.
+    """
+    if str(ROOT) not in sys.path:
+        sys.path.insert(0, str(ROOT))
+
+
 SCRAPY_DIR = ROOT / "corpus"
 DATASETS_DIR = ROOT / "corpus" / "datasets"
 
@@ -225,6 +234,7 @@ def embed_pending_chunks(self, max_chunks: int = 4000) -> dict:
     """
     import redis
 
+    _ensure_project_on_path()
     from rag.indexation.backfill import embed_pending
 
     client = redis.Redis.from_url(app.conf.broker_url)
