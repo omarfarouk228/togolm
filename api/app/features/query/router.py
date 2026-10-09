@@ -39,10 +39,27 @@ router = APIRouter(tags=["Query"])
 
 _NO_RESULTS = "Je n'ai pas trouvé de documents pertinents dans le corpus pour cette question."
 
-# Chunks above retrieval min_score (0.62) reach the model as context.
-# Only chunks above this higher threshold are shown as sources in the response —
-# preventing irrelevant borderline matches from appearing as citations.
-_SOURCE_DISPLAY_MIN_SCORE = 0.72
+# Chunks above retrieval min_score (rag.retrieval.search.DEFAULT_MIN_SCORE)
+# reach the model as context. Only chunks above this higher threshold are shown
+# as sources, so borderline matches don't appear as citations. Calibrated for
+# RETRIEVAL_QUERY query embeddings (scores ~0.09 lower than before).
+_SOURCE_DISPLAY_MIN_SCORE = 0.70
+
+
+def _display_sources(sources: list[dict]) -> list[dict]:
+    """Sources worth citing: above the display threshold, one per URL."""
+    seen: set[str] = set()
+    shown = []
+    for s in sources:
+        if s["score"] < _SOURCE_DISPLAY_MIN_SCORE:
+            continue
+        key = s.get("url") or s.get("title") or ""
+        if key in seen:
+            continue
+        seen.add(key)
+        shown.append(s)
+    return shown
+
 
 # Module-level embedder cache for the /embed endpoint
 _local_embedder: LocalEmbedder | None = None
@@ -84,7 +101,7 @@ def _run_image_query(request: QueryRequest) -> QueryGraphResult:
             added_terms=(),
         )
     enriched = enrich_query(search_question, category=request.category)
-    chunks = retrieval.retrieve(question=enriched.search_query, category=enriched.category, top_k=5)
+    chunks = retrieval.retrieve(question=enriched.search_query, category=request.category, top_k=5)
     if chunks:
         answer = generation.build_answer_with_image(
             request.question, chunks, image.mime_type, image.data, history=request.history
@@ -103,6 +120,17 @@ def _run_image_query(request: QueryRequest) -> QueryGraphResult:
     )
 
 
+def _run_text_query(request: QueryRequest):
+    """Run the query graph, translating local-language questions to French
+    first; the answer is still written in request.language."""
+    return run_query_graph(
+        question=generation.question_for_pipeline(request.question, request.language),
+        category=request.category,
+        language=request.language,
+        history=request.history,
+    )
+
+
 @router.post("/query", response_model=QueryResponse)
 async def query_corpus(
     request: QueryRequest,
@@ -116,13 +144,7 @@ async def query_corpus(
         if request.image:
             result = await asyncio.to_thread(_run_image_query, request)
         else:
-            result = await asyncio.to_thread(
-                run_query_graph,
-                question=request.question,
-                category=request.category,
-                language=request.language,
-                history=request.history,
-            )
+            result = await asyncio.to_thread(_run_text_query, request)
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Retrieval error: {e}")
 
@@ -142,10 +164,12 @@ async def query_corpus(
     # Chunks between retrieval min_score and this threshold still reach the model
     # as context but are not presented as citations (they may be borderline matches
     # that the model ignored in favour of general knowledge).
-    display_chunks = [c for c in result.chunks if c.score >= _SOURCE_DISPLAY_MIN_SCORE]
+    display_sources = _display_sources(
+        [{"title": c.title, "url": c.url, "score": round(c.score, 4)} for c in result.chunks]
+    )
     return QueryResponse(
         answer=result.answer,
-        sources=[Source(title=c.title, url=c.url, score=round(c.score, 4)) for c in display_chunks],
+        sources=[Source(**src) for src in display_sources],
         model="togolm-rag-v1",
         latency_ms=latency_ms,
     )
@@ -179,7 +203,7 @@ def _stream_image_query(
 
     try:
         chunks = retrieval.retrieve(
-            question=enriched.search_query, category=enriched.category, top_k=5
+            question=enriched.search_query, category=request.category, top_k=5
         )
     except Exception as e:
         yield f"data: {json.dumps({'type': 'error', 'message': str(e)})}\n\n"
@@ -232,7 +256,7 @@ def _stream_image_query(
         latency_ms,
         api_key,
     )
-    display_sources = [s for s in sources if s["score"] >= _SOURCE_DISPLAY_MIN_SCORE]
+    display_sources = _display_sources(sources)
     yield f"data: {json.dumps({'type': 'sources', 'sources': display_sources, 'latency_ms': latency_ms})}\n\n"
     yield "data: [DONE]\n\n"
 
@@ -259,12 +283,15 @@ def stream_query(
             yield from _stream_image_query(request, api_key, t0)
             return
 
-        off_topic = is_trivially_off_topic(request.question, has_history=bool(request.history)) or (
-            generation.route_query(request.question, request.history or []) == "off_topic"
+        # Éwé/Kabiyè questions go through routing and retrieval in French.
+        question = generation.question_for_pipeline(request.question, request.language)
+
+        off_topic = is_trivially_off_topic(question, has_history=bool(request.history)) or (
+            generation.route_query(question, request.history or []) == "off_topic"
         )
         if off_topic:
             for event_type, text in generation.stream_without_corpus(
-                request.question, request.history or []
+                question, request.history or []
             ):
                 yield _sse(event_type, text)
             latency_ms = int((time.monotonic() - t0) * 1000)
@@ -277,14 +304,14 @@ def stream_query(
 
         # Rewrite the question using conversation history so the vector search
         # operates on a standalone, fully-resolved query instead of a pronoun-laden follow-up.
-        search_question = request.question
+        search_question = question
         if request.history:
-            search_question = rewrite_question_with_history(request.question, request.history)
+            search_question = rewrite_question_with_history(question, request.history)
         enriched = enrich_query(search_question, category=request.category)
 
         try:
             chunks = retrieval.retrieve(
-                question=enriched.search_query, category=enriched.category, top_k=5
+                question=enriched.search_query, category=request.category, top_k=5
             )
         except Exception as e:
             yield f"data: {json.dumps({'type': 'error', 'message': str(e)})}\n\n"
@@ -296,10 +323,11 @@ def stream_query(
         if gemini_available():
             try:
                 for event_type, text in generation.stream_answer(
-                    request.question,
+                    question,
                     chunks,
                     request.history or [],
                     max_output_tokens=request.max_tokens,
+                    language=request.language,
                 ):
                     yield _sse(event_type, text)
             except Exception:
@@ -326,7 +354,7 @@ def stream_query(
             latency_ms,
             api_key,
         )
-        display_sources = [s for s in sources if s["score"] >= _SOURCE_DISPLAY_MIN_SCORE]
+        display_sources = _display_sources(sources)
         yield f"data: {json.dumps({'type': 'sources', 'sources': display_sources, 'latency_ms': latency_ms})}\n\n"
         yield "data: [DONE]\n\n"
 

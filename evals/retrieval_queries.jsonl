@@ -1,0 +1,16 @@
+{"question": "Comment obtenir un NIF auprès de l'OTR ?", "expect": "otr\\.tg.*nif|nif|immatriculation-fiscale"}
+{"question": "Quels documents faut-il pour un passeport togolais ?", "expect": "passeport"}
+{"question": "Quels sont les résultats du recensement RGPH-5 ?", "expect": "rgph"}
+{"question": "Comment créer une entreprise au CFE ?", "expect": "cfe|creation-d-entreprise|création d'entreprise|creer-une-entreprise"}
+{"question": "Quel est le prix du super sans plomb à la pompe ?", "expect": "carburant|pompe|produits-petroliers|prix-des-produits"}
+{"question": "Quelles sont les conditions d'inscription à l'Université de Lomé ?", "expect": "univ-lome|inscription"}
+{"question": "Qui est le Président de la République du Togo ?", "expect": "president|présiden"}
+{"question": "Comment obtenir un certificat de nationalité togolaise ?", "expect": "nationalit"}
+{"question": "Comment déclarer une naissance au Togo ?", "expect": "naissance"}
+{"question": "Quel est le taux de cotisation à la CNSS ?", "expect": "cnss|cotisation"}
+{"question": "Quel est le budget de l'État togolais pour 2026 ?", "expect": "budget|loi-de-finances|finances"}
+{"question": "Comment obtenir un permis de conduire au Togo ?", "expect": "permis"}
+{"question": "Quelles sont les bourses d'études disponibles pour les étudiants togolais ?", "expect": "bourse"}
+{"question": "Quelles sont les missions de l'ANPE Togo ?", "expect": "anpe"}
+{"question": "Comment payer la taxe foncière au Togo ?", "expect": "foncier|fonciere|foncière|otr"}
+{"question": "Quel est le salaire minimum (SMIG) au Togo ?", "expect": "smig|salaire-minimum|salaire minimum"}

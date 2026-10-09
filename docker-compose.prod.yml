@@ -66,6 +66,9 @@ services:
       --loglevel=info
       --concurrency=2
       -Q celery
+    volumes:
+      # Spider output survives redeploys (it lived in the container layer before).
+      - datasets:/app/corpus/datasets
     environment:
       POSTGRES_HOST: db
       POSTGRES_PORT: 5432
@@ -77,6 +80,14 @@ services:
       redis:
         condition: service_healthy
     restart: unless-stopped
+    # The image's default HEALTHCHECK curls the API port, which a worker never
+    # serves, so workers were always reported "unhealthy". Ping Celery instead.
+    healthcheck:
+      test: ["CMD-SHELL", "celery -A corpus.celery_app inspect ping -d celery@$$HOSTNAME --timeout 10"]
+      interval: 60s
+      timeout: 20s
+      retries: 3
+      start_period: 60s
 
   celery-beat:
     build:
@@ -100,8 +111,13 @@ services:
       redis:
         condition: service_healthy
     restart: unless-stopped
+    # Beat serves nothing to probe; disable the image's API-port HEALTHCHECK.
+    # Only ONE beat may ever run, or every scheduled task fires twice.
+    healthcheck:
+      disable: true
 
 volumes:
   pgdata:
   redisdata:
   beatdata:
+  datasets:

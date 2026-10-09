@@ -5,7 +5,11 @@ Priority:
   1. sentence-transformers (local, no API key, default)
   2. Gemini Embeddings API (when GEMINI_API_KEY is set — for production)
 
-Both produce 384-dim vectors compatible with the pgvector schema.
+Both produce 384-dim vectors compatible with the pgvector schema, but they live
+in DIFFERENT vector spaces: a query embedded by one model cannot be compared
+with a chunk embedded by the other. Every stored vector is therefore tagged
+with ``model_id`` (chunks.embedding_model). Search skips vectors tagged with a
+non-canonical model, and rag.indexation.backfill re-embeds them.
 """
 
 import os
@@ -28,8 +32,14 @@ def max_chunk_words(max_tokens: int = LOCAL_MAX_TOKENS) -> int:
     return max(16, int((max_tokens - _SPECIAL_TOKENS) / _TOKENS_PER_WORD))
 
 
+LOCAL_MODEL_ID = "minilm-l12-v2"
+GEMINI_MODEL_ID = "gemini-embedding-001@384"
+
+
 class LocalEmbedder:
     """Sentence-transformers local embedder. Downloaded once, then cached."""
+
+    model_id = LOCAL_MODEL_ID
 
     def __init__(self, model_name: str = MODEL_NAME):
         self.model_name = model_name
@@ -64,11 +74,16 @@ class LocalEmbedder:
     def encode_one(self, text: str) -> list[float]:
         return self.encode([text])[0]
 
+    def encode_query(self, text: str) -> list[float]:
+        """Embed a search query (symmetric model: same as a document)."""
+        return self.encode_one(text)
+
 
 class GeminiEmbedder:
     """Gemini text-embedding-004 via google-genai SDK — requires GEMINI_API_KEY."""
 
     MODEL = "gemini-embedding-001"  # 3072 dims by default, can be truncated to 768
+    model_id = GEMINI_MODEL_ID
 
     TARGET_DIMS = 384
 
@@ -79,19 +94,28 @@ class GeminiEmbedder:
         self._client = genai.Client(api_key=os.environ["GEMINI_API_KEY"])
         self._types = types
 
-    def encode(self, texts: list[str]) -> list[list[float]]:
+    def encode(self, texts: list[str], task_type: str = "RETRIEVAL_DOCUMENT") -> list[list[float]]:
         result = self._client.models.embed_content(
             model=self.MODEL,
             contents=texts,
             config=self._types.EmbedContentConfig(
                 output_dimensionality=self.TARGET_DIMS,
-                task_type="RETRIEVAL_DOCUMENT",
+                task_type=task_type,
             ),
         )
         return [e.values for e in result.embeddings]
 
     def encode_one(self, text: str) -> list[float]:
         return self.encode([text])[0]
+
+    def encode_query(self, text: str) -> list[float]:
+        """Embed a search query with the asymmetric RETRIEVAL_QUERY task type.
+
+        Measured on prod (8 questions, top 10): more relevant chunks than
+        embedding the query as a document in 5 cases, equal in 3, never worse.
+        Cosine scores come out ~0.09 lower, hence the retrieval thresholds.
+        """
+        return self.encode([text], task_type="RETRIEVAL_QUERY")[0]
 
 
 def _has_valid_gemini_key() -> bool:

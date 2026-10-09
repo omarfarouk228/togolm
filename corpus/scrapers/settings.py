@@ -27,3 +27,18 @@ TWISTED_REACTOR = "twisted.internet.asyncioreactor.AsyncioSelectorReactor"
 FEED_EXPORT_ENCODING = "utf-8"
 
 LOG_LEVEL = "INFO"
+
+# The telnet console is never used, and two crawls starting close together
+# fought over its port ("Address already in use") and crashed the spider.
+TELNETCONSOLE_ENABLED = False
+
+# Close the spider gracefully (flushing its JSONL output) a few minutes before
+# corpus.tasks.SPIDER_TIMEOUT_S kills the subprocess outright.
+CLOSESPIDER_TIMEOUT = 2700
+
+# Incremental crawl for news spiders (enabled per run with -s SKIP_KNOWN_URLS=1
+# by corpus.tasks.run_spider): don't re-download already-ingested articles.
+DOWNLOADER_MIDDLEWARES = {
+    "scrapers.middlewares.SkipKnownUrlsMiddleware": 50,
+}
+SKIP_KNOWN_URLS = False

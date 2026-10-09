@@ -82,7 +82,9 @@ jobs:
         with:
           python-version: "3.11"
           cache: pip
-      - run: pip install ruff
+      # Pinned: newer ruff releases also format code blocks inside Markdown
+      # docs, which failed lint on files nobody touched.
+      - run: pip install "ruff==0.15.1"
       - run: ruff check .
       - run: ruff format --check .
 

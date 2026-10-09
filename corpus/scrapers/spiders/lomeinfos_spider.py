@@ -13,14 +13,10 @@ import re
 import scrapy
 from scrapers.spiders.base_spider import BaseTogoSpider
 
-# All known post sitemaps (WordPress generates one per ~1000 posts)
-POST_SITEMAPS = [
-    "https://www.lomeinfos.com/post-sitemap.xml",
-    "https://www.lomeinfos.com/post-sitemap2.xml",
-    "https://www.lomeinfos.com/post-sitemap3.xml",
-    "https://www.lomeinfos.com/post-sitemap4.xml",
-    "https://www.lomeinfos.com/post-sitemap5.xml",
-]
+# WordPress core sitemap index (the Yoast post-sitemapN.xml files were removed
+# in 2026 and now 404). The index lists wp-sitemap-posts-post-N.xml files.
+POST_SITEMAPS = ["https://www.lomeinfos.com/wp-sitemap.xml"]
+POST_SITEMAP_RE = re.compile(r"wp-sitemap-posts-post-\d+\.xml$")
 
 # Match article slugs at root: /some-title-here/
 # Exclude static pages and WordPress internals
@@ -94,7 +90,9 @@ class LomeinfosSpider(BaseTogoSpider):
         response.selector.remove_namespaces()
         for url in response.xpath("//loc/text()").getall():
             url = url.strip()
-            if self._is_article_url(url):
+            if POST_SITEMAP_RE.search(url):
+                yield scrapy.Request(url, callback=self.parse)
+            elif self._is_article_url(url):
                 yield scrapy.Request(url, callback=self.parse, priority=10)
 
     def _parse_article(self, response):
