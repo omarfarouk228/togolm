@@ -16,6 +16,7 @@ from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, System
 from langchain_core.output_parsers import StrOutputParser
 from pydantic import BaseModel, Field
 
+from rag.generation.language_examples import examples_block
 from rag.generation.llm import (
     gemini_available,
     get_chat_model,
@@ -167,6 +168,12 @@ def _iter_chunk_events(chunk: Any) -> Iterator[tuple[str, str]]:
 # --- Non-streaming generation -------------------------------------------------
 
 
+def _language_section(language: str) -> str:
+    """Answer-language instruction, preceded for Éwé/Kabiyè by wording that
+    native speakers validated (rag.generation.language_examples)."""
+    return examples_block(language) + language_instruction(language)
+
+
 def build_answer(
     question: str,
     chunks: list[Any],
@@ -207,7 +214,7 @@ def _generate_answer(
             "context": _format_context(chunks),
             "question": question,
             "history": _history_messages(history, limit=6, truncate=400),
-            "language_instruction": language_instruction(language),
+            "language_instruction": _language_section(language),
         }
     )
 
@@ -388,7 +395,7 @@ def stream_answer(
         context=_format_context(chunks),
         question=question,
         history=history_msgs,
-        language_instruction=language_instruction(language),
+        language_instruction=_language_section(language),
     )
     model = get_chat_model_with_fallback(max_output_tokens=max_output_tokens, streaming=True)
     for chunk in model.stream(messages):

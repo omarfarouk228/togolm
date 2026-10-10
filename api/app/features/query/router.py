@@ -30,6 +30,7 @@ from api.app.features.query.schemas import (
 from rag import generation, retrieval
 from rag.generation import rewrite_question_with_history
 from rag.generation.audio import TranscriptionError, transcribe_audio
+from rag.generation.language_examples import queue_live_answer
 from rag.generation.llm import gemini_available
 from rag.indexation.embedder import LocalEmbedder
 from rag.orchestration.classification import is_trivially_off_topic
@@ -125,13 +126,18 @@ def _run_image_query(request: QueryRequest) -> QueryGraphResult:
 
 def _run_text_query(request: QueryRequest):
     """Run the query graph, translating local-language questions to French
-    first; the answer is still written in request.language."""
-    return run_query_graph(
-        question=generation.question_for_pipeline(request.question, request.language),
+    first; the answer is still written in request.language. Éwé/Kabiyè answers
+    are queued for native-speaker review."""
+    question = generation.question_for_pipeline(request.question, request.language)
+    result = run_query_graph(
+        question=question,
         category=request.category,
         language=request.language,
         history=request.history,
     )
+    if not result.is_off_topic:
+        queue_live_answer(request.language, request.question, question, result.answer)
+    return result
 
 
 @router.post("/query", response_model=QueryResponse)
@@ -325,6 +331,7 @@ def stream_query(
 
         if gemini_available():
             try:
+                streamed: list[str] = []
                 for event_type, text in generation.stream_answer(
                     question,
                     chunks,
@@ -332,7 +339,10 @@ def stream_query(
                     max_output_tokens=request.max_tokens,
                     language=request.language,
                 ):
+                    if event_type == "chunk":
+                        streamed.append(text)
                     yield _sse(event_type, text)
+                queue_live_answer(request.language, request.question, question, "".join(streamed))
             except Exception:
                 events = (
                     generation.stream_extractive(chunks)

@@ -11,6 +11,8 @@ Endpoints:
   GET  /v1/documents/{id}   — Single document with chunks
   GET  /v1/search           — Full-text keyword search
   POST /v1/feedback         — Report an issue with a generated answer
+  GET  /v1/contribute/items — Éwé/Kabiyè answers waiting for native-speaker review
+  POST /v1/contribute/reviews — Submit a native-speaker review
 """
 
 import os
@@ -25,6 +27,7 @@ from fastapi.middleware.cors import CORSMiddleware  # noqa: E402
 from api.app.core.rate_limit import check_rate_limit  # noqa: E402
 from api.app.features.admin.router import router as admin_router  # noqa: E402
 from api.app.features.auth.router import router as auth_router  # noqa: E402
+from api.app.features.contribute.router import router as contribute_router  # noqa: E402
 from api.app.features.corpus.router import router as corpus_router  # noqa: E402
 from api.app.features.documents.router import router as documents_router  # noqa: E402
 from api.app.features.feedback.router import router as feedback_router  # noqa: E402
@@ -56,6 +59,7 @@ app.include_router(corpus_router, prefix="/v1")  # public read-only stats, no ra
 app.include_router(query_router, prefix="/v1", dependencies=_security)
 app.include_router(documents_router, prefix="/v1", dependencies=_security)
 app.include_router(feedback_router, prefix="/v1")  # bounded write, no rate limit
+app.include_router(contribute_router, prefix="/v1")  # per-IP daily cap on reviews
 
 
 @app.get("/", include_in_schema=False)
