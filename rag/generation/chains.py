@@ -16,6 +16,7 @@ from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, System
 from langchain_core.output_parsers import StrOutputParser
 from pydantic import BaseModel, Field
 
+from rag.generation import health as generation_health
 from rag.generation.language_examples import examples_block
 from rag.generation.llm import (
     gemini_available,
@@ -194,9 +195,11 @@ def build_answer(
     """
     if gemini_available():
         try:
-            return _generate_answer(question, chunks, history or [], max_output_tokens, language)
-        except Exception:
-            pass
+            answer = _generate_answer(question, chunks, history or [], max_output_tokens, language)
+            generation_health.record_success()
+            return answer
+        except Exception as e:
+            generation_health.record_failure(e)
     if not chunks:
         return NO_CORPUS_ANSWER
     return extractive_answer(chunks)
@@ -403,8 +406,13 @@ def stream_answer(
         language_instruction=_language_section(language),
     )
     model = get_chat_model_with_fallback(max_output_tokens=max_output_tokens, streaming=True)
-    for chunk in model.stream(messages):
-        yield from _iter_chunk_events(chunk)
+    try:
+        for chunk in model.stream(messages):
+            yield from _iter_chunk_events(chunk)
+    except Exception as e:
+        generation_health.record_failure(e)
+        raise
+    generation_health.record_success()
 
 
 def stream_without_corpus(
