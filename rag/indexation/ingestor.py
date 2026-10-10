@@ -21,6 +21,7 @@ from tqdm import tqdm
 from rag.indexation.chunker import chunk_by_words
 from rag.indexation.cleaner import clean_document, is_useful
 from rag.indexation.embedder import get_embedder, max_chunk_words
+from rag.indexation.titles import better_title
 
 load_dotenv(Path(__file__).resolve().parents[2] / ".env")
 
@@ -167,7 +168,7 @@ def upsert_document(cur, doc: dict) -> str:
             "url": doc.get("url", ""),
             "category": doc.get("category", ""),
             "subcategory": doc.get("subcategory", ""),
-            "title": doc.get("title", ""),
+            "title": better_title(doc.get("title", ""), clean or ""),
             "raw_content": doc.get("raw_content", ""),
             "clean_content": clean,
             "language": doc.get("language", "fr"),
