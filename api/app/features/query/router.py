@@ -24,9 +24,12 @@ from api.app.features.query.schemas import (
     QueryRequest,
     QueryResponse,
     Source,
+    TranscribeRequest,
+    TranscribeResponse,
 )
 from rag import generation, retrieval
 from rag.generation import rewrite_question_with_history
+from rag.generation.audio import TranscriptionError, transcribe_audio
 from rag.generation.llm import gemini_available
 from rag.indexation.embedder import LocalEmbedder
 from rag.orchestration.classification import is_trivially_off_topic
@@ -379,4 +382,30 @@ async def embed_text(request: EmbedRequest):
         embedding=vector,
         model="paraphrase-multilingual-MiniLM-L12-v2",
         token_count=len(request.text.split()),
+    )
+
+
+@router.post("/transcribe", response_model=TranscribeResponse)
+async def transcribe(request: TranscribeRequest):
+    """Transcribe a spoken question (Éwé and Kabiyè included).
+
+    Browsers' built-in dictation has no Éwé or Kabiyè model, so clients send
+    the recording and Gemini transcribes it. Returns the text in the language
+    spoken plus a French translation. Counts toward the query rate limit.
+    """
+    if not gemini_available():
+        raise HTTPException(status_code=503, detail="Transcription unavailable.")
+    try:
+        result = await asyncio.to_thread(
+            transcribe_audio, request.audio.mime_type, request.audio.data, request.language
+        )
+    except TranscriptionError:
+        raise HTTPException(status_code=502, detail="Transcription failed, try again.")
+    if not result["text"]:
+        raise HTTPException(status_code=422, detail="No speech recognized.")
+    return TranscribeResponse(
+        text=result["text"],
+        translation_fr=result["translation_fr"],
+        language=request.language,
+        spoken_language=result.get("spoken_language", ""),
     )
