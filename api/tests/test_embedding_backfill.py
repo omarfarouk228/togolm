@@ -147,3 +147,15 @@ class TestProjectOnPath:
         monkeypatch.setattr(sys, "path", [p for p in sys.path if p != str(tasks.ROOT)])
         tasks._ensure_project_on_path()
         assert sys.path[0] == str(tasks.ROOT)
+
+
+def test_gemini_embedder_sets_a_request_timeout(monkeypatch):
+    from unittest.mock import patch as _patch
+
+    from rag.indexation import embedder
+
+    monkeypatch.setenv("GEMINI_API_KEY", "test-key-123456")
+    with _patch("google.genai.Client") as client:
+        embedder.GeminiEmbedder()
+    options = client.call_args.kwargs["http_options"]
+    assert options.timeout == embedder.EMBED_TIMEOUT_MS

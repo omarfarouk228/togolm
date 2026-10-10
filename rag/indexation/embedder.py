@@ -79,6 +79,9 @@ class LocalEmbedder:
         return self.encode_one(text)
 
 
+EMBED_TIMEOUT_MS = int(os.getenv("GEMINI_EMBED_TIMEOUT_MS", "10000"))
+
+
 class GeminiEmbedder:
     """Gemini text-embedding-004 via google-genai SDK — requires GEMINI_API_KEY."""
 
@@ -91,7 +94,13 @@ class GeminiEmbedder:
         from google import genai
         from google.genai import types
 
-        self._client = genai.Client(api_key=os.environ["GEMINI_API_KEY"])
+        # Without a timeout a stalled call blocked retrieval indefinitely (one
+        # weekly-eval question took 456 s during a deploy). On timeout,
+        # retrieval falls back to full-text search (rag.retrieval.search).
+        self._client = genai.Client(
+            api_key=os.environ["GEMINI_API_KEY"],
+            http_options=types.HttpOptions(timeout=EMBED_TIMEOUT_MS),
+        )
         self._types = types
 
     def encode(self, texts: list[str], task_type: str = "RETRIEVAL_DOCUMENT") -> list[list[float]]:
