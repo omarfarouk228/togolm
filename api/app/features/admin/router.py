@@ -28,6 +28,10 @@ Usage stats:
 
 System:
   GET  /v1/admin/health/detailed — DB, Redis, embedding coverage
+
+Retrieval quality:
+  GET  /v1/admin/eval/retrieval      — weekly eval history (latest first)
+  POST /v1/admin/eval/retrieval/run  — queue a run now
 """
 
 from fastapi import APIRouter, Header, Query
@@ -289,3 +293,35 @@ def health_detailed(
         return service.get_health(conn, service.get_redis())
     finally:
         conn.close()
+
+
+# ── Retrieval quality ────────────────────────────────────────────────────────
+
+
+@router.get("/admin/eval/retrieval")
+def get_retrieval_eval(
+    limit: int = Query(12, ge=1, le=26),
+    authorization: str | None = Header(default=None),
+    x_admin_key: str | None = Header(default=None),
+):
+    """History of corpus.tasks.run_retrieval_eval runs, latest first."""
+    _auth(authorization, x_admin_key)
+    import json
+
+    from corpus.tasks import EVAL_HISTORY_KEY
+
+    raw = service.get_redis().lrange(EVAL_HISTORY_KEY, 0, limit - 1)
+    return {"runs": [json.loads(r) for r in raw]}
+
+
+@router.post("/admin/eval/retrieval/run")
+def run_retrieval_eval_now(
+    authorization: str | None = Header(default=None),
+    x_admin_key: str | None = Header(default=None),
+):
+    """Queue a retrieval eval now (takes about a minute; refresh the history)."""
+    _auth(authorization, x_admin_key)
+    from corpus.celery_app import app as celery_app
+
+    task = celery_app.send_task("corpus.tasks.run_retrieval_eval")
+    return {"queued": True, "task_id": task.id}
