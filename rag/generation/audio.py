@@ -39,6 +39,10 @@ PROMPT = (
 )
 
 
+# A stalled call must not hold the request open forever.
+TRANSCRIBE_TIMEOUT_MS = 30_000
+
+
 class TranscriptionError(Exception):
     """Raised when no model could transcribe the recording."""
 
@@ -48,7 +52,10 @@ def transcribe_audio(mime_type: str, data_b64: str, language: str) -> dict:
     from google import genai
     from google.genai import types
 
-    client = genai.Client(api_key=os.environ["GEMINI_API_KEY"])
+    client = genai.Client(
+        api_key=os.environ["GEMINI_API_KEY"],
+        http_options=types.HttpOptions(timeout=TRANSCRIBE_TIMEOUT_MS),
+    )
     prompt = PROMPT.format(
         language=LANGUAGE_NAMES.get(language, "français"),
         orthography=ORTHOGRAPHY_HINTS.get(language, ""),

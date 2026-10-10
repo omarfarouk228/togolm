@@ -405,3 +405,61 @@ class TestBuildOrTsquery:
         cur.fetchone.return_value = (70000,)
         with patch.object(search, "_df_cache", {}), patch.object(search, "_doc_total", None):
             assert search._build_or_tsquery(cur, "q") == "'b2' | 'c3'"
+
+
+class TestNeighborContext:
+    def _chunk(self, doc, idx, content):
+        from rag.retrieval import RetrievedChunk
+
+        return RetrievedChunk(
+            title="Titre",
+            url=f"https://x.tg/{doc}",
+            source="x.tg",
+            category="c",
+            content=content,
+            score=0.8,
+            document_id=doc,
+            chunk_index=idx,
+        )
+
+    def test_overlapping_words_are_not_repeated(self):
+        from rag.retrieval.search import _join_overlapping
+
+        assert _join_overlapping("a b c d e", "d e f g") == "a b c d e f g"
+        assert _join_overlapping("a b", "c d") == "a b c d"
+
+    def test_chunk_is_widened_with_its_neighbours_in_order(self):
+        from rag.retrieval.search import expand_with_neighbors
+
+        cur = MagicMock()
+        cur.fetchall.return_value = [
+            ("d1", 4, "avant le passage x y"),
+            ("d1", 6, "x y suite du passage"),
+        ]
+        chunk = self._chunk("d1", 5, "x y passage trouvé x y")
+        (out,) = expand_with_neighbors(cur, [chunk], window=1)
+        assert out.content == "avant le passage x y passage trouvé x y suite du passage"
+
+    def test_documents_with_several_chunks_are_left_alone(self):
+        from rag.retrieval.search import expand_with_neighbors
+
+        cur = MagicMock()
+        chunks = [self._chunk("d1", 1, "un"), self._chunk("d1", 2, "deux")]
+        assert [c.content for c in expand_with_neighbors(cur, chunks)] == ["un", "deux"]
+        cur.execute.assert_not_called()
+
+    def test_database_error_keeps_original_content(self):
+        from rag.retrieval.search import expand_with_neighbors
+
+        cur = MagicMock()
+        cur.execute.side_effect = RuntimeError("db down")
+        (out,) = expand_with_neighbors(cur, [self._chunk("d1", 3, "original")])
+        assert out.content == "original"
+
+    def test_disabled_with_a_zero_window(self):
+        from rag.retrieval.search import expand_with_neighbors
+
+        cur = MagicMock()
+        (out,) = expand_with_neighbors(cur, [self._chunk("d1", 3, "original")], window=0)
+        assert out.content == "original"
+        cur.execute.assert_not_called()
