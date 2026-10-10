@@ -69,6 +69,47 @@ DEFAULT_MIN_SCORE = 0.55
 CONTEXT_NEIGHBORS = int(os.getenv("RAG_CONTEXT_NEIGHBORS", "1"))
 
 
+# Navigation and listing pages crawled by mistake ("Our Shop", "Jour :",
+# "Category:") must not reach the model. Retrieval used to skip every title of
+# 15 characters or fewer, which also hid 1,025 Wikipedia articles ("Abass
+# Kaboua", "2010 au Togo"), short press headlines and the 2025-2026 special
+# issues of the Journal officiel. Skip only what is clearly navigation.
+NAVIGATION_TITLES = (
+    "our shop",
+    "actualités",
+    "contact",
+    "contactez-nous",
+    "inscription",
+    "courses",
+    "getting started",
+    "account/profile",
+    "instructor",
+    "course building",
+    "course taking",
+    "a nice entry",
+    "a nice post",
+    "a small gallery",
+    "un autre test",
+    "publicité",
+    "liens utiles",
+    "qui sommes nous",
+    "nos partenaires",
+    "nos missions",
+    "header three",
+    "footer inner",
+    "blogs",
+    "magazine",
+    "diaporama joee",
+)
+USABLE_TITLE_SQL = (
+    "length(trim(coalesce(d.title, ''))) > 0"
+    " AND trim(d.title) !~ ':\\s*$'"
+    " AND lower(trim(d.title)) NOT IN ("
+    + ", ".join("'" + t.replace("'", "''") + "'" for t in NAVIGATION_TITLES)
+    + ")"
+)
+
+
 def _position(row) -> dict:
     """document_id/chunk_index from columns 7-8 of a retrieval row, if present."""
     if len(row) < 9 or row[7] is None:
@@ -372,7 +413,7 @@ def _fulltext_chunk_search(
             FROM documents d, q
             WHERE d.fts_vector @@ q.tsq
               AND d.status = 'active'
-              AND length(trim(coalesce(d.title, ''))) > 15
+              AND {usable_title}
               {category_filter}
             ORDER BY rank DESC
             LIMIT %(limit)s
@@ -404,7 +445,14 @@ def _fulltext_chunk_search(
     model_filter = ""
     if model_id:
         model_filter = "AND (c.embedding_model IS NULL OR c.embedding_model = %(model_id)s)"
-    cur.execute(sql.format(category_filter=category_filter, model_filter=model_filter), params)
+    cur.execute(
+        sql.format(
+            category_filter=category_filter,
+            model_filter=model_filter,
+            usable_title=USABLE_TITLE_SQL,
+        ),
+        params,
+    )
 
     return [
         RetrievedChunk(
@@ -452,8 +500,9 @@ def _chunk_vector_search(
         JOIN documents d ON d.id = c.document_id
         WHERE c.embedding IS NOT NULL
           AND d.status = 'active'
-          AND length(trim(coalesce(d.title, ''))) > 15
+          AND {usable_title}
     """
+    base_sql = base_sql.replace("{usable_title}", USABLE_TITLE_SQL)
     params: list = [query_vector]
 
     if model_id:
@@ -533,9 +582,10 @@ def _office_title_boost(
             JOIN chunks c ON c.document_id = d.id
             WHERE d.status = 'active'
               AND c.embedding IS NOT NULL
-              AND length(trim(coalesce(d.title, ''))) > 15
+              AND {usable_title}
               AND d.title ILIKE %s
     """
+    sql = sql.replace("{usable_title}", USABLE_TITLE_SQL)
     params: list = [query_vector, f"%{title_phrase}%"]
 
     if model_id:
