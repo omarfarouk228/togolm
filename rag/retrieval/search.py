@@ -62,6 +62,75 @@ FTS_IGNORED_TEXT = "Togo togolais togolaise togolaises République pays"
 DEFAULT_MIN_SCORE = 0.55
 
 
+# Chunks are small (~60 words, sized for the old local embedding model), which
+# keeps search precise but gave the model only ~300 words of context for five
+# sources. Each retrieved chunk is widened with its neighbours in the same
+# document before generation: "small to big" retrieval, no re-embedding needed.
+CONTEXT_NEIGHBORS = int(os.getenv("RAG_CONTEXT_NEIGHBORS", "1"))
+
+
+def _position(row) -> dict:
+    """document_id/chunk_index from columns 7-8 of a retrieval row, if present."""
+    if len(row) < 9 or row[7] is None:
+        return {}
+    return {"document_id": str(row[7]), "chunk_index": row[8]}
+
+
+def _join_overlapping(left: str, right: str, max_overlap_words: int = 30) -> str:
+    """Concatenate consecutive chunks, dropping the words they share (the
+    chunker repeats the last few words of a chunk at the start of the next)."""
+    a, b = left.split(), right.split()
+    for n in range(min(max_overlap_words, len(a), len(b)), 0, -1):
+        if a[-n:] == b[:n]:
+            return " ".join(a + b[n:])
+    return f"{left} {right}"
+
+
+def expand_with_neighbors(cur, chunks: list["RetrievedChunk"], window: int = CONTEXT_NEIGHBORS):
+    """Replace each chunk's content with itself plus `window` chunks on each
+    side from the same document. Documents contributing several chunks (list
+    questions) are left as they are, so their text isn't repeated. Any error
+    leaves the chunks unchanged."""
+    if window <= 0:
+        return chunks
+    per_doc: dict[str, int] = {}
+    for c in chunks:
+        if c.document_id:
+            per_doc[c.document_id] = per_doc.get(c.document_id, 0) + 1
+    targets = [
+        c
+        for c in chunks
+        if c.document_id and c.chunk_index is not None and per_doc[c.document_id] == 1
+    ]
+    if not targets:
+        return chunks
+    try:
+        cur.execute(
+            """
+            SELECT c.document_id, c.chunk_index, c.content
+            FROM chunks c
+            JOIN unnest(%s::uuid[], %s::int[]) AS w(doc, idx)
+              ON c.document_id = w.doc
+             AND c.chunk_index BETWEEN w.idx - %s AND w.idx + %s
+            """,
+            ([c.document_id for c in targets], [c.chunk_index for c in targets], window, window),
+        )
+        by_doc: dict[str, dict[int, str]] = {}
+        for doc_id, idx, content in cur.fetchall():
+            by_doc.setdefault(str(doc_id), {})[idx] = content
+    except Exception:
+        return chunks
+    for c in targets:
+        pieces = by_doc.get(c.document_id, {})
+        text = ""
+        for idx in range(c.chunk_index - window, c.chunk_index + window + 1):
+            piece = c.content if idx == c.chunk_index else pieces.get(idx)
+            if piece:
+                text = _join_overlapping(text, piece) if text else piece
+        c.content = text or c.content
+    return chunks
+
+
 def _get_embedder():
     global _embedder
     if _embedder is None:
@@ -78,6 +147,10 @@ class RetrievedChunk:
     content: str
     score: float
     published_at: str | None = None
+    # Position of the chunk in its document, used to add neighbouring chunks
+    # to the context (see expand_with_neighbors).
+    document_id: str | None = None
+    chunk_index: int | None = None
 
 
 def retrieve(
@@ -117,7 +190,9 @@ def retrieve(
             if not has_chunks:
                 return _fulltext_search(cur, question, category, top_k)
             if query_vector is None:
-                return _fulltext_chunk_search(cur, question, None, category, top_k, model_id)
+                return expand_with_neighbors(
+                    cur, _fulltext_chunk_search(cur, question, None, category, top_k, model_id)
+                )
 
             _configure_ann(cur)
 
@@ -139,7 +214,7 @@ def retrieve(
             excluded_urls = {c.url for c in boosted if c.url}
             remaining_top_k = max(effective_top_k - len(boosted), 0)
             if remaining_top_k == 0:
-                return boosted
+                return expand_with_neighbors(cur, boosted)
             vector_results = _chunk_vector_search(
                 cur,
                 query_vector,
@@ -163,7 +238,7 @@ def retrieve(
                 top_k=remaining_top_k,
                 max_chunks_per_document=max_chunks_per_document,
             )
-            return boosted + fused
+            return expand_with_neighbors(cur, boosted + fused)
     finally:
         conn.close()
 
@@ -303,11 +378,11 @@ def _fulltext_chunk_search(
             LIMIT %(limit)s
         )
         SELECT docs.title, docs.url, docs.source, docs.category, best.content,
-               best.score, docs.published_at
+               best.score, docs.published_at, docs.id, best.chunk_index
         FROM docs
         CROSS JOIN q
         CROSS JOIN LATERAL (
-            SELECT c.content,
+            SELECT c.content, c.chunk_index,
                    CASE
                        WHEN %(vector)s::vector IS NOT NULL
                         AND c.embedding IS NOT NULL
@@ -340,6 +415,7 @@ def _fulltext_chunk_search(
             content=row[4] or "",
             score=float(row[5]) if row[5] is not None else FTS_ONLY_SCORE,
             published_at=str(row[6]) if row[6] else None,
+            **_position(row),
         )
         for row in cur.fetchall()
     ]
@@ -371,7 +447,7 @@ def _chunk_vector_search(
         SELECT
             d.title, d.url, d.source, d.category, c.content,
             1 - (c.embedding <=> %s::vector) AS score,
-            d.published_at
+            d.published_at, c.document_id, c.chunk_index
         FROM chunks c
         JOIN documents d ON d.id = c.document_id
         WHERE c.embedding IS NOT NULL
@@ -422,6 +498,7 @@ def _chunk_vector_search(
                 content=row[4] or "",
                 score=score,
                 published_at=str(row[6]) if row[6] else None,
+                **_position(row),
             )
         )
         if len(results) >= top_k:
@@ -445,11 +522,13 @@ def _office_title_boost(
     from a current one.
     """
     sql = """
-        SELECT title, url, source, category, content, published_at, score
+        SELECT title, url, source, category, content, published_at, score,
+               document_id, chunk_index
         FROM (
             SELECT DISTINCT ON (d.id)
                 d.title, d.url, d.source, d.category, c.content, d.published_at,
-                1 - (c.embedding <=> %s::vector) AS score
+                1 - (c.embedding <=> %s::vector) AS score,
+                d.id AS document_id, c.chunk_index
             FROM documents d
             JOIN chunks c ON c.document_id = d.id
             WHERE d.status = 'active'
@@ -485,6 +564,7 @@ def _office_title_boost(
             content=row[4] or "",
             published_at=str(row[5]) if row[5] else None,
             score=float(row[6]),
+            **_position(row),
         )
         for row in cur.fetchall()
     ]

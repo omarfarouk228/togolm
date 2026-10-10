@@ -125,12 +125,17 @@ def _history_text(history: History, limit: int = 4, truncate: int = 300) -> str:
     return "\n".join(lines)
 
 
+MAX_CHUNK_CONTEXT_CHARS = 2000
+
+
 def _format_context(chunks: list[Any]) -> str:
     def _header(c: Any) -> str:
         date = getattr(c, "published_at", None) or "date inconnue"
         return f"[{c.source} — {c.title} — {date}]"
 
-    context = "\n\n".join(f"{_header(c)}\n{c.content[:600]}" for c in chunks)
+    # Retrieved chunks now carry their neighbours (~180 words); the old 600-char
+    # cut kept barely one chunk of them.
+    context = "\n\n".join(f"{_header(c)}\n{c.content[:MAX_CHUNK_CONTEXT_CHARS]}" for c in chunks)
     return context or "(aucun document disponible)"
 
 
