@@ -1,6 +1,16 @@
 services:
   db:
     image: pgvector/pgvector:pg16
+    # Postgres defaults (128MB shared_buffers, 64MB /dev/shm) were too small:
+    # the HNSW index on chunks alone is ~540MB, so cold vector searches took
+    # ~1.8s (490ms once cached), and parallel index builds failed for lack of
+    # shared memory. Sized for a 2.4GB database on a shared 12GB host.
+    command: >
+      postgres
+      -c shared_buffers=1GB
+      -c effective_cache_size=2GB
+      -c maintenance_work_mem=256MB
+    shm_size: 512mb
     environment:
       POSTGRES_DB: ${POSTGRES_DB:-togolm}
       POSTGRES_USER: ${POSTGRES_USER:-togolm}
