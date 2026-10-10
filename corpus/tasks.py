@@ -8,6 +8,7 @@ Tasks:
   - ingest_datasets(embed)     : Ingest all JSONL files in corpus/datasets/
   - embed_pending_chunks()     : Embed chunks missing a vector (DB-driven backlog)
   - run_retrieval_eval()       : Weekly retrieval quality check (results in Redis)
+  - split_journal_officiel()   : One document per act for Journal officiel issues
 """
 
 import subprocess
@@ -267,3 +268,12 @@ def run_retrieval_eval(self) -> dict:
     client.lpush(EVAL_HISTORY_KEY, json.dumps(report))
     client.ltrim(EVAL_HISTORY_KEY, 0, EVAL_HISTORY_LEN - 1)
     return {k: v for k, v in report.items() if k != "results"}
+
+
+@app.task(bind=True, max_retries=0, soft_time_limit=1200, time_limit=1260)
+def split_journal_officiel(self) -> dict:
+    """Split Journal officiel issues stored as one document into one per act."""
+    _ensure_project_on_path()
+    from rag.indexation.split_issues import split_pending_issues
+
+    return split_pending_issues()

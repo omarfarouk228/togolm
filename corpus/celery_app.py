@@ -59,6 +59,11 @@ app.conf.update(
             "task": "corpus.tasks.embed_pending_chunks",
             "schedule": crontab(minute="*/15"),
         },
+        # One document per act for Journal officiel issues, after the morning ingest.
+        "daily-split-journal-officiel": {
+            "task": "corpus.tasks.split_journal_officiel",
+            "schedule": crontab(hour=10, minute=0),
+        },
         # Retrieval quality check against the real corpus, Mondays 04:00.
         "weekly-retrieval-eval": {
             "task": "corpus.tasks.run_retrieval_eval",
