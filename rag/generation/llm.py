@@ -6,13 +6,24 @@ every generation path shares one place to tune the model, token budgets, and
 thinking behaviour.
 """
 
+import logging
 import os
 
 from langchain_core.runnables import Runnable
 from langchain_google_genai import ChatGoogleGenerativeAI
 
-DEFAULT_MODEL = "gemini-2.5-flash"
-DEFAULT_FALLBACK_MODEL = "gemini-3-flash-preview"
+logger = logging.getLogger(__name__)
+
+DEFAULT_MODEL = "gemini-3.8-flash"
+DEFAULT_FALLBACK_MODEL = "gemini-3.5-flash"
+
+# Models Google no longer serves to this project's API key, mapped to their
+# replacement, so a stale GEMINI_MODEL in the deployment environment can't
+# take generation down. On 2026-10-10 every answer fell back to raw extracts:
+# "gemini-2.5-flash is no longer available to new users" (404).
+RETIRED_MODELS = {
+    "gemini-2.5-flash": "gemini-3.8-flash",
+}
 
 
 def gemini_available() -> bool:
@@ -21,12 +32,38 @@ def gemini_available() -> bool:
     return len(key) > 10
 
 
+def _resolve(name: str) -> str:
+    replacement = RETIRED_MODELS.get(name)
+    if replacement:
+        logger.warning("Gemini model %s is retired, using %s instead", name, replacement)
+        return replacement
+    return name
+
+
 def _primary_model_name() -> str:
-    return os.getenv("GEMINI_MODEL", "").strip() or DEFAULT_MODEL
+    return _resolve(os.getenv("GEMINI_MODEL", "").strip() or DEFAULT_MODEL)
 
 
 def _fallback_model_name() -> str:
-    return os.getenv("GEMINI_FALLBACK_MODEL", "").strip() or DEFAULT_FALLBACK_MODEL
+    return _resolve(os.getenv("GEMINI_FALLBACK_MODEL", "").strip() or DEFAULT_FALLBACK_MODEL)
+
+
+def thinking_settings(model_name: str, thinking_budget: int = 0) -> dict:
+    """Thinking parameters for ChatGoogleGenerativeAI, per model generation.
+
+    Gemini 2.x takes a token budget, where 0 means off (left unset it thinks
+    dynamically and can eat the visible answer's token budget). Gemini 3.x
+    takes a level instead and can't fully turn thinking off: "minimal" is the
+    closest, "low" when the caller wants reasoning streamed.
+    """
+    if model_name.startswith("gemini-2"):
+        settings: dict = {"thinking_budget": thinking_budget}
+        if thinking_budget > 0:
+            settings["include_thoughts"] = True
+        return settings
+    if thinking_budget > 0:
+        return {"thinking_config": {"thinking_level": "LOW", "include_thoughts": True}}
+    return {"thinking_config": {"thinking_level": "MINIMAL"}}
 
 
 def has_distinct_fallback_model() -> bool:
@@ -67,17 +104,11 @@ def get_chat_model(
         "google_api_key": os.environ["GEMINI_API_KEY"],
         "max_output_tokens": max_output_tokens,
         "streaming": streaming,
-        # Gemini 2.5 models default to *dynamic* thinking (an unbounded, variable
-        # reasoning budget) when thinking_budget is left unset — it isn't the same
-        # as "off". Passing 0 explicitly is required to disable it. Without this,
-        # thinking tokens are drawn from the same max_output_tokens ceiling as the
-        # visible answer, so a request with a lot of context (e.g. an enumeration
-        # question retrieving several chunks) can spend most/all of its budget
-        # thinking and cut the visible answer off mid-sentence.
-        "thinking_budget": thinking_budget,
+        # Thinking left on draws from the same max_output_tokens ceiling as the
+        # visible answer and can cut it off mid-sentence on context-heavy
+        # requests, so it is kept off (2.x) or minimal (3.x) by default.
+        **thinking_settings(model_name, thinking_budget),
     }
-    if thinking_budget > 0:
-        kwargs["include_thoughts"] = True
     return ChatGoogleGenerativeAI(**kwargs)
 
 
@@ -89,10 +120,10 @@ def get_chat_model_with_fallback(
 ) -> Runnable:
     """Build the Gemini chat model most call sites should use.
 
-    Tries GEMINI_MODEL (default gemini-2.5-flash) first; if it raises for any
+    Tries GEMINI_MODEL (default gemini-3.8-flash) first; if it raises for any
     reason (quota exhausted, model unavailable, transient API error, etc.),
     LangChain's Runnable.with_fallbacks retries once against
-    GEMINI_FALLBACK_MODEL (default gemini-3-flash-preview) with the same
+    GEMINI_FALLBACK_MODEL (default gemini-3.5-flash) with the same
     generation params. Note: for streaming, the fallback only kicks in if the
     failure happens before any token has been yielded — a mid-stream failure
     can't be safely retried without duplicating output already sent.

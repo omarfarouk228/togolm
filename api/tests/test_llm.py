@@ -44,6 +44,7 @@ class TestGetChatModel:
         assert model.model == "gemini-3-pro-preview"
 
     def test_thinking_disabled_by_default(self, monkeypatch):
+        monkeypatch.setenv("GEMINI_MODEL", "gemini-2.0-flash")
         # Regression: Gemini 2.5 defaults to *dynamic* (unbounded) thinking when
         # thinking_budget is left unset, not thinking=off. Left unset, thinking
         # tokens draw from the same max_output_tokens ceiling as the visible
@@ -56,6 +57,7 @@ class TestGetChatModel:
 
     def test_thinking_enabled_when_budget_requested(self, monkeypatch):
         monkeypatch.setenv("GEMINI_API_KEY", "AQ.fake-key")
+        monkeypatch.setenv("GEMINI_MODEL", "gemini-2.0-flash")
         model = get_chat_model(max_output_tokens=100, thinking_budget=500)
         assert model.thinking_budget == 500
         assert model.include_thoughts is True
@@ -90,3 +92,34 @@ class TestGetChatModelWithFallback:
         model = get_chat_model_with_fallback(max_output_tokens=100)
         assert isinstance(model, ChatGoogleGenerativeAI)
         assert not isinstance(model, RunnableWithFallbacks)
+
+
+class TestModelGenerations:
+    def test_retired_model_in_the_environment_is_replaced(self, monkeypatch):
+        # Regression 2026-10-10: GEMINI_MODEL=gemini-2.5-flash started failing
+        # with 404 "no longer available to new users".
+        monkeypatch.setenv("GEMINI_API_KEY", "AQ.fake-key")
+        monkeypatch.setenv("GEMINI_MODEL", "gemini-2.5-flash")
+        assert get_chat_model(max_output_tokens=100).model == "gemini-3.8-flash"
+
+    def test_defaults_are_current_models(self, monkeypatch):
+        monkeypatch.setenv("GEMINI_API_KEY", "AQ.fake-key")
+        monkeypatch.delenv("GEMINI_MODEL", raising=False)
+        monkeypatch.delenv("GEMINI_FALLBACK_MODEL", raising=False)
+        assert get_chat_model(max_output_tokens=100).model == "gemini-3.8-flash"
+        assert (
+            get_chat_model(max_output_tokens=100, use_fallback_model=True).model
+            == "gemini-3.5-flash"
+        )
+
+    def test_gemini_3_uses_thinking_levels_not_budgets(self):
+        from rag.generation.llm import thinking_settings
+
+        assert thinking_settings("gemini-3.8-flash") == {
+            "thinking_config": {"thinking_level": "MINIMAL"}
+        }
+        assert (
+            thinking_settings("gemini-3.8-flash", 500)["thinking_config"]["include_thoughts"]
+            is True
+        )
+        assert thinking_settings("gemini-2.0-flash") == {"thinking_budget": 0}

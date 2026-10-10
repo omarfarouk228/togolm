@@ -13,6 +13,12 @@ import os
 
 from rag.generation.llm import _fallback_model_name, _primary_model_name
 
+
+def _thinking_off(model: str) -> dict:
+    # Gemini 2.x turns thinking off with a zero budget; 3.x only goes down to "minimal".
+    return {"thinking_budget": 0} if model.startswith("gemini-2") else {"thinking_level": "MINIMAL"}
+
+
 LANGUAGE_NAMES = {
     "fr": "français",
     "en": "anglais",
@@ -64,18 +70,18 @@ def transcribe_audio(mime_type: str, data_b64: str, language: str) -> dict:
         types.Part.from_bytes(data=base64.b64decode(data_b64), mime_type=mime_type),
         prompt,
     ]
-    config = types.GenerateContentConfig(
-        response_mime_type="application/json",
-        temperature=0,
-        max_output_tokens=1024,
-        thinking_config=types.ThinkingConfig(thinking_budget=0),
-    )
 
     last_error: Exception | None = None
     models = [_primary_model_name()]
     if _fallback_model_name() not in models:
         models.append(_fallback_model_name())
     for model in models:
+        config = types.GenerateContentConfig(
+            response_mime_type="application/json",
+            temperature=0,
+            max_output_tokens=1024,
+            thinking_config=types.ThinkingConfig(**_thinking_off(model)),
+        )
         try:
             response = client.models.generate_content(model=model, contents=contents, config=config)
             return parse_transcription(response.text or "")

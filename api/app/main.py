@@ -72,6 +72,16 @@ def root():
     }
 
 
+@app.get("/health/generation", include_in_schema=False)
+def health_generation():
+    """Whether the latest answer generation succeeded. "degraded" means answers
+    are falling back to raw extracts (LLM credits, retired model, outage);
+    the uptime workflow alerts on it."""
+    from rag.generation.health import status
+
+    return status()
+
+
 @app.get("/health", include_in_schema=False)
 def health():
     return {"status": "ok"}

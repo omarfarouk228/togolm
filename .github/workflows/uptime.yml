@@ -31,14 +31,16 @@ jobs:
             for attempt in 1 2 3; do
               body=$(curl -s -m 20 -w '\n%{http_code}' "$url" || true)
               code=$(echo "$body" | tail -n1)
-              if [ "$code" = "200" ] && echo "$body" | grep -q "$expect"; then
+              if [ "$code" = "200" ] && echo "$body" | grep -qE "$expect"; then
                 echo "OK   $name"
                 return 0
               fi
               sleep 15
             done
-            echo "DOWN $name ($url -> HTTP ${code:-none})"
-            echo "- **$name** : $url renvoie HTTP ${code:-aucune réponse}" >> failures.md
+            detail="HTTP ${code:-aucune réponse}"
+            [ "$code" = "200" ] && detail="réponse inattendue : $(echo "$body" | head -n1 | cut -c1-160)"
+            echo "DOWN $name ($url -> $detail)"
+            echo "- **$name** : $url, $detail" >> failures.md
             return 1
           }
           : > failures.md
@@ -47,6 +49,9 @@ jobs:
           check "API (base)"       https://api.togolm.com/v1/stats total_documents     || ok=false
           check "Site"             https://togolm.com/             TogoLM              || ok=false
           check "Admin"            https://admin.togolm.com/       html                || ok=false
+          # Answers silently fall back to raw extracts when the LLM fails
+          # (exhausted credits, retired model): "degraded" is an outage too.
+          check "Génération (LLM)" https://api.togolm.com/health/generation '"status":"(ok|unknown)"' || ok=false
           echo "ok=$ok" >> "$GITHUB_OUTPUT"
 
       - name: Open or close the outage issue
