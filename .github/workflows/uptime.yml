@@ -1,0 +1,75 @@
+name: Uptime
+
+# Checks the public services every 5 minutes from outside the VPS. After 3
+# failed attempts it opens a GitHub issue labelled "outage" (GitHub notifies
+# by e-mail and in the mobile app); when everything answers again it closes
+# that issue with the downtime. On 2026-10-09 the API answered 502 for ~25
+# minutes after a deploy and nobody was alerted: this is the alert.
+
+on:
+  schedule:
+    - cron: "*/5 * * * *"
+  workflow_dispatch:
+
+permissions:
+  issues: write
+
+concurrency:
+  group: uptime
+  cancel-in-progress: false
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Probe services
+        id: probe
+        run: |
+          check() {
+            local name="$1" url="$2" expect="$3"
+            for attempt in 1 2 3; do
+              body=$(curl -s -m 20 -w '\n%{http_code}' "$url" || true)
+              code=$(echo "$body" | tail -n1)
+              if [ "$code" = "200" ] && echo "$body" | grep -q "$expect"; then
+                echo "OK   $name"
+                return 0
+              fi
+              sleep 15
+            done
+            echo "DOWN $name ($url -> HTTP ${code:-none})"
+            echo "- **$name** : $url renvoie HTTP ${code:-aucune réponse}" >> failures.md
+            return 1
+          }
+          : > failures.md
+          ok=true
+          check "API"              https://api.togolm.com/health   '"ok"'               || ok=false
+          check "API (base)"       https://api.togolm.com/v1/stats total_documents     || ok=false
+          check "Site"             https://togolm.com/             TogoLM              || ok=false
+          check "Admin"            https://admin.togolm.com/       html                || ok=false
+          echo "ok=$ok" >> "$GITHUB_OUTPUT"
+
+      - name: Open or close the outage issue
+        uses: actions/github-script@v7
+        env:
+          OK: ${{ steps.probe.outputs.ok }}
+        with:
+          script: |
+            const fs = require("fs");
+            const ok = process.env.OK === "true";
+            const { owner, repo } = context.repo;
+            const open = await github.rest.issues.listForRepo({ owner, repo, state: "open", labels: "outage" });
+            const current = open.data[0];
+            const now = new Date().toISOString().replace("T", " ").slice(0, 16) + " UTC";
+            if (!ok && !current) {
+              const failures = fs.readFileSync("failures.md", "utf8");
+              await github.rest.issues.create({
+                owner, repo, labels: ["outage"],
+                title: `Panne détectée (${now})`,
+                body: `Le contrôle automatique a échoué 3 fois de suite :\n\n${failures}\nCette issue se fermera toute seule au retour du service.`,
+              });
+            } else if (ok && current) {
+              const minutes = Math.round((Date.now() - new Date(current.created_at)) / 60000);
+              await github.rest.issues.createComment({ owner, repo, issue_number: current.number, body: `Service rétabli (${now}), environ ${minutes} min après la détection.` });
+              await github.rest.issues.update({ owner, repo, issue_number: current.number, state: "closed" });
+            }

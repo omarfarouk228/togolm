@@ -7,6 +7,7 @@ Tasks:
   - run_news_spiders(embed)    : Run only news/press spiders
   - ingest_datasets(embed)     : Ingest all JSONL files in corpus/datasets/
   - embed_pending_chunks()     : Embed chunks missing a vector (DB-driven backlog)
+  - run_retrieval_eval()       : Weekly retrieval quality check (results in Redis)
 """
 
 import subprocess
@@ -244,3 +245,25 @@ def embed_pending_chunks(self, max_chunks: int = 4000) -> dict:
         return embed_pending(max_chunks=max_chunks, deadline_s=1200)
     finally:
         client.delete(EMBED_LOCK_KEY)
+
+
+# Weekly retrieval quality check. Results go to a short Redis history that
+# GET /v1/admin/eval/retrieval serves to the admin.
+EVAL_HISTORY_KEY = "togolm:eval:retrieval"
+EVAL_HISTORY_LEN = 26  # about six months of weekly runs
+
+
+@app.task(bind=True, max_retries=0, soft_time_limit=900, time_limit=960)
+def run_retrieval_eval(self) -> dict:
+    import json
+
+    import redis
+
+    _ensure_project_on_path()
+    from rag.evaluation.retrieval import evaluate, load_cases
+
+    report = evaluate(load_cases())
+    client = redis.Redis.from_url(app.conf.broker_url)
+    client.lpush(EVAL_HISTORY_KEY, json.dumps(report))
+    client.ltrim(EVAL_HISTORY_KEY, 0, EVAL_HISTORY_LEN - 1)
+    return {k: v for k, v in report.items() if k != "results"}

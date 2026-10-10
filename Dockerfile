@@ -64,6 +64,7 @@ COPY db/       ./db/
 COPY corpus/   ./corpus/
 COPY alembic/  ./alembic/
 COPY scripts/  ./scripts/
+COPY evals/    ./evals/
 COPY alembic.ini ./alembic.ini
 
 # Non-root user for security

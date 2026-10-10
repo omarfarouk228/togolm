@@ -161,3 +161,70 @@ class TestRateLimitFailOpen:
         mock_redis.incr.side_effect = Exception("INCR failed")
         with patch("api.app.core.rate_limit._get_redis", return_value=mock_redis):
             await check_rate_limit(_make_request(), api_key=None)
+
+
+class TestRateLimitPerDevice:
+    """Anonymous quota per device (X-Client-Id) under a shared per-IP ceiling."""
+
+    @staticmethod
+    def _request(client_id: str | None, ip: str = "41.207.1.1"):
+        headers = {"X-Real-IP": ip}
+        if client_id is not None:
+            headers["X-Client-Id"] = client_id
+        req = MagicMock()
+        req.client.host = ip
+        req.headers.get = lambda key, default=None: headers.get(key, default)
+        return req
+
+    @staticmethod
+    def _redis(counts: dict[str, int]):
+        r = MagicMock()
+        r.incr.side_effect = lambda key: counts.get(key.split(":")[1], 1)
+        return r
+
+    @pytest.mark.asyncio
+    async def test_device_buckets_are_used_with_a_valid_client_id(self):
+        r = self._redis({})
+        with patch("api.app.core.rate_limit._get_redis", return_value=r):
+            await check_rate_limit(
+                self._request("3f2b8c1e-9a7d-4c2e-b1f0-123456789abc"), api_key=None
+            )
+        keys = [c.args[0] for c in r.incr.call_args_list if c.args[0].startswith("rl:")]
+        assert keys == [
+            "rl:anon-device:41.207.1.1:3f2b8c1e-9a7d-4c2e-b1f0-123456789abc",
+            "rl:anon-ip:41.207.1.1",
+        ]
+
+    @pytest.mark.asyncio
+    async def test_neighbour_on_same_ip_is_not_blocked_by_another_device(self):
+        # This device has used 3 requests; the shared IP has seen 60 in total:
+        # under the old per-IP rule (20) it would be refused.
+        r = self._redis({"anon-device": 3, "anon-ip": 60})
+        with patch("api.app.core.rate_limit._get_redis", return_value=r):
+            await check_rate_limit(self._request("device-aaaaaaaaaaaaaaaa"), api_key=None)
+
+    @pytest.mark.asyncio
+    async def test_device_over_its_quota_is_refused(self):
+        r = self._redis({"anon-device": 21, "anon-ip": 30})
+        with patch("api.app.core.rate_limit._get_redis", return_value=r):
+            with pytest.raises(HTTPException) as exc:
+                await check_rate_limit(self._request("device-aaaaaaaaaaaaaaaa"), api_key=None)
+        assert exc.value.status_code == 429
+        assert "20 requests" in exc.value.detail
+
+    @pytest.mark.asyncio
+    async def test_ip_ceiling_still_applies_to_forged_device_ids(self):
+        r = self._redis({"anon-device": 1, "anon-ip": 151})
+        with patch("api.app.core.rate_limit._get_redis", return_value=r):
+            with pytest.raises(HTTPException) as exc:
+                await check_rate_limit(self._request("forged-id-0000000000001"), api_key=None)
+        assert "150 requests" in exc.value.detail
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("bad_id", [None, "short", "has spaces in it!!!!", "x" * 65])
+    async def test_without_a_valid_device_id_the_per_ip_quota_applies(self, bad_id):
+        r = self._redis({})
+        with patch("api.app.core.rate_limit._get_redis", return_value=r):
+            await check_rate_limit(self._request(bad_id), api_key=None)
+        keys = [c.args[0] for c in r.incr.call_args_list if c.args[0].startswith("rl:")]
+        assert keys == ["rl:anon:41.207.1.1"]

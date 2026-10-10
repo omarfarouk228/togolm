@@ -2,7 +2,9 @@
 Redis-based rate limiting for TogoLM API.
 
 Quotas per 24-hour window:
-    anonymous    :    20 req  (identified by client IP)
+    anonymous    :    20 req  per device (X-Client-Id header, sent by the
+                              showcase), with at most 150 req per IP in total;
+                              20 req per IP when no device id is sent
     free plan    :   200 req  (identified by key ID)
     dev plan     : 1 000 req  (identified by key ID)
     institution  : 100 000 req (identified by key ID — effectively unlimited)
@@ -37,6 +39,24 @@ _LIMITS: dict[str, tuple[int, int]] = {
 }
 
 PLAN_QUOTAS: dict[str, int] = {k: v[0] for k, v in _LIMITS.items()}
+
+# Many Togolese mobile users share one public IP (carrier-grade NAT), so a
+# per-IP anonymous quota made strangers exhaust each other's: in the week of
+# 2026-10-03, 35% of requests were refused. Clients that send a stable,
+# random device id get the anonymous quota per device instead. The id is
+# client-chosen and can be forged, so a per-IP ceiling stays the real bound
+# on what one address can consume.
+ANON_SHARED_IP_LIMIT = 150
+_CLIENT_ID_CHARS = set("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-")
+
+
+def _get_client_id(request: Request) -> str | None:
+    """The X-Client-Id header if it looks like a random device id, else None."""
+    value = (request.headers.get("X-Client-Id") or "").strip()
+    if 16 <= len(value) <= 64 and set(value) <= _CLIENT_ID_CHARS:
+        return value
+    return None
+
 
 _STATS_TTL = 35 * 86_400  # keep 35 days of stats
 
@@ -88,16 +108,28 @@ async def check_rate_limit(
         identifier = _get_client_ip(request)
 
     max_req, window = _LIMITS.get(plan, _LIMITS["dev"])
-    redis_key = f"rl:{plan}:{identifier}"
+    # (redis key, limit) pairs; the request must fit within every one.
+    buckets = [(f"rl:{plan}:{identifier}", max_req)]
+    if plan == "anon":
+        client_id = _get_client_id(request)
+        if client_id:
+            buckets = [
+                (f"rl:anon-device:{identifier}:{client_id}", max_req),
+                (f"rl:anon-ip:{identifier}", ANON_SHARED_IP_LIMIT),
+            ]
     today = datetime.date.today().isoformat()
 
     try:
         r = _get_redis()
 
         # Rate limit check
-        count = r.incr(redis_key)
-        if count == 1:
-            r.expire(redis_key, window)
+        exceeded_limit = None
+        for redis_key, limit in buckets:
+            count = r.incr(redis_key)
+            if count == 1:
+                r.expire(redis_key, window)
+            if count > limit and exceeded_limit is None:
+                exceeded_limit = limit
 
         # Stats counters — pipeline to keep it one round-trip
         pipe = r.pipeline()
@@ -107,13 +139,13 @@ async def check_rate_limit(
         pipe.expire(f"stats:req:{today}:{plan}", _STATS_TTL)
         pipe.execute()
 
-        if count > max_req:
+        if exceeded_limit is not None:
             # Record the 429 separately
             r.incr(f"stats:rl_hit:{today}")
             r.expire(f"stats:rl_hit:{today}", _STATS_TTL)
             raise HTTPException(
                 status_code=429,
-                detail=f"Rate limit exceeded ({max_req} requests/24 h for plan '{plan}').",
+                detail=f"Rate limit exceeded ({exceeded_limit} requests/24 h for plan '{plan}').",
                 headers={"Retry-After": str(window)},
             )
     except HTTPException:

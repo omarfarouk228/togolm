@@ -59,6 +59,11 @@ app.conf.update(
             "task": "corpus.tasks.embed_pending_chunks",
             "schedule": crontab(minute="*/15"),
         },
+        # Retrieval quality check against the real corpus, Mondays 04:00.
+        "weekly-retrieval-eval": {
+            "task": "corpus.tasks.run_retrieval_eval",
+            "schedule": crontab(hour=4, minute=0, day_of_week="monday"),
+        },
     },
     worker_prefetch_multiplier=1,
 )
