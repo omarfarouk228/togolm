@@ -10,9 +10,10 @@ Corpus:
   GET  /v1/admin/corpus/recent   — recently ingested documents
 
 API Keys:
-  GET    /v1/admin/keys          — list all keys
+  GET    /v1/admin/keys          — list keys (paginated)
   POST   /v1/admin/keys          — create a key with a given plan
   PATCH  /v1/admin/keys/{id}     — update plan or active status
+  POST   /v1/admin/keys/{id}/reset: issue a new secret, old one stops working
   DELETE /v1/admin/keys/{id}     — hard-delete a key
 
 Queries:
@@ -41,6 +42,7 @@ from api.app.features.admin.schemas import (
     AdminLoginRequest,
     AdminLoginResponse,
     ApiKeyItem,
+    ApiKeyListResponse,
     CreateKeyRequest,
     CreateKeyResponse,
     FeedbackItem,
@@ -115,8 +117,10 @@ def corpus_recent(
 # ── API Keys ──────────────────────────────────────────────────────────────────
 
 
-@router.get("/admin/keys", response_model=list[ApiKeyItem])
+@router.get("/admin/keys", response_model=ApiKeyListResponse)
 def list_keys(
+    page: int = Query(1, ge=1),
+    page_size: int = Query(20, ge=1, le=100),
     plan: str | None = Query(None),
     active_only: bool = Query(False),
     authorization: str | None = Header(default=None),
@@ -125,7 +129,7 @@ def list_keys(
     _auth(authorization, x_admin_key)
     conn = get_conn()
     try:
-        return service.list_api_keys(conn, plan, active_only)
+        return service.list_api_keys(conn, page, page_size, plan, active_only)
     finally:
         conn.close()
 
@@ -155,6 +159,20 @@ def update_key(
     conn = get_conn()
     try:
         return service.update_api_key(conn, key_id, req)
+    finally:
+        conn.close()
+
+
+@router.post("/admin/keys/{key_id}/reset", response_model=CreateKeyResponse)
+def reset_key(
+    key_id: str,
+    authorization: str | None = Header(default=None),
+    x_admin_key: str | None = Header(default=None),
+):
+    _auth(authorization, x_admin_key)
+    conn = get_conn()
+    try:
+        return service.reset_api_key(conn, key_id)
     finally:
         conn.close()
 

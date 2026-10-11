@@ -187,6 +187,7 @@ See [`sdk/js`](sdk/js) and [`sdk/python`](sdk/python) for full usage, including 
 | `GET` | `/v1/admin/keys` | List all API keys |
 | `POST` | `/v1/admin/keys` | Create an API key |
 | `PATCH` | `/v1/admin/keys/{id}` | Update plan or active status |
+| `POST` | `/v1/admin/keys/{id}/reset` | Reset an API key (new secret) |
 | `DELETE` | `/v1/admin/keys/{id}` | Delete an API key |
 | `GET` | `/v1/admin/queries` | Paginated query history |
 | `GET` | `/v1/admin/queries/stats` | Query analytics (off-topic rate, latency) |

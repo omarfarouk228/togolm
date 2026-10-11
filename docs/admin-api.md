@@ -68,9 +68,10 @@ curl http://localhost:8000/v1/admin/corpus/stats \
 
 | Method | Path | Description |
 |--------|------|-------------|
-| `GET` | `/v1/admin/keys` | List all keys (supports `?plan=free&active_only=true`) |
+| `GET` | `/v1/admin/keys` | List keys, paginated: `{items, total, page, page_size}` (supports `?page=1&page_size=20&plan=free&active_only=true`) |
 | `POST` | `/v1/admin/keys` | Create a key |
 | `PATCH` | `/v1/admin/keys/{id}` | Update plan or active status |
+| `POST` | `/v1/admin/keys/{id}/reset` | Issue a new secret (returned once); the old key stops working immediately |
 | `DELETE` | `/v1/admin/keys/{id}` | Hard-delete a key |
 
 **Create a key**

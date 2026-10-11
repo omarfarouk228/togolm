@@ -40,6 +40,13 @@ class ApiKeyItem(BaseModel):
     last_used: str | None
 
 
+class ApiKeyListResponse(BaseModel):
+    items: list[ApiKeyItem]
+    total: int
+    page: int
+    page_size: int
+
+
 class CreateKeyRequest(BaseModel):
     name: str
     email: EmailStr
