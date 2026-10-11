@@ -11,6 +11,7 @@ from api.app.core.rate_limit import PLAN_QUOTAS
 from api.app.features.admin.schemas import (
     AdminLoginResponse,
     ApiKeyItem,
+    ApiKeyListResponse,
     CreateKeyRequest,
     CreateKeyResponse,
     FeedbackItem,
@@ -163,7 +164,34 @@ def get_recent_documents(conn, limit: int) -> list[RecentDocument]:
 # ── API Keys ──────────────────────────────────────────────────────────────────
 
 
-def list_api_keys(conn, plan: str | None, active_only: bool) -> list[ApiKeyItem]:
+_KEY_COLUMNS = """id::text, key_prefix, owner_name, owner_email, use_case,
+                   plan, is_active, created_at::text, last_used::text"""
+
+
+def _key_item(r) -> ApiKeyItem:
+    return ApiKeyItem(
+        id=r[0],
+        key_prefix=r[1],
+        owner_name=r[2],
+        owner_email=r[3],
+        use_case=r[4],
+        plan=r[5],
+        is_active=r[6],
+        created_at=r[7],
+        last_used=r[8],
+    )
+
+
+def _new_key() -> tuple[str, str, str]:
+    """Return (plain key, sha256 hash, display prefix) for a fresh key."""
+    key = _KEY_PREFIX + secrets.token_hex(24)
+    return key, hashlib.sha256(key.encode()).hexdigest(), key[:14]
+
+
+def list_api_keys(
+    conn, page: int, page_size: int, plan: str | None, active_only: bool
+) -> ApiKeyListResponse:
+    offset = (page - 1) * page_size
     where = ["1=1"]
     params: list = []
     if plan:
@@ -171,32 +199,23 @@ def list_api_keys(conn, plan: str | None, active_only: bool) -> list[ApiKeyItem]
         params.append(plan)
     if active_only:
         where.append("is_active = true")
+    clause = " AND ".join(where)
 
     with conn.cursor() as cur:
+        cur.execute(f"SELECT COUNT(*) FROM api_keys WHERE {clause}", params)
+        total = cur.fetchone()[0]
         cur.execute(
             f"""
-            SELECT id::text, key_prefix, owner_name, owner_email, use_case,
-                   plan, is_active, created_at::text, last_used::text
+            SELECT {_KEY_COLUMNS}
             FROM api_keys
-            WHERE {" AND ".join(where)}
+            WHERE {clause}
             ORDER BY created_at DESC
+            LIMIT %s OFFSET %s
         """,
-            params,
+            params + [page_size, offset],
         )
-        return [
-            ApiKeyItem(
-                id=r[0],
-                key_prefix=r[1],
-                owner_name=r[2],
-                owner_email=r[3],
-                use_case=r[4],
-                plan=r[5],
-                is_active=r[6],
-                created_at=r[7],
-                last_used=r[8],
-            )
-            for r in cur.fetchall()
-        ]
+        items = [_key_item(r) for r in cur.fetchall()]
+    return ApiKeyListResponse(items=items, total=total, page=page, page_size=page_size)
 
 
 def create_api_key(conn, req: CreateKeyRequest) -> CreateKeyResponse:
@@ -205,9 +224,7 @@ def create_api_key(conn, req: CreateKeyRequest) -> CreateKeyResponse:
             status_code=400, detail=f"Invalid plan. Choose from: {list(PLAN_QUOTAS)}"
         )
 
-    key = _KEY_PREFIX + secrets.token_hex(24)
-    key_hash = hashlib.sha256(key.encode()).hexdigest()
-    key_prefix = key[:14]
+    key, key_hash, key_prefix = _new_key()
 
     with conn.cursor() as cur:
         cur.execute("SELECT id FROM api_keys WHERE owner_email = %s", (req.email,))
@@ -253,8 +270,7 @@ def update_api_key(conn, key_id: str, req: PatchKeyRequest) -> ApiKeyItem:
             f"""
             UPDATE api_keys SET {", ".join(sets)}
             WHERE id::text = %s
-            RETURNING id::text, key_prefix, owner_name, owner_email, use_case,
-                      plan, is_active, created_at::text, last_used::text
+            RETURNING {_KEY_COLUMNS}
         """,
             params,
         )
@@ -263,16 +279,32 @@ def update_api_key(conn, key_id: str, req: PatchKeyRequest) -> ApiKeyItem:
         raise HTTPException(status_code=404, detail="API key not found.")
     conn.commit()
 
-    return ApiKeyItem(
-        id=row[0],
-        key_prefix=row[1],
-        owner_name=row[2],
-        owner_email=row[3],
-        use_case=row[4],
-        plan=row[5],
-        is_active=row[6],
-        created_at=row[7],
-        last_used=row[8],
+    return _key_item(row)
+
+
+def reset_api_key(conn, key_id: str) -> CreateKeyResponse:
+    """Replace a key's secret. The old key stops working at once; the record
+    (owner, plan, quota counter keyed by id) is kept."""
+    key, key_hash, key_prefix = _new_key()
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            UPDATE api_keys SET key_hash = %s, key_prefix = %s, last_used = NULL
+            WHERE id::text = %s
+            RETURNING plan
+        """,
+            (key_hash, key_prefix, key_id),
+        )
+        row = cur.fetchone()
+    if not row:
+        raise HTTPException(status_code=404, detail="API key not found.")
+    conn.commit()
+
+    return CreateKeyResponse(
+        api_key=key,
+        key_prefix=key_prefix + "...",
+        plan=row[0],
+        quota_per_day=PLAN_QUOTAS.get(row[0], 0),
     )
 
 
