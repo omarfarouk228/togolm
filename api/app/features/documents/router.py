@@ -87,7 +87,7 @@ def list_documents(
         where_clauses.append("d.source = %s")
         params.append(source)
     if category:
-        where_clauses.append("d.category = %s")
+        where_clauses.append("%s IN (d.category, d.subcategory)")
         params.append(category)
     if language:
         where_clauses.append("d.language = %s")

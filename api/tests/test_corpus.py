@@ -13,12 +13,36 @@ def test_health():
 
 
 def test_categories():
+    from api.app.features.corpus.router import CATEGORIES
+
     response = client.get("/v1/categories")
     assert response.status_code == 200
     data = response.json()
-    assert "categories" in data
-    assert len(data["categories"]) > 0
-    assert "administrative" in data["categories"]
+    assert set(data["counts"]) == set(CATEGORIES)
+    # Only categories that hold documents are announced.
+    assert data["categories"] == [c for c in CATEGORIES if data["counts"][c] > 0]
+    assert data["total"] == len(data["categories"])
+
+
+def test_categories_hide_empty_and_count_subcategories():
+    """A category with no document must not be announced; one only present as
+    a subcategory (press articles about health) must be."""
+    from unittest.mock import MagicMock, patch
+
+    conn = MagicMock()
+    cur = conn.cursor.return_value.__enter__.return_value
+    cur.fetchall.return_value = [("legal", 12), ("health", 3)]
+    with patch("api.app.features.corpus.router.get_conn", return_value=conn):
+        response = client.get("/v1/categories")
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["categories"] == ["legal", "health"]
+    assert data["total"] == 2
+    assert data["counts"]["health"] == 3
+    assert data["counts"]["agriculture"] == 0
+    sql = cur.execute.call_args.args[0]
+    assert "d.subcategory" in sql
 
 
 def test_stats():

@@ -48,6 +48,7 @@ WORKING_SPIDERS = [
     "primature",  # presidenceduconseil.gouv.tg — full crawl, plus complet que sitemap
     "inseed",
     "gouv_ministry",
+    "sante",  # sante-assurances.gouv.tg, via its WordPress REST API
     "journal_officiel",
     "otr",
     "legal_pdf",

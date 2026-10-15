@@ -70,16 +70,8 @@ SITES = [
         ],
     },
     # ── Health ───────────────────────────────────────────────────────────────
-    {
-        "domain": "sante.gouv.tg",
-        "source": "sante.gouv.tg",
-        "category": "health",
-        "sitemaps": [
-            "https://sante.gouv.tg/wp-sitemap-posts-post-1.xml",
-            "https://sante.gouv.tg/post-sitemap.xml",
-            "https://sante.gouv.tg/documentation-sitemap.xml",
-        ],
-    },
+    # sante.gouv.tg moved to a React SPA (sante-assurances.gouv.tg) with no
+    # sitemap: crawled through its WordPress REST API by sante_spider instead.
     # ── Justice / Security ───────────────────────────────────────────────────
     {
         "domain": "justice.gouv.tg",
@@ -117,7 +109,6 @@ SITES = [
     },
     # ── Digital ──────────────────────────────────────────────────────────────
     # numerique.gouv.tg: sitemap returns no URLs — skip
-    # sante.gouv.tg: React SPA, no WordPress sitemap — skip
     # ── Tourism ──────────────────────────────────────────────────────────────
     {
         "domain": "tourisme.gouv.tg",
