@@ -139,6 +139,25 @@ class TestRetrieve:
         assert result[0].title == "Titre doc"
         assert result[0].score == 0.9
 
+    def test_category_filter_also_matches_subcategory(self):
+        # Press articles about health are stored as category "press",
+        # subcategory "health": every search leg must match either column.
+        mock_conn = self._mock_conn([], chunk_count=1)
+
+        with (
+            patch("rag.retrieval.search.get_conn", return_value=mock_conn),
+            patch("rag.retrieval.search._get_embedder") as mock_emb,
+        ):
+            mock_emb.return_value.encode_query.return_value = [0.1] * 384
+            retrieve("hôpital de Lomé", category="health")
+
+        cur = mock_conn.cursor.return_value
+        filtered = [c.args[0] for c in cur.execute.call_args_list if "health" in str(c.args[1:])]
+        assert filtered, "no query was filtered on the requested category"
+        for sql in filtered:
+            assert "subcategory)" in sql
+            assert "d.category = " not in sql
+
     def test_filters_low_score_chunks(self):
         # Score 0.1 is well below min_score → filtered out of the vector leg
         # (no full-text match here: full-text hits are kept on lexical evidence).

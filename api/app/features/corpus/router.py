@@ -1,5 +1,5 @@
 """
-GET /v1/categories       — List corpus categories
+GET /v1/categories       — List corpus categories that hold documents, with counts
 GET /v1/stats            — Public corpus statistics
 GET /v1/documents/recent — Small fixed-size list of recent documents for display
 """
@@ -29,6 +29,7 @@ CATEGORIES = [
 class CategoryResponse(BaseModel):
     categories: list[str]
     total: int
+    counts: dict[str, int]
 
 
 class SourceStat(BaseModel):
@@ -61,10 +62,43 @@ class StatsResponse(BaseModel):
     model_version: str
 
 
+def _category_counts(cur) -> dict[str, int]:
+    """Active documents per known category, counted the way the search filter
+    matches them: on category OR subcategory (news sites file health, economy...
+    articles under "press" with the topic in subcategory)."""
+    cur.execute(
+        """
+        SELECT t.cat, COUNT(*)
+        FROM documents d
+        CROSS JOIN LATERAL (
+            SELECT DISTINCT unnest(ARRAY[d.category, d.subcategory]) AS cat
+        ) t
+        WHERE d.status = 'active' AND t.cat = ANY(%s)
+        GROUP BY t.cat
+        """,
+        (CATEGORIES,),
+    )
+    found = dict(cur.fetchall())
+    return {cat: found.get(cat, 0) for cat in CATEGORIES}
+
+
+def _non_empty(counts: dict[str, int]) -> list[str]:
+    return [cat for cat in CATEGORIES if counts[cat] > 0]
+
+
 @router.get("/categories", response_model=CategoryResponse)
-async def list_categories():
-    """Return the list of available corpus categories."""
-    return CategoryResponse(categories=CATEGORIES, total=len(CATEGORIES))
+def list_categories():
+    """Return the categories that currently hold documents, so a filter on any
+    of them returns results. ``counts`` covers every known category, zeros
+    included, to show where coverage is thin."""
+    conn = get_conn()
+    try:
+        with conn.cursor() as cur:
+            counts = _category_counts(cur)
+    finally:
+        conn.close()
+    categories = _non_empty(counts)
+    return CategoryResponse(categories=categories, total=len(categories), counts=counts)
 
 
 @router.get("/stats", response_model=StatsResponse)
@@ -98,6 +132,8 @@ async def corpus_stats():
                 """
             )
             source_rows = cur.fetchall()
+
+            category_counts = _category_counts(cur)
     finally:
         conn.close()
 
@@ -109,7 +145,7 @@ async def corpus_stats():
         total_documents=total_docs,
         total_chunks=total_chunks,
         languages=sorted(languages) or ["fr"],
-        categories=CATEGORIES,
+        categories=_non_empty(category_counts),
         sources=sources,
         last_updated=last_updated.isoformat() if last_updated else None,
         model_version="togolm-embed-v1",

@@ -47,6 +47,8 @@ Query the Togolese corpus via RAG.
 }
 ```
 
+`category` is optional. It restricts retrieval to documents whose category **or** subcategory matches: news articles are stored as `press` with their topic (`health`, `economy`...) as subcategory, so `"category": "health"` also returns health news. Use a value listed by `GET /v1/categories`.
+
 **Response**
 ```json
 {
@@ -135,13 +137,14 @@ Generate an embedding vector for a text.
 
 ## GET /v1/categories
 
-Returns all corpus categories.
+Returns the categories that currently hold documents, so filtering on any of them returns results. `counts` gives the number of active documents for every known category (category or subcategory match, the same rule as the query filter), zeros included.
 
 **Response**
 ```json
 {
   "categories": ["administrative", "legal", "education", "economy", "health", "agriculture", "politics", "press"],
-  "total": 8
+  "total": 8,
+  "counts": {"administrative": 6, "legal": 771, "health": 412, "culinary": 0, "...": 0}
 }
 ```
 
@@ -157,7 +160,7 @@ Public corpus statistics.
   "total_documents": 12450,
   "total_chunks": 89320,
   "languages": ["fr"],
-  "categories": ["administrative", "legal", ...],
+  "categories": ["administrative", "legal", ...],  // non-empty categories only
   "last_updated": "2026-05-17T08:00:00Z",
   "model_version": "togolm-7b-v1"
 }

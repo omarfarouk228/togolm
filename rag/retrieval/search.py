@@ -204,6 +204,10 @@ def retrieve(
     Return the top-k most relevant chunks for the question (hybrid search).
     Falls back to full-text only when the query can't be embedded (embedding
     API down) or no chunk has a vector yet.
+
+    ``category`` matches a document's category OR its subcategory: news sites
+    file health, education, economy... articles under category "press" with
+    the topic in subcategory, so a strict category match would miss them.
     """
     embedder = _get_embedder()
     try:
@@ -440,7 +444,7 @@ def _fulltext_chunk_search(
     params = {"tsquery": tsquery, "limit": limit, "vector": query_vector, "model_id": model_id}
     category_filter = ""
     if category:
-        category_filter = "AND d.category = %(category)s"
+        category_filter = "AND %(category)s IN (d.category, d.subcategory)"
         params["category"] = category
     model_filter = ""
     if model_id:
@@ -512,7 +516,7 @@ def _chunk_vector_search(
         params.append(model_id)
 
     if category:
-        base_sql += " AND d.category = %s"
+        base_sql += " AND %s IN (d.category, d.subcategory)"
         params.append(category)
 
     # Fetch extra candidates so there's enough headroom to pull several chunks
@@ -593,7 +597,7 @@ def _office_title_boost(
         params.append(model_id)
 
     if category:
-        sql += " AND d.category = %s"
+        sql += " AND %s IN (d.category, d.subcategory)"
         params.append(category)
 
     sql += """
@@ -641,7 +645,7 @@ def _fulltext_search(
     params: list = [question, question]
 
     if category:
-        base_sql += " AND category = %s"
+        base_sql += " AND %s IN (category, subcategory)"
         params.append(category)
 
     base_sql += " ORDER BY score DESC LIMIT %s"
