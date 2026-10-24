@@ -34,6 +34,7 @@ from api.app.features.contribute.router import router as contribute_router  # no
 from api.app.features.corpus.router import router as corpus_router  # noqa: E402
 from api.app.features.documents.router import router as documents_router  # noqa: E402
 from api.app.features.feedback.router import router as feedback_router  # noqa: E402
+from api.app.features.procedures.router import router as procedures_router  # noqa: E402
 from api.app.features.query.router import router as query_router  # noqa: E402
 
 app = FastAPI(
@@ -59,6 +60,7 @@ _security = [Depends(check_rate_limit)]
 app.include_router(admin_router, prefix="/v1")  # protected by X-Admin-Key, no rate limit
 app.include_router(auth_router, prefix="/v1")  # no rate limit on register/me
 app.include_router(corpus_router, prefix="/v1")  # public read-only stats, no rate limit
+app.include_router(procedures_router, prefix="/v1")  # public read-only procedure cards
 app.include_router(query_router, prefix="/v1", dependencies=_security)
 app.include_router(documents_router, prefix="/v1", dependencies=_security)
 app.include_router(feedback_router, prefix="/v1")  # bounded write, no rate limit
