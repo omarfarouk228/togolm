@@ -16,6 +16,8 @@ def log_query(
     """Persist a query log record — called in background, never raises."""
     if isinstance(api_key, APIKeyRecord):
         prefix = api_key.preview
+    elif isinstance(api_key, str) and api_key.startswith("bot:"):
+        prefix = api_key  # "bot:telegram", "bot:whatsapp": usage per channel
     elif isinstance(api_key, str):
         prefix = api_key[:8] + "..." if len(api_key) > 8 else api_key
     else:
