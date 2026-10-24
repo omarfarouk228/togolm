@@ -7,16 +7,19 @@ Covers: politics, economy, society, sports, culture, international.
 Uses post sitemaps for complete article discovery.
 """
 
+import re
+
 import scrapy
 from scrapers.spiders.base_spider import BaseTogoSpider
 
-# All 28 post sitemaps (ordered oldest → newest; newest = highest number)
-# Targeting sitemaps 15-28 (most recent ~14,000 articles) for a good corpus
-# without crawling 10+ years of archived content.
-POST_SITEMAPS = [
-    f"https://togoactualite.com/post-sitemap{'' if i == 1 else i}.xml"
-    for i in range(15, 29)  # sitemaps 15..28 = ~14,000 recent articles
-]
+# Post sitemaps are numbered oldest -> newest. Only sitemaps 15 and up (the
+# ~14,000 most recent articles) are crawled, to skip 10+ years of archives.
+# They are read from the sitemap index rather than hardcoded (the old
+# range(15, 29) would have silently stopped at post-sitemap28, as icilome's
+# hardcoded list did at 23).
+SITEMAP_INDEX = "https://togoactualite.com/sitemap_index.xml"
+POST_SITEMAP_RE = re.compile(r"post-sitemap(\d*)\.xml$")
+MIN_POST_SITEMAP = 15
 
 EXCLUDED_PATHS = [
     "/category/",
@@ -55,7 +58,7 @@ class TogoactualiteSpider(BaseTogoSpider):
     category = "press"
     language = "fr"
 
-    start_urls = POST_SITEMAPS
+    start_urls = [SITEMAP_INDEX]
 
     custom_settings = {
         "DOWNLOAD_DELAY": 0.5,
@@ -71,10 +74,20 @@ class TogoactualiteSpider(BaseTogoSpider):
 
     def _parse_sitemap(self, response):
         response.selector.remove_namespaces()
+        if response.xpath("/sitemapindex"):
+            yield from self._parse_sitemap_index(response)
+            return
         for url in response.xpath("//loc/text()").getall():
             url = url.strip()
             if self._is_article_url(url):
                 yield scrapy.Request(url, callback=self.parse, priority=10)
+
+    def _parse_sitemap_index(self, response):
+        """Follow post sitemaps >= MIN_POST_SITEMAP, newest first."""
+        for url in response.xpath("//sitemap/loc/text()").getall():
+            m = POST_SITEMAP_RE.search(url.strip())
+            if m and int(m.group(1) or 1) >= MIN_POST_SITEMAP:
+                yield scrapy.Request(url.strip(), callback=self.parse, priority=int(m.group(1)))
 
     def _parse_article(self, response):
         # JEG theme selectors

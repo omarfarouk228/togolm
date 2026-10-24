@@ -149,6 +149,32 @@ def test_search():
     assert data["query"] == "budget togo"
 
 
+def test_document_with_invalid_id_is_not_found():
+    response = client.get("/v1/documents/abc")
+    assert response.status_code == 404
+
+
+def test_search_requires_all_words_before_any_word():
+    """AND first; OR only when no document has every word."""
+    from unittest.mock import MagicMock, patch
+
+    conn = MagicMock()
+    cur = conn.cursor.return_value.__enter__.return_value
+    row = ("00000000-0000-0000-0000-000000000002", "jo.gouv.tg", "u", "Budget", "budget", 0.5)
+    cur.fetchall.side_effect = [[], [row]]
+    cur.fetchone.return_value = (1,)
+    with patch("api.app.features.documents.router.get_conn", return_value=conn):
+        response = client.get("/v1/search?q=budget+zzqx&category=health")
+
+    assert response.status_code == 200
+    assert response.json()["total"] == 1
+    queries = [c.args[0] for c in cur.execute.call_args_list]
+    assert "websearch_to_tsquery" in queries[0]
+    assert "' | '" in queries[1]
+    assert "IN (category, subcategory)" in queries[0]
+    assert "ILIKE" not in " ".join(queries)
+
+
 def test_recent_documents():
     response = client.get("/v1/documents/recent")
     assert response.status_code == 200

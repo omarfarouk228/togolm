@@ -129,12 +129,7 @@ class TogofirstSpider(BaseTogoSpider):
         if not raw_content or len(raw_content.split()) < 30:
             return
 
-        published_at = (
-            response.css("time::attr(datetime)").get("")
-            or response.css(".itemDateCreated::text, .published::text").get("")
-            or response.css("meta[property='article:published_time']::attr(content)").get("")
-            or ""
-        )
+        published_at = self.extract_published_at(response, ".itemDateCreated")
 
         subcategory = self._infer_subcategory(response.url)
 
@@ -143,7 +138,7 @@ class TogofirstSpider(BaseTogoSpider):
             title=title,
             raw_content=raw_content,
             subcategory=subcategory,
-            published_at=published_at[:10] if published_at else None,
+            published_at=published_at,
             metadata={"word_count": len(raw_content.split())},
         )
 
