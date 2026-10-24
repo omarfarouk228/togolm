@@ -39,6 +39,7 @@ def test_overview_shape(admin_key):
     jo = next(s for s in data["sources"] if s["source"] == "jo.gouv.tg")
     assert jo["schedule"] == "weekly"
     assert jo["stale"] is False
+    assert jo["status"] in ("fresh", "quiet")
     assert 0 <= jo["undated_pct"] <= 100
 
 
@@ -66,3 +67,18 @@ def test_chunk_counts_are_cached():
     conn = MagicMock()
     assert service.chunk_counts(conn, r) == (12, 12)
     conn.cursor.assert_not_called()
+
+
+def test_source_status_follows_each_source_pace():
+    # News site publishing ~3 articles a day, nothing new for 5 days: late.
+    assert service.source_status("daily", 5, 270, True)[0] == "late"
+    assert service.source_status("daily", 1, 270, True)[0] == "fresh"
+    # Ministry publishing every ~9 days: 20 days without news is normal.
+    assert service.source_status("weekly", 20, 10, True) == ("fresh", 9.0)
+    assert service.source_status("weekly", 40, 10, True)[0] == "late"
+    # Nothing published for 90 days (jo.gouv.tg /node/ texts): quiet, not late.
+    assert service.source_status("weekly", 140, 0, True) == ("quiet", None)
+    # No dates: only daily news sites can be judged.
+    assert service.source_status("daily", 5, 0, False)[0] == "late"
+    assert service.source_status("weekly", 40, 0, False)[0] == "quiet"
+    assert service.source_status("weekly", None, 0, True)[0] == "late"
