@@ -45,7 +45,7 @@ class TestQuestionForPipeline:
     def test_failure_keeps_the_original_question(self):
         failing = MagicMock(side_effect=RuntimeError("down"))
         with (
-            patch.object(chains, "gemini_available", return_value=True),
+            patch.object(chains, "llm_available", return_value=True),
             patch.object(chains, "get_chat_model_with_fallback", return_value=failing),
         ):
             assert chains.question_for_pipeline("Aleke ma wɔ?", "ee") == "Aleke ma wɔ?"
@@ -66,7 +66,7 @@ def test_stream_endpoint_answers_in_requested_language(client: TestClient):
         patch.object(query_router, "is_trivially_off_topic", return_value=False),
         patch.object(query_router.generation, "route_query", return_value="on_topic"),
         patch.object(query_router.retrieval, "retrieve", return_value=[]),
-        patch.object(query_router, "gemini_available", return_value=True),
+        patch.object(query_router, "llm_available", return_value=True),
         patch.object(query_router.generation, "stream_answer", side_effect=fake_stream),
         patch.object(query_router, "log_query"),
     ):
