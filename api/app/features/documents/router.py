@@ -4,13 +4,16 @@ GET /v1/documents/{id}    — Single document with its chunks
 GET /v1/search            — Full-text keyword search
 """
 
-import psycopg2
+import uuid
+
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel
 
 from db import get_conn
 
 router = APIRouter(tags=["Documents"])
+
+SEARCH_TOTAL_CAP = 1000
 
 
 class ChunkOut(BaseModel):
@@ -209,6 +212,11 @@ def preview_document(
 @router.get("/documents/{doc_id}", response_model=DocumentDetail)
 def get_document(doc_id: str):
     """Fetch a single document with its text chunks."""
+    try:
+        uuid.UUID(doc_id)
+    except ValueError:
+        # Postgres rejected a non-UUID id with an unhandled 500.
+        raise HTTPException(status_code=404, detail="Document not found") from None
     conn = get_conn()
     try:
         with conn.cursor() as cur:
@@ -267,15 +275,18 @@ def search_documents(
 ):
     """Full-text keyword search over the corpus.
 
-    Uses the pre-computed fts_vector column with a GIN index for fast search.
-    Falls back to ILIKE if the tsquery syntax is invalid.
+    Documents containing every word come first (websearch_to_tsquery, which
+    also accepts quotes, "or" and "-word" and never raises a syntax error).
+    Only when no document has them all does it fall back to any of the words.
+    The old query always OR-ed every word: "budget etat 2026" matched 17,000
+    documents (23% of the corpus), ranked all of them and took up to 27 s on
+    a cold cache, and its ILIKE fallback scanned every document's full text.
+
+    ``total`` is capped at SEARCH_TOTAL_CAP.
     """
-    # Build tsquery — OR between words so partial queries still return results
     words = [w.strip() for w in q.split() if len(w.strip()) > 1]
     if not words:
         raise HTTPException(status_code=400, detail="Query too short")
-
-    tsquery = " | ".join(words)
 
     filters = ["status = 'active'", "fts_vector IS NOT NULL"]
     filter_params: list = []
@@ -283,57 +294,47 @@ def search_documents(
         filters.append("source = %s")
         filter_params.append(source)
     if category:
-        filters.append("category = %s")
+        # Press articles keep their topic (health, economy...) in subcategory.
+        filters.append("%s IN (category, subcategory)")
         filter_params.append(category)
     where_clause = "WHERE " + " AND ".join(filters)
+
+    all_words = "websearch_to_tsquery('french', %s)"
+    any_word = "replace(plainto_tsquery('french', %s)::text, ' & ', ' | ')::tsquery"
 
     conn = get_conn()
     try:
         with conn.cursor() as cur:
-            try:
-                # Main search — uses the GIN index on fts_vector (fast)
+            rows: list = []
+            total = 0
+            for tsquery in (all_words, any_word):
                 cur.execute(
                     f"""
-                    SELECT
-                        id, source, url, title, clean_content,
-                        ts_rank(fts_vector, to_tsquery('french', %s)) AS score
-                    FROM documents
+                    SELECT id, source, url, title, clean_content,
+                           ts_rank(fts_vector, q.tsq) AS score
+                    FROM documents, (SELECT {tsquery} AS tsq) q
                     {where_clause}
-                      AND fts_vector @@ to_tsquery('french', %s)
+                      AND fts_vector @@ q.tsq
                     ORDER BY score DESC
                     LIMIT %s
                     """,
-                    [tsquery] + filter_params + [tsquery, limit],
+                    [q] + filter_params + [limit],
                 )
                 rows = cur.fetchall()
-            except psycopg2.Error:
-                conn.rollback()
-                # tsquery syntax error (e.g. single special char) — fall back to ILIKE on title
-                cur.execute(
-                    f"""
-                    SELECT id, source, url, title, clean_content, 0.5
-                    FROM documents
-                    {where_clause}
-                      AND (title ILIKE %s OR clean_content ILIKE %s)
-                    LIMIT %s
-                    """,
-                    filter_params + [f"%{q}%", f"%{q}%", limit],
-                )
-                rows = cur.fetchall()
-
-            try:
-                cur.execute(
-                    f"""
-                    SELECT COUNT(*) FROM documents
-                    {where_clause}
-                      AND fts_vector @@ to_tsquery('french', %s)
-                    """,
-                    filter_params + [tsquery],
-                )
-                total = cur.fetchone()[0]
-            except Exception:
-                conn.rollback()
-                total = len(rows)
+                if rows:
+                    cur.execute(
+                        f"""
+                        SELECT count(*) FROM (
+                            SELECT 1 FROM documents, (SELECT {tsquery} AS tsq) q
+                            {where_clause}
+                              AND fts_vector @@ q.tsq
+                            LIMIT %s
+                        ) capped
+                        """,
+                        [q] + filter_params + [SEARCH_TOTAL_CAP],
+                    )
+                    total = cur.fetchone()[0]
+                    break
     finally:
         conn.close()
 

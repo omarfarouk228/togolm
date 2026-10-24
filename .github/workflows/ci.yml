@@ -68,7 +68,9 @@ jobs:
           uv pip install --system -e ".[dev]"
 
       - name: Initialize test database
-        run: alembic upgrade head
+        run: |
+          alembic upgrade head
+          PGPASSWORD="$POSTGRES_PASSWORD" psql -h "$POSTGRES_HOST" -p "$POSTGRES_PORT" -U "$POSTGRES_USER" -d "$POSTGRES_DB" -v ON_ERROR_STOP=1 -f api/tests/fixtures/seed.sql
 
       - name: Run tests
         run: pytest api/tests/ -v --tb=short

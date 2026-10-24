@@ -2,8 +2,8 @@
 Spider for icilome.com — Le portail togolais par excellence.
 
 Togolese news portal covering politics, economy, society, jobs.
-WordPress site with 23 post sitemaps (~23,000 articles total).
-Date-based article URLs: /YYYY/MM/slug/
+WordPress site whose Yoast sitemap index lists post-sitemapN.xml files
+(~1,000 articles each, N grows over time). Date-based article URLs: /YYYY/MM/slug/
 """
 
 import re
@@ -13,7 +13,11 @@ from scrapers.spiders.base_spider import BaseTogoSpider
 
 WP_DATE_URL_RE = re.compile(r"/\d{4}/\d{2}/.+/$")
 
-POST_SITEMAPS = [f"https://icilome.com/post-sitemap{'' if i == 1 else i}.xml" for i in range(1, 24)]
+# The post sitemaps used to be hardcoded as post-sitemap1..23.xml. The site
+# opened post-sitemap24 and 25 in September 2026 and every article published
+# after 2026-09-24 was never crawled. Read them from the index instead.
+SITEMAP_INDEX = "https://icilome.com/sitemap_index.xml"
+POST_SITEMAP_RE = re.compile(r"post-sitemap(\d*)\.xml$")
 
 EXCLUDED_PATHS = [
     "/category/",
@@ -45,7 +49,7 @@ class IcilomeSpider(BaseTogoSpider):
     category = "press"
     language = "fr"
 
-    start_urls = POST_SITEMAPS
+    start_urls = [SITEMAP_INDEX]
 
     custom_settings = {
         "DOWNLOAD_DELAY": 0.5,
@@ -61,10 +65,22 @@ class IcilomeSpider(BaseTogoSpider):
 
     def _parse_sitemap(self, response):
         response.selector.remove_namespaces()
+        if response.xpath("/sitemapindex"):
+            yield from self._parse_sitemap_index(response)
+            return
         for url in response.xpath("//loc/text()").getall():
             url = url.strip()
             if self._is_article_url(url):
                 yield scrapy.Request(url, callback=self.parse, priority=10)
+
+    def _parse_sitemap_index(self, response):
+        """Follow the post sitemaps, newest (highest N) first: a crawl cut short
+        by the subprocess timeout still picks up the latest articles."""
+        for url in response.xpath("//sitemap/loc/text()").getall():
+            m = POST_SITEMAP_RE.search(url.strip())
+            if m:
+                n = int(m.group(1) or 1)
+                yield scrapy.Request(url.strip(), callback=self.parse, priority=n)
 
     def _parse_article(self, response):
         title = (

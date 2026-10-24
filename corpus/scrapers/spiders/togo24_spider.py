@@ -88,12 +88,8 @@ class Togo24Spider(BaseTogoSpider):
         )
         if not raw or len(raw.split()) < 40:
             return None
-        pub = (
-            response.css("time::attr(datetime)").get()
-            or response.css("meta[property='article:published_time']::attr(content)").get()
-            or ""
-        )
-        return self.make_document(response, title, raw, published_at=pub[:10] if pub else None)
+        pub = self.extract_published_at(response, ".date.meta-item")
+        return self.make_document(response, title, raw, published_at=pub)
 
     def _text(self, r, sel):
         parts = r.css(f"{sel}::text").getall()
