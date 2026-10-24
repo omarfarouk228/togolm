@@ -40,6 +40,8 @@ WELCOME = (
     "officielles.\n\n"
     "Posez votre question par écrit ou en message vocal.\n"
     "Langue des réponses : /fr français, /ee éwé, /kbp kabiyè, /en english.\n"
+    "Alertes chaque matin sur un sujet : /alerte appel d'offres informatique "
+    "(liste : /alertes, arrêt : /stopalertes).\n"
     "Nouvelle conversation : /nouveau. Aide : /aide."
 )
 LANGUAGE_SET = {
@@ -237,7 +239,37 @@ def _command(channel: str, user_id: str, text: str) -> str | None:
     if word in ("nouveau", "new", "reset"):
         _reset(channel, user_id)
         return RESET
+    if word in ("alerte", "alert"):
+        return _alert_command(channel, user_id, text.split(maxsplit=1)[1:] or [""])
+    if word in ("alertes", "alerts"):
+        from api.app.features.alerts import service
+
+        subs = service.list_for(channel, user_id)
+        if not subs:
+            return "Aucune alerte. Exemple : /alerte concours fonction publique"
+        return "Vos alertes :\n" + "\n".join(f"• {s['query']}" for s in subs)
+    if word in ("stopalertes", "stopalerts"):
+        from api.app.features.alerts import service
+
+        count = service.stop_all(channel, user_id)
+        return f"{count} alerte(s) arrêtée(s)." if count else "Aucune alerte en cours."
     return WELCOME
+
+
+def _alert_command(channel: str, user_id: str, words: list[str]) -> str:
+    from api.app.features.alerts import service
+
+    query = words[0].strip()
+    if len(query) < 3:
+        return "Indiquez le sujet suivi, par exemple : /alerte appel d'offres informatique"
+    try:
+        sub = service.create(channel, user_id, query)
+    except service.AlertError:
+        return f"Vous suivez déjà {service.MAX_PER_TARGET} sujets : /stopalertes pour repartir de zéro."
+    return (
+        f"🔔 Alerte créée : « {sub['query']} ». Chaque matin, je vous envoie les nouveaux "
+        "documents publics qui en parlent."
+    )
 
 
 def _ask(channel: str, user_id: str, question: str) -> Answer:

@@ -22,6 +22,9 @@ COMMANDS = [
     ("kbp", "Réponses en kabiyè (expérimental)"),
     ("en", "Answers in English"),
     ("nouveau", "Nouvelle conversation"),
+    ("alerte", "Suivre un sujet (ex. : /alerte appel d'offres informatique)"),
+    ("alertes", "Mes alertes"),
+    ("stopalertes", "Arrêter mes alertes"),
 ]
 DESCRIPTION = (
     "Assistant sur le Togo : démarches, lois, santé, éducation, économie et actualité, "
