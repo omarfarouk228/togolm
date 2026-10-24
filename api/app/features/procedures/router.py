@@ -16,7 +16,9 @@ from rag.procedures import PROCEDURE_SOURCES, procedure_card
 router = APIRouter(tags=["Procedures"])
 
 
-def _rows(where: str, params: list, limit: int, offset: int, order: str) -> list[tuple]:
+def _rows(
+    where: str, params: list, limit: int, offset: int, order: str, order_params: tuple = ()
+) -> list[tuple]:
     conn = get_conn()
     try:
         with conn.cursor() as cur:
@@ -28,7 +30,7 @@ def _rows(where: str, params: list, limit: int, offset: int, order: str) -> list
                 ORDER BY {order}
                 LIMIT %s OFFSET %s
                 """,
-                [list(PROCEDURE_SOURCES), *params, limit, offset],
+                [list(PROCEDURE_SOURCES), *params, *order_params, limit, offset],
             )
             return cur.fetchall()
     finally:
@@ -56,6 +58,7 @@ def list_procedures(
             limit,
             offset,
             f"ts_rank(fts_vector, {tsquery}) DESC",
+            (q,),
         )
         if not rows and offset == 0:
             rows = _rows("AND title ILIKE %s", [f"%{q.strip()}%"], limit, 0, "title")
