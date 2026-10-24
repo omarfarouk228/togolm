@@ -71,7 +71,7 @@ def test_build_answer_records_the_failure_before_falling_back():
     from rag.generation import chains
 
     with (
-        patch.object(chains, "gemini_available", return_value=True),
+        patch.object(chains, "llm_available", return_value=True),
         patch.object(chains, "_generate_answer", side_effect=Exception("402 RESOURCE_EXHAUSTED")),
         patch.object(chains.generation_health, "record_failure") as failed,
     ):
