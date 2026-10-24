@@ -27,6 +27,7 @@ dependencies = [
     "langchain>=1.0,<2.0",
     "langchain-core>=1.0,<2.0",
     "langchain-google-genai>=4.2,<5.0",
+    "anthropic>=2.0",  # Claude, second LLM provider (rag.generation.claude)
     "langgraph>=1.0,<2.0",
     "langsmith>=0.3.0",
     "sentence-transformers>=5.5.0",

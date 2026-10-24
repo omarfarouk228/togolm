@@ -21,6 +21,9 @@ logger = logging.getLogger("togolm.generation")
 _LAST_OK = "togolm:gen:last_ok"
 _LAST_ERROR = "togolm:gen:last_error"
 _LAST_ERROR_CAUSE = "togolm:gen:last_error_cause"
+# Last answer served by the second provider (Claude): Gemini is failing even
+# though users still get real answers, so it stays visible.
+_LAST_FALLBACK = "togolm:gen:last_claude_fallback"
 _client: redis.Redis | None = None
 
 
@@ -52,6 +55,14 @@ def record_success() -> None:
         pass
 
 
+def record_claude_fallback() -> None:
+    logger.warning("Answer served by Claude: the Gemini models failed")
+    try:
+        _redis().set(_LAST_FALLBACK, time.time())
+    except Exception:
+        pass
+
+
 def record_failure(exc: BaseException) -> None:
     cause = short_cause(exc)
     logger.warning("Answer generation failed (%s): %s", cause, str(exc)[:300])
@@ -73,8 +84,15 @@ def status() -> dict:
     try:
         r = _redis()
         last_ok, last_error, cause = r.get(_LAST_OK), r.get(_LAST_ERROR), r.get(_LAST_ERROR_CAUSE)
+        last_fallback = r.get(_LAST_FALLBACK)
     except Exception:
-        return {"status": "unknown", "last_ok": None, "last_error": None, "cause": None}
+        return {
+            "status": "unknown",
+            "last_ok": None,
+            "last_error": None,
+            "cause": None,
+            "last_claude_fallback": None,
+        }
     if last_error and (not last_ok or float(last_error) > float(last_ok)):
         state = "degraded"
     elif last_ok:
@@ -86,4 +104,5 @@ def status() -> dict:
         "last_ok": iso(last_ok),
         "last_error": iso(last_error),
         "cause": cause if state == "degraded" else None,
+        "last_claude_fallback": iso(last_fallback),
     }

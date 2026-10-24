@@ -31,7 +31,7 @@ from rag import generation, retrieval
 from rag.generation import rewrite_question_with_history
 from rag.generation.audio import TranscriptionError, transcribe_audio
 from rag.generation.language_examples import queue_live_answer
-from rag.generation.llm import gemini_available
+from rag.generation.llm import gemini_available, llm_available
 from rag.indexation.embedder import LocalEmbedder
 from rag.orchestration.classification import is_trivially_off_topic
 from rag.orchestration.graph import QueryGraphResult, run_query_graph
@@ -221,7 +221,7 @@ def _stream_image_query(
 
     sources = [{"title": c.title, "url": c.url, "score": round(c.score, 4)} for c in chunks]
 
-    if gemini_available():
+    if llm_available():
         try:
             events = (
                 generation.stream_answer_with_image(
@@ -329,7 +329,7 @@ def stream_query(
 
         sources = [{"title": c.title, "url": c.url, "score": round(c.score, 4)} for c in chunks]
 
-        if gemini_available():
+        if llm_available():
             try:
                 streamed: list[str] = []
                 for event_type, text in generation.stream_answer(
