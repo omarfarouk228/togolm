@@ -53,6 +53,7 @@ WORKING_SPIDERS = [
     "gouv_platform",  # ministries on the React platform (numerique, diplomatie...)
     "wikipedia_local",  # Éwé and Kabiyè Wikipedias (wording references only)
     "eregulations",  # investirautogo.tg, business procedures step by step
+    "dnccp",  # dnccp.gouv.tg, public procurement plans, JMP extracts, decrees
     "journal_officiel",
     "otr",
     "legal_pdf",
