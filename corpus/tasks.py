@@ -69,7 +69,8 @@ WORKING_SPIDERS = [
     "anpe",
     "yas",
     "moov_africa",
-    "edusup",
+    # "edusup": edusup.net forbids all crawlers since 2026 (robots.txt "Disallow: /",
+    # 403 for our server). Its 1,801 documents stay in the corpus.
     # Éducation supérieure
     "univ_lome",
     "campus_togo",
