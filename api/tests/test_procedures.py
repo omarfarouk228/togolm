@@ -18,7 +18,8 @@ SERVICE_PUBLIC = (
     "Etapes: 1. Remplir le formulaire en ligne 2. Payer les frais 3. Retirer la copie | "
     "Pièces à fournir: Numéro de l'acte ; Pièce d'identité | "
     "Délai d'exécution: 72 heures | Coût de la procédure: 2 000 FCFA | "
-    "Durée de validité: N/A | Contact: Mairie de Lomé"
+    "Durée de validité: N/A | Contact: Fournisseur de service Mairie de Lomé "
+    "[email protected] Partager"
 )
 EREGULATIONS = (
     "Procédure administrative au Togo : Zone franche – Carnet bleu – Renouvellement. "

@@ -51,6 +51,11 @@ def _field(label: str) -> str | None:
 
 def _clean(label: str, value: str) -> str:
     value = " ".join(value.split())
+    # Page furniture captured with the text: Cloudflare's hidden e-mails, the
+    # share button, the "service provider" caption before an office's name.
+    value = re.sub(r"\s*\[email\s*protected\]", "", value)
+    value = re.sub(r"\s*Partager$", "", value)
+    value = re.sub(r"^Fournisseur de service\s+", "", value)
     # service-public repeats the label at the start of some values
     # ("Conditions: Conditions La souscription..."): drop the echo.
     first = label.split()[0]
