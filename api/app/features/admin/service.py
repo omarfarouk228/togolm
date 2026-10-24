@@ -1,5 +1,6 @@
 import datetime
 import hashlib
+import json
 import os
 import secrets
 
@@ -78,16 +79,39 @@ def require_admin(authorization: str | None, x_admin_key: str | None) -> None:
 # ── Corpus ────────────────────────────────────────────────────────────────────
 
 
+# Counting the 415k chunks (1.9 GB) takes several seconds on prod and every
+# admin page did it on each load: Dashboard, Corpus and Health stayed on their
+# loading skeleton for 5+ s. The counts only move with ingestion, so they are
+# cached for a few minutes.
+_CHUNK_COUNTS_KEY = "togolm:admin:chunk_counts"
+_CHUNK_COUNTS_TTL_S = 600
+
+
+def chunk_counts(conn, r: redis.Redis | None = None) -> tuple[int, int]:
+    """(total chunks, chunks with an embedding), cached in Redis."""
+    r = r or get_redis()
+    try:
+        cached = r.get(_CHUNK_COUNTS_KEY)
+        if cached:
+            total, embedded = json.loads(cached)
+            return int(total), int(embedded)
+    except Exception:
+        pass
+    with conn.cursor() as cur:
+        cur.execute("SELECT COUNT(*), COUNT(embedding) FROM chunks")
+        total, embedded = cur.fetchone()
+    try:
+        r.set(_CHUNK_COUNTS_KEY, json.dumps([total, embedded]), ex=_CHUNK_COUNTS_TTL_S)
+    except Exception:
+        pass
+    return int(total), int(embedded)
+
+
 def get_corpus_stats(conn) -> dict:
+    total_chunks, embedded_chunks = chunk_counts(conn)
     with conn.cursor() as cur:
         cur.execute("SELECT COUNT(*) FROM documents WHERE status = 'active'")
         total_docs = cur.fetchone()[0]
-
-        cur.execute("SELECT COUNT(*) FROM chunks")
-        total_chunks = cur.fetchone()[0]
-
-        cur.execute("SELECT COUNT(*) FROM chunks WHERE embedding IS NOT NULL")
-        embedded_chunks = cur.fetchone()[0]
 
         cur.execute("""
             SELECT category, COUNT(*) FROM documents
@@ -514,13 +538,9 @@ def get_health(conn, r: redis.Redis) -> dict:
     total_docs = total_chunks = embedded_chunks = 0
     try:
         with conn.cursor() as cur:
-            cur.execute("""
-                SELECT
-                    (SELECT COUNT(*) FROM documents WHERE status = 'active'),
-                    (SELECT COUNT(*) FROM chunks),
-                    (SELECT COUNT(*) FROM chunks WHERE embedding IS NOT NULL)
-            """)
-            total_docs, total_chunks, embedded_chunks = cur.fetchone()
+            cur.execute("SELECT COUNT(*) FROM documents WHERE status = 'active'")
+            total_docs = cur.fetchone()[0]
+        total_chunks, embedded_chunks = chunk_counts(conn, r)
         db_ok = True
     except Exception:
         pass
@@ -646,3 +666,164 @@ def update_feedback_status(conn, feedback_id: str, req: PatchFeedbackRequest) ->
         api_key_prefix=row[8],
         created_at=row[9],
     )
+
+
+# ── Overview ──────────────────────────────────────────────────────────────────
+
+# Sources crawled daily by corpus.tasks.run_news_spiders; the others only by
+# the weekly full crawl.
+_DAILY_SOURCES = {
+    "icilome.com",
+    "togoactualite.com",
+    "togofirst.com",
+    "lomeinfos.com",
+    "letogolais.com",
+    "savoirnews.net",
+    "republicoftogo.com",
+    "presidence.gouv.tg",
+}
+_STALE_AFTER_DAYS = {"daily": 3, "weekly": 14}
+CRAWL_RESULTS_KEY = "togolm:crawl:spiders"
+
+
+def _traffic(cur, days: int) -> list[dict]:
+    cur.execute(
+        """
+        SELECT DATE(created_at) AS day,
+               COUNT(*),
+               percentile_cont(0.5) WITHIN GROUP (ORDER BY latency_ms),
+               percentile_cont(0.9) WITHIN GROUP (ORDER BY latency_ms),
+               COUNT(*) FILTER (WHERE is_off_topic),
+               COUNT(*) FILTER (WHERE chunks_found = 0 AND NOT is_off_topic),
+               COUNT(*) FILTER (WHERE api_key_prefix IS NOT NULL)
+        FROM user_queries
+        WHERE created_at >= CURRENT_DATE - %s
+        GROUP BY day ORDER BY day
+        """,
+        (days - 1,),
+    )
+    rows = {r[0].isoformat(): r for r in cur.fetchall()}
+    today = datetime.date.today()
+    out = []
+    for i in range(days - 1, -1, -1):
+        day = (today - datetime.timedelta(days=i)).isoformat()
+        r = rows.get(day)
+        out.append(
+            {
+                "date": day,
+                "queries": int(r[1]) if r else 0,
+                "latency_p50_ms": int(r[2]) if r and r[2] is not None else None,
+                "latency_p90_ms": int(r[3]) if r and r[3] is not None else None,
+                "off_topic": int(r[4]) if r else 0,
+                "no_sources": int(r[5]) if r else 0,
+                "with_key": int(r[6]) if r else 0,
+            }
+        )
+    return out
+
+
+def _sources(cur) -> list[dict]:
+    cur.execute(
+        """
+        SELECT source, MODE() WITHIN GROUP (ORDER BY category), COUNT(*),
+               MAX(collected_at), MAX(published_at),
+               COUNT(*) FILTER (WHERE published_at IS NULL)
+        FROM documents
+        WHERE status = 'active'
+        GROUP BY source
+        ORDER BY COUNT(*) DESC
+        """
+    )
+    now = datetime.datetime.now()
+    out = []
+    for source, category, docs, collected, published, undated in cur.fetchall():
+        schedule = "daily" if source in _DAILY_SOURCES else "weekly"
+        age = (now - collected).days if collected else None
+        out.append(
+            {
+                "source": source,
+                "category": category,
+                "documents": int(docs),
+                "schedule": schedule,
+                "last_collected": collected.isoformat(timespec="minutes") if collected else None,
+                "last_published": published.isoformat() if published else None,
+                "days_since_collected": age,
+                "undated_pct": round(undated * 100 / docs) if docs else 0,
+                "stale": age is None or age > _STALE_AFTER_DAYS[schedule],
+            }
+        )
+    return out
+
+
+def _crawls(r: redis.Redis) -> list[dict]:
+    try:
+        raw = r.hgetall(CRAWL_RESULTS_KEY)
+    except Exception:
+        return []
+    runs = []
+    for value in raw.values():
+        try:
+            runs.append(json.loads(value))
+        except ValueError:
+            continue
+    return sorted(runs, key=lambda run: run.get("finished_at") or "", reverse=True)
+
+
+def _latest_eval(r: redis.Redis) -> dict | None:
+    from corpus.tasks import EVAL_HISTORY_KEY
+
+    try:
+        raw = r.lindex(EVAL_HISTORY_KEY, 0)
+    except Exception:
+        return None
+    if not raw:
+        return None
+    run = json.loads(raw)
+    return {k: v for k, v in run.items() if k != "results"}
+
+
+def get_overview(conn, r: redis.Redis, days: int = 14) -> dict:
+    """Everything the admin home page needs in one call: what needs attention
+    (generation down, stale sources, failed crawls, reports and reviews to
+    handle) and how the service is used (queries, latency)."""
+    from rag.generation.health import status as generation_status
+
+    total_chunks, embedded_chunks = chunk_counts(conn, r)
+    with conn.cursor() as cur:
+        cur.execute("SELECT COUNT(*) FROM documents WHERE status = 'active'")
+        total_docs = cur.fetchone()[0]
+        traffic = _traffic(cur, days)
+        sources = _sources(cur)
+        cur.execute("SELECT COUNT(*) FROM response_feedback WHERE status = 'open'")
+        open_feedback = cur.fetchone()[0]
+        cur.execute("SELECT COUNT(*) FROM language_reviews WHERE status = 'pending'")
+        pending_reviews = cur.fetchone()[0]
+        cur.execute("SELECT COUNT(*) FROM api_keys WHERE is_active")
+        active_keys = cur.fetchone()[0]
+
+    usage = get_usage_stats(conn, r, days)
+    rate_limited = {d["date"]: d["rate_limit_hits"] for d in usage["by_day"]}
+    requests = {d["date"]: d["total"] for d in usage["by_day"]}
+    for day in traffic:
+        day["requests"] = requests.get(day["date"], 0)
+        day["rate_limited"] = rate_limited.get(day["date"], 0)
+
+    return {
+        "generated_at": datetime.datetime.now(datetime.UTC).isoformat(timespec="seconds"),
+        "generation": generation_status(),
+        "corpus": {
+            "documents": total_docs,
+            "chunks": total_chunks,
+            "embedded_chunks": embedded_chunks,
+            "sources": len(sources),
+        },
+        "traffic": traffic,
+        "sources": sources,
+        "crawls": _crawls(r),
+        "retrieval_eval": _latest_eval(r),
+        "todo": {
+            "open_feedback": int(open_feedback),
+            "pending_reviews": int(pending_reviews),
+        },
+        "active_api_keys": int(active_keys),
+    }

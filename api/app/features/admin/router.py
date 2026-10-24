@@ -297,6 +297,25 @@ def get_admin_stats(
         conn.close()
 
 
+# ── Overview ──────────────────────────────────────────────────────────────────
+
+
+@router.get("/admin/overview")
+def overview(
+    days: int = Query(14, ge=1, le=90),
+    authorization: str | None = Header(default=None),
+    x_admin_key: str | None = Header(default=None),
+):
+    """Admin home page: what needs attention, traffic and latency per day,
+    freshness of every source, last crawl of every spider."""
+    _auth(authorization, x_admin_key)
+    conn = get_conn()
+    try:
+        return service.get_overview(conn, service.get_redis(), days)
+    finally:
+        conn.close()
+
+
 # ── Health ────────────────────────────────────────────────────────────────────
 
 
