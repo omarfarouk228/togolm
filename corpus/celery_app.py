@@ -64,6 +64,11 @@ app.conf.update(
             "task": "corpus.tasks.split_journal_officiel",
             "schedule": crontab(hour=10, minute=0),
         },
+        # Alert digests, after the 06:00 news crawl (~1.5 h).
+        "send-alert-digests": {
+            "task": "corpus.tasks.send_alert_digests",
+            "schedule": crontab(hour=8, minute=0),
+        },
         # Retrieval quality check against the real corpus, Mondays 04:00.
         "weekly-retrieval-eval": {
             "task": "corpus.tasks.run_retrieval_eval",

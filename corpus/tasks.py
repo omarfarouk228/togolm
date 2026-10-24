@@ -315,3 +315,12 @@ def split_journal_officiel(self) -> dict:
     from rag.indexation.split_issues import split_pending_issues
 
     return split_pending_issues()
+
+
+@app.task(bind=True, max_retries=0, soft_time_limit=1200, time_limit=1260)
+def send_alert_digests(self) -> dict:
+    """Daily digests of new documents matching alert subscriptions."""
+    _ensure_project_on_path()
+    from api.app.features.alerts.service import send_digests
+
+    return send_digests()
