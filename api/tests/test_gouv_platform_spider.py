@@ -187,3 +187,40 @@ def test_eregulations_procedure_becomes_one_readable_document():
     assert "Coût : 10 000 CFA frais de renouvellement." in text
     assert "Durée totale : 2 jours à 2 jours 55 min" in text
     assert "Base légale : Courrier DG SAZOF" in text
+
+
+def test_dnccp_documents_come_from_their_attached_pdf():
+    from unittest.mock import patch
+
+    from scrapers.spiders.dnccp_spider import DnccpSpider
+    from scrapy.http import HtmlResponse, Response
+
+    spider = DnccpSpider()
+    cats = _json(
+        "https://dnccp.gouv.tg/wp-json/wp/v2/categorie_document",
+        [{"id": 412, "name": "2026"}, {"id": 485, "name": "Plans de Passation JFE"}],
+    )
+    (listing_req,) = list(spider.parse(cats))
+    doc = {
+        "id": 17573,
+        "date": "2026-07-10T23:45:56",
+        "title": {"rendered": "PPM JFE 2026 Université de Lomé"},
+        "link": "https://dnccp.gouv.tg/documents/ppm-jfe-2026-universite-de-lome/",
+        "categorie_document": [412, 485],
+    }
+    (page_req,) = list(spider.parse_list(_json(listing_req.url, [doc]), page=1))
+    page = HtmlResponse(
+        url=doc["link"],
+        body=b'<a href="/wp-content/uploads/ppm.pdf">PDF</a>',
+        encoding="utf-8",
+    )
+    (pdf_req,) = list(spider.parse_page(page, doc=doc))
+    assert pdf_req.url == "https://dnccp.gouv.tg/wp-content/uploads/ppm.pdf"
+
+    pdf = Response(url=pdf_req.url, body=b"%PDF", request=Request(pdf_req.url))
+    with patch("scrapers.spiders.dnccp_spider._extract_pdf_text", return_value="Marché " * 200):
+        (item,) = list(spider.parse_file(pdf, **pdf_req.cb_kwargs))
+    assert item["url"] == doc["link"]
+    assert item["source"] == "dnccp.gouv.tg"
+    assert item["subcategory"] == "plan-passation-jfe"
+    assert item["published_at"] == "2026-07-10"
