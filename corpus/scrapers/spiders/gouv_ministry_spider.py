@@ -60,15 +60,8 @@ SITES = [
             "https://agriculture.gouv.tg/documentation-sitemap.xml",
         ],
     },
-    {
-        "domain": "environnement.gouv.tg",
-        "source": "environnement.gouv.tg",
-        "category": "agriculture",
-        "sitemaps": [
-            "https://environnement.gouv.tg/wp-sitemap-posts-post-1.xml",
-            "https://environnement.gouv.tg/post-sitemap.xml",
-        ],
-    },
+    # environnement.gouv.tg moved to the React platform in June 2026: crawled
+    # through its REST API by gouv_platform_spider instead.
     # ── Health ───────────────────────────────────────────────────────────────
     # sante.gouv.tg moved to a React SPA (sante-assurances.gouv.tg) with no
     # sitemap: crawled through its WordPress REST API by sante_spider instead.
@@ -108,7 +101,7 @@ SITES = [
         ],
     },
     # ── Digital ──────────────────────────────────────────────────────────────
-    # numerique.gouv.tg: sitemap returns no URLs — skip
+    # numerique.gouv.tg: React platform, crawled by gouv_platform_spider.
     # ── Tourism ──────────────────────────────────────────────────────────────
     {
         "domain": "tourisme.gouv.tg",
@@ -149,7 +142,48 @@ SITES = [
             "https://cnss.tg/sitemap.xml",
         ],
     },
+    # ── Public agencies and companies (added 2026-10-24) ─────────────────────
+    # Yoast sitemap indexes: the post/page sitemaps listed there are followed
+    # (see SITEMAP_INDEX_FOLLOW), so new sub-sitemaps are picked up.
+    {
+        "domain": "arcep.tg",
+        "source": "arcep.tg",
+        "category": "economy",
+        "sitemaps": ["https://arcep.tg/sitemap_index.xml"],
+    },
+    {
+        "domain": "sports.gouv.tg",
+        "source": "sports.gouv.tg",
+        "category": "administrative",
+        "sitemaps": ["https://sports.gouv.tg/sitemap_index.xml"],
+    },
+    {
+        "domain": "togo-port.net",
+        "source": "togo-port.net",
+        "category": "economy",
+        "sitemaps": ["https://www.togo-port.net/sitemap_index.xml"],
+    },
+    {
+        "domain": "tde.tg",
+        "source": "tde.tg",
+        "category": "administrative",
+        "sitemaps": ["https://www.tde.tg/sitemap_index.xml"],
+    },
+    {
+        "domain": "ftf.tg",
+        "source": "ftf.tg",
+        "category": "press",
+        "sitemaps": ["https://www.ftf.tg/sitemap_index.xml"],
+    },
 ]
+
+# Sub-sitemaps of a sitemap index worth reading: posts, pages and content
+# types (projects, documentation...), not taxonomies, authors or media.
+SITEMAP_INDEX_SKIP = re.compile(
+    r"(category|tag|author|attachment|format|elementor|e-landing|ae_global|wpforms|"
+    r"product_cat|portfolio_cat|local)-?sitemap|sitemap-(taxonomies|users)",
+    re.IGNORECASE,
+)
 
 # Paths that are never articles
 EXCLUDED_PATHS = [
@@ -196,9 +230,16 @@ class GouvMinistrySpider(BaseTogoSpider):
     def _parse_sitemap(self, response):
         """Extract article URLs from a WordPress XML sitemap (namespace-agnostic)."""
         response.selector.remove_namespaces()
+        if response.xpath("/sitemapindex"):
+            for url in response.xpath("//sitemap/loc/text()").getall():
+                url = url.strip()
+                if not SITEMAP_INDEX_SKIP.search(url):
+                    yield scrapy.Request(url, callback=self.parse, meta=response.meta)
+            return
         urls = response.xpath("//loc/text()").getall()
         for url in urls:
             site = self._site_for_url(url)
+            url = url.strip()
             if site and self._is_article_url(url):
                 yield scrapy.Request(
                     url,
@@ -230,11 +271,7 @@ class GouvMinistrySpider(BaseTogoSpider):
         if not raw_content or len(raw_content.split()) < 20:
             return
 
-        published_at = (
-            response.css("time::attr(datetime)").get("")
-            or response.xpath('//meta[@property="article:published_time"]/@content').get("")
-            or ""
-        )
+        published_at = self.extract_published_at(response)
 
         subcategory = self._infer_subcategory(response.url)
 
@@ -243,7 +280,7 @@ class GouvMinistrySpider(BaseTogoSpider):
             title=title,
             raw_content=raw_content,
             subcategory=subcategory,
-            published_at=published_at[:10] if published_at else None,
+            published_at=published_at,
             metadata={
                 "word_count": len(raw_content.split()),
                 "source_site": site.get("source", ""),

@@ -681,6 +681,8 @@ _DAILY_SOURCES = {
     "savoirnews.net",
     "republicoftogo.com",
     "presidence.gouv.tg",
+    "atop.tg",
+    "republiquetogolaise.tg",
 }
 _STALE_AFTER_DAYS = {"daily": 3, "weekly": 14}
 CRAWL_RESULTS_KEY = "togolm:crawl:spiders"

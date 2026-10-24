@@ -18,6 +18,7 @@ from pydantic import BaseModel, Field
 
 from rag.generation import health as generation_health
 from rag.generation.language_examples import examples_block
+from rag.generation.language_reference import reference_block
 from rag.generation.llm import (
     gemini_available,
     get_chat_model,
@@ -174,10 +175,16 @@ def _iter_chunk_events(chunk: Any) -> Iterator[tuple[str, str]]:
 # --- Non-streaming generation -------------------------------------------------
 
 
-def _language_section(language: str) -> str:
+def _language_section(language: str, question: str = "") -> str:
     """Answer-language instruction, preceded for Éwé/Kabiyè by wording that
-    native speakers validated (rag.generation.language_examples)."""
-    return examples_block(language) + language_instruction(language)
+    native speakers validated (rag.generation.language_examples) and by
+    passages of that language's Wikipedia close to the question
+    (rag.generation.language_reference)."""
+    return (
+        examples_block(language)
+        + reference_block(language, question)
+        + language_instruction(language)
+    )
 
 
 def build_answer(
@@ -222,7 +229,7 @@ def _generate_answer(
             "context": _format_context(chunks),
             "question": question,
             "history": _history_messages(history, limit=6, truncate=400),
-            "language_instruction": _language_section(language),
+            "language_instruction": _language_section(language, question),
         }
     )
 
@@ -403,7 +410,7 @@ def stream_answer(
         context=_format_context(chunks),
         question=question,
         history=history_msgs,
-        language_instruction=_language_section(language),
+        language_instruction=_language_section(language, question),
     )
     model = get_chat_model_with_fallback(max_output_tokens=max_output_tokens, streaming=True)
     try:

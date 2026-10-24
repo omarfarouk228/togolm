@@ -29,6 +29,7 @@ def test_parse_date_iso_and_french():
     assert parse_date("16.05.22") is None
     assert parse_date("2026-02-30") is None
     assert parse_date("0001-01-01") is None
+    assert parse_date("1970-01-01T00:00:00+00:00") is None
 
 
 def test_togofirst_date_in_k2_text():

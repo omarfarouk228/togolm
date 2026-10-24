@@ -50,6 +50,9 @@ WORKING_SPIDERS = [
     "inseed",
     "gouv_ministry",
     "sante",  # sante-assurances.gouv.tg, via its WordPress REST API
+    "gouv_platform",  # ministries on the React platform (numerique, diplomatie...)
+    "wikipedia_local",  # Éwé and Kabiyè Wikipedias (wording references only)
+    "eregulations",  # investirautogo.tg, business procedures step by step
     "journal_officiel",
     "otr",
     "legal_pdf",
@@ -64,6 +67,8 @@ WORKING_SPIDERS = [
     "wikipedia",
     "lomeinfos",
     "togoactualite",
+    "atop",  # Agence Togolaise de Presse, via its WordPress REST API
+    "republiquetogolaise",  # official portal republiquetogolaise.tg
     # Nouvelles sources — actualités & institutions
     "togo24",
     "anpe",
@@ -83,6 +88,8 @@ WORKING_SPIDERS = [
 NEWS_SPIDERS = [
     "togofirst",
     "icilome",
+    "atop",
+    "republiquetogolaise",
     "republicoftogo",
     "letogolais",
     "savoirnews",
