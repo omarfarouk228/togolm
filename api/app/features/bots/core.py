@@ -141,6 +141,24 @@ def _within_quota(channel: str, user_id: str) -> bool:
 class Answer:
     text: str
     sources: list[dict]
+    procedure: dict | None = None
+
+
+def _procedure_block(card: dict, style: str) -> str:
+    """Exact documents, cost and time of a procedure (rag.procedures)."""
+    bold = (lambda t: f"<b>{t}</b>") if style == "html" else (lambda t: f"*{t}*")
+    esc = html.escape if style == "html" else (lambda t: t)
+    lines = [bold(f"📋 Fiche : {esc(card['title'])}")]
+    if card.get("documents"):
+        lines.append(bold("Pièces à fournir"))
+        lines += [f"☐ {esc(d)[:300]}" for d in card["documents"][:10]]
+    if card.get("cost"):
+        lines.append(f"💰 {bold('Coût')} : {esc(card['cost'])[:300]}")
+    if card.get("duration"):
+        lines.append(f"⏱ {bold('Délai')} : {esc(card['duration'])[:300]}")
+    if card.get("office"):
+        lines.append(f"📍 {esc(card['office'])[:300]}")
+    return "\n".join(lines)
 
 
 def _split(text: str) -> list[str]:
@@ -193,6 +211,8 @@ def render(answer: Answer, style: str) -> list[str]:
                 lines.append(f"• {title}\n  {s['url']}")
         header = "<b>Sources</b>" if style == "html" else "*Sources*"
         body += f"\n\n{header}\n" + "\n".join(lines)
+    if answer.procedure:
+        body += "\n\n" + _procedure_block(answer.procedure, style)
     return _split(body)
 
 
@@ -221,7 +241,7 @@ def _command(channel: str, user_id: str, text: str) -> str | None:
 
 
 def _ask(channel: str, user_id: str, question: str) -> Answer:
-    from api.app.features.query.router import _display_sources, _run_text_query
+    from api.app.features.query.router import _display_sources, _procedure_for, _run_text_query
 
     language = get_language(channel, user_id)
     request = QueryRequest(question=question, language=language, history=_history(channel, user_id))
@@ -240,7 +260,7 @@ def _ask(channel: str, user_id: str, question: str) -> Answer:
     sources = _display_sources(
         [{"title": c.title, "url": c.url, "score": round(c.score, 4)} for c in result.chunks]
     )
-    return Answer(result.answer, [s for s in sources if s.get("url")])
+    return Answer(result.answer, [s for s in sources if s.get("url")], _procedure_for(sources))
 
 
 def handle_text(channel: str, user_id: str, text: str, style: str) -> list[str]:

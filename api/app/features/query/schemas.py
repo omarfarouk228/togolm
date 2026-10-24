@@ -77,6 +77,9 @@ class QueryResponse(BaseModel):
     sources: list[Source]
     model: str
     latency_ms: int
+    # Structured card when the best source is an administrative procedure
+    # (rag.procedures): exact steps, documents, cost and time to show as is.
+    procedure: dict | None = None
 
 
 class EmbedRequest(BaseModel):

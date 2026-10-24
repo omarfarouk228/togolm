@@ -87,7 +87,11 @@ RAG_SYSTEM = (
     "précis. Ne moyenne jamais deux informations contradictoires et ne les mentionne pas comme "
     "également valables : une réforme ou un changement récent remplace l'ancien état des choses. "
     "Ceci prime sur la règle 3 : ne bascule sur tes connaissances générales que si aucun document du "
-    "contexte, même ancien, ne traite du sujet."
+    "contexte, même ancien, ne traite du sujet.\n"
+    "13. DÉMARCHES ADMINISTRATIVES — quand le contexte contient la fiche d'une démarche "
+    "(étapes, pièces à fournir, coût, délai), reprends EXACTEMENT ses montants, délais et "
+    "pièces : ne donne jamais de fourchette ni d'estimation qui n'y figure pas, et ne mélange "
+    "pas les chiffres de deux démarches différentes (par exemple obtention et renouvellement)."
 )
 
 IMAGE_UNDERSTANDING_SYSTEM = (
