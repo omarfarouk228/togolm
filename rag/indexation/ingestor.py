@@ -124,6 +124,16 @@ def fetch_existing_document(cur, url: str) -> tuple[str, str] | None:
     return (row[0], row[1] or "") if row else None
 
 
+def backfill_published_at(cur, document_id: str, raw_date: str | None) -> None:
+    """Set published_at on an existing document that has none yet."""
+    published_at = normalize_date(raw_date)
+    if published_at:
+        cur.execute(
+            "UPDATE documents SET published_at = %s WHERE id = %s AND published_at IS NULL",
+            (published_at, document_id),
+        )
+
+
 def needs_reindex(cur, document_id: str, embed: bool) -> bool:
     """True if the document has no chunks yet, or (when embedding) any chunk
     is missing its embedding. Used to skip re-chunk/re-embed work for content
@@ -236,6 +246,10 @@ def process_file(jsonl_path: Path, embed: bool, conn) -> tuple[int, int, int, in
             ):
                 # Content unchanged and already fully (re)indexed — skip the
                 # expensive delete+rechunk+reembed cycle for this document.
+                # Still fill a missing publication date: several spiders
+                # extracted none until 2026-10, and a re-crawl must be able to
+                # backfill it without re-chunking the whole source.
+                backfill_published_at(cur, existing[0], doc.get("published_at"))
                 unchanged += 1
                 conn.commit()
                 continue
