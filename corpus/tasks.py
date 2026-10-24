@@ -13,6 +13,7 @@ Tasks:
 
 import subprocess
 import sys
+import time
 from pathlib import Path
 
 from corpus.celery_app import app
@@ -127,6 +128,7 @@ def run_spider(self, spider_name: str) -> dict:
     # the parent run_news_spiders/run_all_spiders task with an EncodeError
     # every day. Whatever the spider wrote before being killed is still ingested.
     timed_out = False
+    started = time.monotonic()
     try:
         result = subprocess.run(cmd, cwd=str(SCRAPY_DIR), timeout=SPIDER_TIMEOUT_S)
         returncode = result.returncode
@@ -135,12 +137,38 @@ def run_spider(self, spider_name: str) -> dict:
         returncode = None
     size_kb = output_file.stat().st_size / 1024 if output_file.exists() else 0
 
-    return {
+    summary = {
         "spider": spider_name,
         "success": returncode == 0,
         "timed_out": timed_out,
         "output_kb": round(size_kb, 1),
     }
+    _record_crawl(summary, time.monotonic() - started)
+    return summary
+
+
+# Last run of each spider, shown on the admin home page. A spider that keeps
+# finishing with 0 KB (icilome from 2026-09-24 to 2026-10-24) only showed up
+# in worker logs before.
+CRAWL_RESULTS_KEY = "togolm:crawl:spiders"
+
+
+def _record_crawl(summary: dict, duration_s: float) -> None:
+    import json
+    from datetime import UTC, datetime
+
+    import redis
+
+    try:
+        client = redis.Redis.from_url(app.conf.broker_url)
+        record = {
+            **summary,
+            "duration_s": round(duration_s),
+            "finished_at": datetime.now(UTC).isoformat(timespec="seconds"),
+        }
+        client.hset(CRAWL_RESULTS_KEY, summary["spider"], json.dumps(record))
+    except Exception:
+        pass
 
 
 @app.task(bind=True, max_retries=0, time_limit=86400)
