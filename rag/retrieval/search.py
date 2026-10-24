@@ -101,7 +101,13 @@ NAVIGATION_TITLES = (
     "magazine",
     "diaporama joee",
 )
+# Retrieval reads French documents only. The Éwé and Kabiyè Wikipedias are
+# in the corpus as wording references for answers in those languages
+# (language_reference), not as sources for French answers.
+RETRIEVAL_LANGUAGE = "fr"
+
 USABLE_TITLE_SQL = (
+    f"d.language = '{RETRIEVAL_LANGUAGE}' AND "
     "length(trim(coalesce(d.title, ''))) > 0"
     " AND trim(d.title) !~ ':\\s*$'"
     " AND lower(trim(d.title)) NOT IN ("
@@ -640,9 +646,10 @@ def _fulltext_search(
             published_at
         FROM documents
         WHERE status = 'active'
+          AND language = %s
           AND to_tsvector('french', coalesce(clean_content,'')) @@ plainto_tsquery('french', %s)
     """
-    params: list = [question, question]
+    params: list = [question, RETRIEVAL_LANGUAGE, question]
 
     if category:
         base_sql += " AND %s IN (category, subcategory)"

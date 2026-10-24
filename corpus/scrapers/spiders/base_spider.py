@@ -48,6 +48,8 @@ def parse_date(raw: str | None) -> str | None:
         return None
     if not 1960 <= date.year <= datetime.utcnow().year + 1:
         return None
+    if (date.year, date.month, date.day) == (1970, 1, 1):
+        return None  # Unix epoch: a zero timestamp, not a date (atop.tg)
     return date.strftime("%Y-%m-%d")
 
 

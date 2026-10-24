@@ -29,7 +29,7 @@ def _json_response(url: str, payload, total_pages: int = 1) -> TextResponse:
 @pytest.fixture
 def spider() -> SanteSpider:
     s = SanteSpider()
-    s.category_slugs = {9: "avis-et-annonces", 1: "non-classe"}
+    s.category_slugs = {"bk.sante.gouv.tg": {9: "avis-et-annonces", 1: "non-classe"}}
     return s
 
 
@@ -80,7 +80,7 @@ def test_pdf_is_stored_under_its_own_url_with_entry_metadata(spider):
     response = Response(url=url, body=b"%PDF-1.4", request=Request(url))
     text = "Antibiotiques recommandés en pédiatrie. " * 50
 
-    with patch("scrapers.spiders.sante_spider._extract_pdf_text", return_value=text):
+    with patch("scrapers.spiders.wp_platform._extract_pdf_text", return_value=text):
         (doc,) = spider.parse_pdf(response, entry=entry)
 
     assert doc["url"] == url
@@ -93,7 +93,7 @@ def test_pdf_is_stored_under_its_own_url_with_entry_metadata(spider):
 def test_pdf_without_extractable_text_is_skipped(spider):
     url = "https://bk.sante.gouv.tg/scan.pdf"
     response = Response(url=url, body=b"%PDF-1.4", request=Request(url))
-    with patch("scrapers.spiders.sante_spider._extract_pdf_text", return_value=""):
+    with patch("scrapers.spiders.wp_platform._extract_pdf_text", return_value=""):
         assert list(spider.parse_pdf(response, entry={"id": 1, "title": {}})) == []
 
 

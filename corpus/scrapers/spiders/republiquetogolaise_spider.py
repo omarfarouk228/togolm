@@ -5,8 +5,8 @@ Joomla CMS with K2 component. Article URLs follow:
   /{category}/{ddmm}-{id}-{slug}
   e.g. /gestion-publique/3112-11462-conseil-des-ministres-du-30-decembre-2025
 
-Articles are discovered from the homepage and category listing pages.
-Pagination via Joomla's ?start=N offset parameter.
+Articles are discovered from the JMap sitemap (~12,000 articles), the homepage
+and category listing pages (pagination via Joomla's ?start=N offset).
 """
 
 import re
@@ -15,7 +15,8 @@ from urllib.parse import parse_qs, urlencode, urljoin, urlparse, urlunparse
 import scrapy
 from scrapers.spiders.base_spider import BaseTogoSpider
 
-DOMAIN = "www.republiquetogolaise.com"
+DOMAIN = "www.republiquetogolaise.tg"
+SITEMAP_URL = f"https://{DOMAIN}/index.php?option=com_jmap&view=sitemap&format=xml"
 BASE_URL = f"https://{DOMAIN}"
 
 CATEGORIES = [
@@ -30,6 +31,9 @@ CATEGORIES = [
     "culture",
     "securite",
     "social",
+    "gouvernance-economique",
+    "sante",
+    "agro",
 ]
 
 # Joomla article URL: /{category}/{ddmm}-{5+digit-id}-{slug}
@@ -67,16 +71,24 @@ SUBCATEGORY_MAP = {
     "culture": "culture",
     "securite": "politics",
     "social": "society",
+    # Sections of the .tg portal (2026), topics as corpus categories so the
+    # category filter (category OR subcategory) finds them.
+    "gouvernance-economique": "economy",
+    "sante": "health",
+    "agro": "agriculture",
+    "formation": "education",
+    "tic": "technologies",
+    "cedeao": "international",
 }
 
 
 class RepubliquetogolaisSpider(BaseTogoSpider):
     name = "republiquetogolaise"
-    source = "republiquetogolaise.com"
+    source = "republiquetogolaise.tg"
     category = "press"
     language = "fr"
 
-    start_urls = [BASE_URL] + [f"{BASE_URL}/{cat}" for cat in CATEGORIES]
+    start_urls = [SITEMAP_URL, BASE_URL] + [f"{BASE_URL}/{cat}" for cat in CATEGORIES]
 
     custom_settings = {
         "DOWNLOAD_DELAY": 2,
@@ -84,6 +96,12 @@ class RepubliquetogolaisSpider(BaseTogoSpider):
     }
 
     def parse(self, response):
+        if response.url == SITEMAP_URL:
+            response.selector.remove_namespaces()
+            for url in response.xpath("//loc/text()").getall():
+                if self._is_article_url(url.strip()):
+                    yield scrapy.Request(url.strip(), callback=self.parse_article)
+            return
         # Collect article links from listing page
         articles_found = 0
         for href in response.css("a::attr(href)").getall():
@@ -116,15 +134,17 @@ class RepubliquetogolaisSpider(BaseTogoSpider):
         if not title or len(title) < 5:
             return
 
-        # Joomla K2 content selectors
-        body_html = (
-            response.css("div.itemFullText").get("")
-            or response.css("div.itemBody").get("")
-            or response.css("div.itemIntroText").get("")
-            or response.css("div.item-page").get("")
-            or response.css("article").get("")
-        )
-        raw_content = self.html_to_text(body_html) if body_html else ""
+        # Joomla K2: the text is split between the intro and the full text,
+        # either of which can be empty (on the .tg portal the whole article is
+        # often in itemIntroText). Taking the first non-empty element picked
+        # an empty itemFullText, and the paragraph fallback dropped link text.
+        raw_content = " ".join(
+            self.html_to_text(part)
+            for part in response.css("div.itemIntroText, div.itemFullText").getall()
+        ).strip()
+        if len(raw_content.split()) < 30:
+            body_html = response.css("div.item-page").get("") or response.css("article").get("")
+            raw_content = self.html_to_text(body_html) if body_html else ""
 
         if not raw_content or len(raw_content.split()) < 30:
             paragraphs = response.css(
@@ -135,22 +155,14 @@ class RepubliquetogolaisSpider(BaseTogoSpider):
         if not raw_content or len(raw_content.split()) < 30:
             return
 
-        # Date: Joomla K2 span, meta tag, or time element
-        published_at = (
-            response.css("span.itemDateCreated::text").get("")
-            or response.css("time::attr(datetime)").get("")
-            or response.css("meta[property='article:published_time']::attr(content)").get("")
-            or ""
-        )
-        # Normalize French date "31 Décembre 2025" → handled by ingestor
-        published_at = published_at.strip()
+        published_at = self.extract_published_at(response, ".itemDateCreated")
 
         yield self.make_document(
             response=response,
             title=title,
             raw_content=raw_content,
             subcategory=self._infer_subcategory(response.url),
-            published_at=published_at[:10] if published_at else None,
+            published_at=published_at,
             metadata={"word_count": len(raw_content.split())},
         )
 

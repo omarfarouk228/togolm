@@ -681,6 +681,8 @@ _DAILY_SOURCES = {
     "savoirnews.net",
     "republicoftogo.com",
     "presidence.gouv.tg",
+    "atop.tg",
+    "republiquetogolaise.tg",
 }
 _STALE_AFTER_DAYS = {"daily": 3, "weekly": 14}
 CRAWL_RESULTS_KEY = "togolm:crawl:spiders"
@@ -722,12 +724,40 @@ def _traffic(cur, days: int) -> list[dict]:
     return out
 
 
+def source_status(
+    schedule: str, days_since_new: int | None, published_90d: int, dated: bool
+) -> tuple[str, float | None]:
+    """("fresh" | "late" | "quiet", expected days between two new documents).
+
+    "No new document for N days" alone flagged 11 sources as late on
+    2026-10-24, jo.gouv.tg included, although its crawler worked: the site
+    simply had published nothing since October 2025. Each source is judged
+    against its own pace instead (documents published in the last 90 days).
+    A source with no recent publication is "quiet", not late; a crawler that
+    actually fails shows up in the crawl results.
+    """
+    if days_since_new is None:
+        return "late", None
+    if not dated:
+        # No publication dates to measure a pace: only daily news sites are
+        # expected to bring new articles all the time.
+        if schedule == "daily":
+            return ("late" if days_since_new > _STALE_AFTER_DAYS["daily"] else "fresh"), None
+        return "quiet" if days_since_new > _STALE_AFTER_DAYS["weekly"] else "fresh", None
+    if published_90d == 0:
+        return "quiet", None
+    gap = 90 / published_90d
+    allowed = max(_STALE_AFTER_DAYS[schedule], 3 * gap)
+    return ("late" if days_since_new > allowed else "fresh"), round(gap, 1)
+
+
 def _sources(cur) -> list[dict]:
     cur.execute(
         """
         SELECT source, MODE() WITHIN GROUP (ORDER BY category), COUNT(*),
                MAX(collected_at), MAX(published_at),
-               COUNT(*) FILTER (WHERE published_at IS NULL)
+               COUNT(*) FILTER (WHERE published_at IS NULL),
+               COUNT(*) FILTER (WHERE published_at >= CURRENT_DATE - 90)
         FROM documents
         WHERE status = 'active'
         GROUP BY source
@@ -736,9 +766,11 @@ def _sources(cur) -> list[dict]:
     )
     now = datetime.datetime.now()
     out = []
-    for source, category, docs, collected, published, undated in cur.fetchall():
+    for source, category, docs, collected, published, undated, recent in cur.fetchall():
         schedule = "daily" if source in _DAILY_SOURCES else "weekly"
         age = (now - collected).days if collected else None
+        undated_pct = round(undated * 100 / docs) if docs else 0
+        status, gap = source_status(schedule, age, int(recent), undated_pct < 50)
         out.append(
             {
                 "source": source,
@@ -748,8 +780,11 @@ def _sources(cur) -> list[dict]:
                 "last_collected": collected.isoformat(timespec="minutes") if collected else None,
                 "last_published": published.isoformat() if published else None,
                 "days_since_collected": age,
-                "undated_pct": round(undated * 100 / docs) if docs else 0,
-                "stale": age is None or age > _STALE_AFTER_DAYS[schedule],
+                "undated_pct": undated_pct,
+                "published_90d": int(recent),
+                "expected_gap_days": gap,
+                "status": status,
+                "stale": status == "late",
             }
         )
     return out
