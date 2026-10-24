@@ -24,6 +24,7 @@ from rag.generation.llm import (
     get_chat_model,
     get_chat_model_with_fallback,
     has_distinct_fallback_model,
+    llm_available,
 )
 from rag.generation.prompts import (
     IMAGE_ANSWER_SYSTEM,
@@ -200,7 +201,7 @@ def build_answer(
     be shown by the caller). Falls back to extractive or NO_CORPUS_ANSWER only
     when Gemini is unavailable.
     """
-    if gemini_available():
+    if llm_available():
         try:
             answer = _generate_answer(question, chunks, history or [], max_output_tokens, language)
             generation_health.record_success()
@@ -236,7 +237,7 @@ def _generate_answer(
 
 def answer_without_corpus(question: str, history: History) -> str:
     """Answer an off-topic message without corpus context (graph off_topic_node)."""
-    if not gemini_available():
+    if not llm_available():
         return OFF_TOPIC_GREETING
     chain = (
         OFF_TOPIC_PROMPT | get_chat_model_with_fallback(max_output_tokens=200) | StrOutputParser()
@@ -257,7 +258,7 @@ def rewrite_question_with_history(question: str, history: History) -> str:
 
     Falls back to the original question when Gemini is unavailable or the call fails.
     """
-    if not history or not gemini_available():
+    if not history or not llm_available():
         return question
     chain = REWRITE_PROMPT | get_chat_model_with_fallback(max_output_tokens=150) | StrOutputParser()
     try:
@@ -277,7 +278,7 @@ def question_for_pipeline(question: str, language: str) -> str:
     prompts.LANGUAGE_INSTRUCTIONS). Returns the question unchanged for other
     languages, or when Gemini is unavailable or the call fails.
     """
-    if language not in LOCAL_LANGUAGES or not question.strip() or not gemini_available():
+    if language not in LOCAL_LANGUAGES or not question.strip() or not llm_available():
         return question
     chain = (
         TRANSLATE_TO_FRENCH_PROMPT
@@ -305,7 +306,7 @@ def describe_image_question(mime_type: str, data: str, question: str) -> str:
     retrieval still runs on whatever text the user typed.
     """
     fallback = question.strip() or "Décris cette image."
-    if not gemini_available():
+    if not llm_available():
         return fallback
     try:
         text = question.strip() or "Que puis-je savoir sur cette image ?"
@@ -326,7 +327,7 @@ def answer_from_image(
     max_output_tokens: int = 2048,
 ) -> str:
     """Answer directly from the image when corpus retrieval found nothing."""
-    if gemini_available():
+    if llm_available():
         try:
             messages = _image_answer_messages(mime_type, data, question, history or [])
             model = get_chat_model_with_fallback(max_output_tokens=max_output_tokens)
@@ -365,7 +366,7 @@ def build_answer_with_image(
     no way to notice the mismatch, so it confidently answers from irrelevant
     context. Grounding on the image lets it discard context that doesn't match.
     """
-    if gemini_available():
+    if llm_available():
         try:
             messages = _image_context_answer_messages(
                 question, chunks, mime_type, data, history or []
@@ -426,7 +427,7 @@ def stream_without_corpus(
     question: str, history: History | None = None
 ) -> Iterator[tuple[str, str]]:
     """Stream an off-topic reply, handling missing key and failures internally."""
-    if not gemini_available():
+    if not llm_available():
         yield ("chunk", OFF_TOPIC_GREETING)
         return
     model = get_chat_model_with_fallback(max_output_tokens=200, streaming=True)
