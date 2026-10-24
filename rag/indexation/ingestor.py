@@ -170,6 +170,9 @@ def upsert_document(cur, doc: dict) -> str:
             clean_content = EXCLUDED.clean_content,
             word_count    = EXCLUDED.word_count,
             metadata      = EXCLUDED.metadata,
+            -- A re-crawl brings dates the first crawl missed (2026-10 spider
+            -- date fixes); never erase a known date with a missing one.
+            published_at  = COALESCE(EXCLUDED.published_at, documents.published_at),
             updated_at    = NOW()
         RETURNING id
         """,

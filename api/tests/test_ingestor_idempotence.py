@@ -49,3 +49,33 @@ class TestNeedsReindex:
         cur = MagicMock()
         cur.fetchone.side_effect = [(5,), (0,)]
         assert needs_reindex(cur, "doc-1", embed=True) is False
+
+
+def test_reingest_fills_a_missing_date_and_never_erases_one():
+    import uuid
+
+    from db import get_conn
+    from rag.indexation.ingestor import upsert_document
+
+    url = f"https://example.tg/article-{uuid.uuid4()}"
+    doc = {"source": "example.tg", "url": url, "title": "Article de test", "category": "press"}
+    conn = get_conn()
+    try:
+        with conn.cursor() as cur:
+            upsert_document(cur, {**doc, "raw_content": "v1", "clean_content": "v1"})
+            upsert_document(
+                cur,
+                {
+                    **doc,
+                    "raw_content": "v2",
+                    "clean_content": "v2",
+                    "published_at": "23 octobre 2026",
+                },
+            )
+            upsert_document(cur, {**doc, "raw_content": "v3", "clean_content": "v3"})
+            cur.execute("SELECT published_at::text FROM documents WHERE url = %s", (url,))
+            assert cur.fetchone()[0] == "2026-10-23"
+            cur.execute("DELETE FROM documents WHERE url = %s", (url,))
+        conn.commit()
+    finally:
+        conn.close()
