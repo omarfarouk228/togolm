@@ -14,8 +14,10 @@ def log_query(
     api_key: APIKeyRecord | str | None,
 ) -> None:
     """Persist a query log record — called in background, never raises."""
+    key_id = None
     if isinstance(api_key, APIKeyRecord):
         prefix = api_key.preview
+        key_id = api_key.id
     elif isinstance(api_key, str) and api_key.startswith("bot:"):
         prefix = api_key  # "bot:telegram", "bot:whatsapp": usage per channel
     elif isinstance(api_key, str):
@@ -30,10 +32,20 @@ def log_query(
                 cur.execute(
                     """
                     INSERT INTO user_queries
-                        (question, language, category, is_off_topic, chunks_found, latency_ms, api_key_prefix)
-                    VALUES (%s, %s, %s, %s, %s, %s, %s)
+                        (question, language, category, is_off_topic, chunks_found, latency_ms,
+                         api_key_prefix, api_key_id)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
                     """,
-                    (question, language, category, is_off_topic, chunks_found, latency_ms, prefix),
+                    (
+                        question,
+                        language,
+                        category,
+                        is_off_topic,
+                        chunks_found,
+                        latency_ms,
+                        prefix,
+                        key_id,
+                    ),
                 )
             conn.commit()
         finally:

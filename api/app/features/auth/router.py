@@ -3,12 +3,13 @@ POST /v1/auth/register  — Request a free API key (shown once)
 GET  /v1/auth/me        — Current key info and daily usage
 """
 
+import datetime
 import hashlib
 import os
 import secrets
 
 import redis
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, EmailStr
 
 from api.app.core.auth import APIKeyRecord, get_api_key
@@ -147,3 +148,49 @@ def me(api_key: APIKeyRecord | str | None = Depends(get_api_key)):
         quota_per_day=quota,
         remaining_today=max(0, quota - used),
     )
+
+
+@router.get("/auth/usage")
+def usage(
+    days: int = Query(30, ge=1, le=90),
+    api_key: APIKeyRecord | str | None = Depends(get_api_key),
+):
+    """Questions asked with this key per day (POST /v1/query and /v1/query/stream),
+    for the integrator's dashboard. Counted since 2026-10-25 (migration 009)."""
+    if not isinstance(api_key, APIKeyRecord):
+        raise HTTPException(status_code=401, detail="X-API-Key header required")
+    conn = get_conn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT DATE(created_at), COUNT(*),
+                       COUNT(*) FILTER (WHERE is_off_topic),
+                       percentile_cont(0.5) WITHIN GROUP (ORDER BY latency_ms)
+                FROM user_queries
+                WHERE api_key_id = %s AND created_at >= CURRENT_DATE - %s
+                GROUP BY 1
+                """,
+                (api_key.id, days - 1),
+            )
+            rows = {r[0].isoformat(): r for r in cur.fetchall()}
+    finally:
+        conn.close()
+    today = datetime.date.today()
+    series = []
+    for i in range(days - 1, -1, -1):
+        day = (today - datetime.timedelta(days=i)).isoformat()
+        r = rows.get(day)
+        series.append(
+            {
+                "date": day,
+                "questions": int(r[1]) if r else 0,
+                "off_topic": int(r[2]) if r else 0,
+                "latency_p50_ms": int(r[3]) if r and r[3] is not None else None,
+            }
+        )
+    return {
+        "plan": api_key.plan,
+        "quota_per_day": PLAN_QUOTAS.get(api_key.plan, PLAN_QUOTAS["free"]),
+        "days": series,
+    }
