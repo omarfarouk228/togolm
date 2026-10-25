@@ -59,6 +59,19 @@ def checkout(body: CheckoutRequest, api_key: APIKeyRecord | str | None = Depends
     return {**payment, "message": "Validez le paiement sur votre téléphone."}
 
 
+@router.get("/billing/payments")
+def my_payments(api_key: APIKeyRecord | str | None = Depends(get_api_key)):
+    """This key's payments, newest first (developer console)."""
+    key = _key(api_key)
+    hidden = ("owner_name", "owner_email")
+    return {
+        "items": [
+            {k: v for k, v in p.items() if k not in hidden}
+            for p in service.recent_payments(50, api_key_id=key.id)
+        ]
+    }
+
+
 @router.get("/billing/payments/{identifier}")
 def payment(identifier: str, api_key: APIKeyRecord | str | None = Depends(get_api_key)):
     key = _key(api_key)
