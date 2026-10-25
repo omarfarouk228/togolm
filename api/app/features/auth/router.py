@@ -5,11 +5,12 @@ GET  /v1/auth/me        — Current key info and daily usage
 
 import datetime
 import hashlib
+import hmac
 import os
 import secrets
 
 import redis
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, Header, HTTPException, Query
 from pydantic import BaseModel, EmailStr
 
 from api.app.core.auth import APIKeyRecord, get_api_key
@@ -69,6 +70,14 @@ class MeResponse(BaseModel):
     requests_today: int
     quota_per_day: int
     remaining_today: int
+    # End of a paid plan (payments, 010); None for free keys and fixed plans.
+    plan_expires_at: datetime.datetime | None = None
+
+
+class RotateResponse(BaseModel):
+    api_key: str
+    key_prefix: str
+    message: str
 
 
 # ---------------------------------------------------------------------------
@@ -139,6 +148,14 @@ def me(api_key: APIKeyRecord | str | None = Depends(get_api_key)):
     quota = PLAN_QUOTAS.get(plan, PLAN_QUOTAS["free"])
     used = _redis_usage(plan, api_key.id)
 
+    conn = get_conn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute("SELECT plan_expires_at FROM api_keys WHERE id = %s", (api_key.id,))
+            row = cur.fetchone()
+    finally:
+        conn.close()
+
     return MeResponse(
         name=api_key.owner_name,
         email=api_key.owner_email,
@@ -147,6 +164,40 @@ def me(api_key: APIKeyRecord | str | None = Depends(get_api_key)):
         requests_today=used,
         quota_per_day=quota,
         remaining_today=max(0, quota - used),
+        plan_expires_at=row[0] if row else None,
+    )
+
+
+@router.post("/auth/keys/rotate", response_model=RotateResponse)
+def rotate_key(api_key: APIKeyRecord | str | None = Depends(get_api_key)):
+    """Revoke this key and issue its replacement on the same account.
+
+    The old key stops working at once (a leaked key is useless after this);
+    the plan, its end date and the usage history stay, since they hang on the
+    account row, not on the key. The new key is shown once.
+    """
+    if not isinstance(api_key, APIKeyRecord):
+        raise HTTPException(status_code=401, detail="X-API-Key header required")
+    key = _generate_key()
+    conn = get_conn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                UPDATE api_keys SET key_hash = %s, key_prefix = %s
+                WHERE id = %s AND is_active = TRUE
+                """,
+                (_hash_key(key), key[:14], api_key.id),
+            )
+            if cur.rowcount != 1:
+                raise HTTPException(status_code=401, detail="Invalid API key")
+        conn.commit()
+    finally:
+        conn.close()
+    return RotateResponse(
+        api_key=key,
+        key_prefix=key[:14] + "...",
+        message="The previous key no longer works. Save this one: it is shown only once.",
     )
 
 
@@ -194,3 +245,41 @@ def usage(
         "quota_per_day": PLAN_QUOTAS.get(api_key.plan, PLAN_QUOTAS["free"]),
         "days": series,
     }
+
+
+class ClaimRequest(BaseModel):
+    email: EmailStr
+
+
+@router.post("/auth/keys/claim", response_model=RotateResponse, include_in_schema=False)
+def claim_key(body: ClaimRequest, x_internal_token: str | None = Header(None)):
+    """Issue a new key for an e-mail whose ownership the website has verified
+    (Google or magic-link sign-in), when that address already had a key from the
+    registration form that the account can't read back. Only the website calls
+    this, with INTERNAL_API_TOKEN; the old key stops working, the plan stays."""
+    expected = os.getenv("INTERNAL_API_TOKEN", "")
+    if not expected:
+        raise HTTPException(status_code=503, detail="Key claim is not configured")
+    if not x_internal_token or not hmac.compare_digest(x_internal_token, expected):
+        raise HTTPException(status_code=403, detail="Forbidden")
+    key = _generate_key()
+    conn = get_conn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                UPDATE api_keys SET key_hash = %s, key_prefix = %s
+                WHERE lower(owner_email) = lower(%s) AND is_active = TRUE
+                """,
+                (_hash_key(key), key[:14], str(body.email)),
+            )
+            if cur.rowcount != 1:
+                raise HTTPException(status_code=404, detail="No active key for this e-mail")
+        conn.commit()
+    finally:
+        conn.close()
+    return RotateResponse(
+        api_key=key,
+        key_prefix=key[:14] + "...",
+        message="New key issued; the previous one no longer works.",
+    )

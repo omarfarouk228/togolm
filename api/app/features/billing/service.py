@@ -81,7 +81,8 @@ def update_plan(plan: str, label: str, monthly_fcfa: int | None, active: bool) -
     return next(p for p in all_plans() if p["plan"] == plan)
 
 
-def recent_payments(limit: int = 100) -> list[dict]:
+def recent_payments(limit: int = 100, api_key_id: str | None = None) -> list[dict]:
+    """Latest payments, all keys (admin) or one key's own (developer console)."""
     conn = get_conn()
     try:
         with conn.cursor() as cur:
@@ -90,9 +91,10 @@ def recent_payments(limit: int = 100) -> list[dict]:
                 SELECT p.identifier, p.plan, p.months, p.amount, p.network, p.status,
                        p.payment_method, p.created_at, p.paid_at, k.owner_name, k.owner_email
                 FROM payments p JOIN api_keys k ON k.id = p.api_key_id
-                ORDER BY p.created_at DESC LIMIT %s
+                WHERE %(key)s::uuid IS NULL OR p.api_key_id = %(key)s::uuid
+                ORDER BY p.created_at DESC LIMIT %(limit)s
                 """,
-                (limit,),
+                {"key": api_key_id, "limit": limit},
             )
             rows = cur.fetchall()
     finally:

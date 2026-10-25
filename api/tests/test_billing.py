@@ -133,3 +133,66 @@ def test_checkout_unavailable_without_prices(key):
         headers={"X-API-Key": key[0]},
     )
     assert resp.status_code == 503
+
+
+def test_key_rotation_keeps_the_account_and_kills_the_old_key(priced, key, monkeypatch):
+    api_key, email = key
+    # Non-empty, so an unknown key is refused instead of passing as a dev key.
+    monkeypatch.setenv("API_KEYS", "only-this-env-key")
+    with patch.object(paygate, "request_payment", return_value={"tx_reference": "T2", "status": 0}):
+        identifier = client.post(
+            "/v1/billing/checkout",
+            json={"plan": "dev", "months": 1, "phone": "90123456", "network": "FLOOZ"},
+            headers={"X-API-Key": api_key},
+        ).json()["identifier"]
+
+    rotated = client.post("/v1/auth/keys/rotate", headers={"X-API-Key": api_key})
+    assert rotated.status_code == 200
+    new_key = rotated.json()["api_key"]
+    assert new_key != api_key
+
+    assert client.get("/v1/auth/me", headers={"X-API-Key": api_key}).status_code == 401
+    me = client.get("/v1/auth/me", headers={"X-API-Key": new_key}).json()
+    assert me["email"] == email
+    # Payments hang on the account, so the new key still sees them.
+    mine = client.get("/v1/billing/payments", headers={"X-API-Key": new_key}).json()["items"]
+    assert [p["identifier"] for p in mine] == [identifier]
+    assert "owner_email" not in mine[0]
+
+
+def test_payment_history_needs_a_key():
+    assert client.get("/v1/billing/payments").status_code == 401
+
+
+def test_website_can_claim_the_key_of_a_verified_email(key, monkeypatch):
+    api_key, email = key
+    monkeypatch.setenv("API_KEYS", "only-this-env-key")
+    body = {"email": email.upper()}
+
+    monkeypatch.delenv("INTERNAL_API_TOKEN", raising=False)
+    assert client.post("/v1/auth/keys/claim", json=body).status_code == 503
+
+    monkeypatch.setenv("INTERNAL_API_TOKEN", "site-secret")
+    assert client.post("/v1/auth/keys/claim", json=body).status_code == 403
+    assert (
+        client.post(
+            "/v1/auth/keys/claim", json=body, headers={"X-Internal-Token": "wrong"}
+        ).status_code
+        == 403
+    )
+
+    claimed = client.post(
+        "/v1/auth/keys/claim", json=body, headers={"X-Internal-Token": "site-secret"}
+    )
+    assert claimed.status_code == 200
+    new_key = claimed.json()["api_key"]
+    assert client.get("/v1/auth/me", headers={"X-API-Key": api_key}).status_code == 401
+    assert client.get("/v1/auth/me", headers={"X-API-Key": new_key}).json()["email"] == email
+
+    unknown = {"email": "nobody-here@example.com"}
+    assert (
+        client.post(
+            "/v1/auth/keys/claim", json=unknown, headers={"X-Internal-Token": "site-secret"}
+        ).status_code
+        == 404
+    )

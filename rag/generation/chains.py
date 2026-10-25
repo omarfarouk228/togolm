@@ -286,7 +286,10 @@ def question_for_pipeline(question: str, language: str) -> str:
         | StrOutputParser()
     )
     try:
-        translated = chain.invoke({"question": question}).strip()
+        # Wording validated by native speakers helps read the question too.
+        translated = chain.invoke(
+            {"question": question, "examples": examples_block(language)}
+        ).strip()
         return translated or question
     except Exception:
         return question
