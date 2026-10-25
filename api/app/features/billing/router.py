@@ -3,14 +3,17 @@ GET  /v1/billing/plans                  — Paid plans and prices (public)
 POST /v1/billing/checkout               — Pay a plan by mobile money (X-API-Key)
 GET  /v1/billing/payments/{identifier}  — Payment status, activates the plan once paid
 POST /v1/billing/paygate/callback       — PayGate's confirmation (set as return URL in PayGate)
+GET  /v1/admin/billing/plans, PUT /v1/admin/billing/plans/{plan}, GET /v1/admin/billing/payments
+                                        — prices and payments, for the admin
 """
 
 import logging
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request
 from pydantic import BaseModel, Field
 
 from api.app.core.auth import APIKeyRecord, get_api_key
+from api.app.features.admin.service import require_admin
 from api.app.features.billing import paygate, service
 
 logger = logging.getLogger("togolm.billing")
@@ -22,6 +25,12 @@ class CheckoutRequest(BaseModel):
     months: int = Field(1, ge=1, le=12)
     phone: str = Field(..., max_length=20)
     network: str = Field(..., description="FLOOZ or TMONEY")
+
+
+class PlanUpdate(BaseModel):
+    label: str = Field(..., min_length=2, max_length=60)
+    monthly_fcfa: int | None = Field(None, gt=0, le=10_000_000)
+    active: bool = False
 
 
 def _key(api_key: APIKeyRecord | str | None) -> APIKeyRecord:
@@ -72,3 +81,39 @@ async def paygate_callback(request: Request):
         except Exception:
             logger.exception("PayGate callback check failed for %s", identifier)
     return {"ok": True}
+
+
+# ── Admin ────────────────────────────────────────────────────────────────────
+
+
+@router.get("/admin/billing/plans")
+def admin_plans(
+    authorization: str | None = Header(default=None),
+    x_admin_key: str | None = Header(default=None),
+):
+    require_admin(authorization, x_admin_key)
+    return {"paygate_configured": paygate.configured(), "plans": service.all_plans()}
+
+
+@router.put("/admin/billing/plans/{plan}")
+def admin_update_plan(
+    plan: str,
+    body: PlanUpdate,
+    authorization: str | None = Header(default=None),
+    x_admin_key: str | None = Header(default=None),
+):
+    require_admin(authorization, x_admin_key)
+    try:
+        return service.update_plan(plan, body.label, body.monthly_fcfa, body.active)
+    except service.BillingError as e:
+        raise HTTPException(status_code=422, detail=str(e)) from None
+
+
+@router.get("/admin/billing/payments")
+def admin_payments(
+    limit: int = Query(100, ge=1, le=500),
+    authorization: str | None = Header(default=None),
+    x_admin_key: str | None = Header(default=None),
+):
+    require_admin(authorization, x_admin_key)
+    return {"payments": service.recent_payments(limit)}
