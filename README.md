@@ -15,9 +15,13 @@ TogoLM is an open-source AI knowledge layer for Togo — a complete pipeline fro
 
 | Layer | Description |
 |-------|-------------|
-| **Corpus** | 62 000+ structured Togolese documents — laws, government data, press, education — from 55+ sources |
+| **Corpus** | 99 000+ structured Togolese documents (laws, official journal, government data, press, education, health) from 59 sources, in French, Éwé and Kabiyè |
 | **RAG Engine** | Retrieval-Augmented Generation over the Togolese corpus |
-| **Public API** | REST endpoints consumable by any developer or app |
+| **Public API** | REST endpoints consumable by any developer or app: JSON or streamed (SSE) answers, voice transcription, image questions |
+| **Procedure cards** | Exact cost, delay and documents to bring for administrative procedures (service-public.gouv.tg, investirautogo.tg), attached to answers |
+| **Bots** | Telegram and WhatsApp bots answering from the same RAG engine |
+| **Alerts** | Daily e-mail of new public documents on a topic (double opt-in) |
+| **Billing** | Paid plans through PayGate Global (Flooz, T-Money) |
 | **Admin API** | Protected endpoints for corpus management, API key CRUD, query analytics |
 | **Fine-tuned LLM** | Mistral 7B adapted to the Togolese context (training in progress) |
 | **SDKs** | Official JS/TS and Python clients (`sdk/`) for the public API |
@@ -34,7 +38,7 @@ Togolese public data is scattered across dozens of government portals and absent
 togolm/
 ├── corpus/
 │   ├── scrapers/
-│   │   └── spiders/          # 35 Scrapy spiders — one per source
+│   │   └── spiders/          # 44 Scrapy spiders, one per source or family of sources
 │   └── datasets/             # Scraped JSONL files (gitignored)
 ├── rag/
 │   ├── generation/           # LangChain LCEL chains, prompts, LLM config
@@ -48,10 +52,16 @@ togolm/
 │   │   ├── core/             # auth.py, rate_limit.py, models.py
 │   │   └── features/
 │   │       ├── admin/        # router.py, service.py, schemas.py
-│   │       ├── auth/         # register, me
+│   │       ├── alerts/       # topic alerts by e-mail (double opt-in)
+│   │       ├── auth/         # register, me, key rotation, usage
+│   │       ├── billing/      # plans, PayGate checkout and callback
+│   │       ├── bots/         # Telegram and WhatsApp webhooks
+│   │       ├── contribute/   # Éwé / Kabiyè answer reviews
 │   │       ├── corpus/       # public stats
-│   │       ├── documents/    # list, detail, search
-│   │       └── query/        # HTTP layer — delegates to rag/
+│   │       ├── documents/    # list, detail, search, link preview
+│   │       ├── feedback/     # answer feedback
+│   │       ├── procedures/   # procedure cards
+│   │       └── query/        # HTTP layer, delegates to rag/
 │   └── tests/                # pytest integration tests
 ├── alembic/                  # Database migrations (Alembic)
 │   └── versions/
@@ -136,8 +146,9 @@ uv run uvicorn api.app.main:app --reload --port 8000
 ```
 
 ```bash
-# Query the corpus
+# Query the corpus (in development, with API_KEYS empty, any X-API-Key is accepted)
 curl -X POST http://localhost:8000/v1/query \
+  -H "X-API-Key: dev" \
   -H "Content-Type: application/json" \
   -d '{"question": "Comment créer une entreprise au Togo ?"}'
 ```
@@ -162,37 +173,109 @@ See [`sdk/js`](sdk/js) and [`sdk/python`](sdk/python) for full usage, including 
 
 ## API endpoints
 
+Interactive docs: `GET /docs` (OpenAPI at `/openapi.json`). Endpoints marked 🔑 are rate limited: 20 requests per day without a key, 200 per day with a free key (`X-API-Key` header), more on paid plans.
+
 ### Public
 
 | Method | Path | Description |
 |--------|------|-------------|
 | `GET` | `/v1/stats` | Corpus statistics |
-| `GET` | `/v1/categories` | Available corpus categories |
-| `GET` | `/v1/documents` | Paginated document list |
-| `GET` | `/v1/documents/{id}` | Document detail + chunks |
-| `GET` | `/v1/search?q=` | French full-text search |
-| `POST` | `/v1/query` | RAG query → JSON response |
-| `POST` | `/v1/embed` | Generate a 384-dim embedding vector |
-| `POST` | `/v1/auth/register` | Request a free API key |
-| `GET` | `/v1/auth/me` | Current key info and usage |
+| `GET` | `/v1/categories` | Categories that currently hold documents |
+| `GET` | `/v1/documents/recent` | Recent documents feed |
+| `GET` | `/v1/documents` 🔑 | Paginated document list |
+| `GET` | `/v1/documents/{id}` 🔑 | Document detail + chunks |
+| `GET` | `/v1/documents/preview?url=` 🔑 | Title, description and favicon of a cited URL |
+| `GET` | `/v1/search?q=` 🔑 | French full-text search |
+| `POST` | `/v1/query` 🔑 | RAG answer as JSON, with sources and the procedure card when relevant |
+| `POST` | `/v1/query/stream` 🔑 | Same answer streamed as Server-Sent Events |
+| `POST` | `/v1/embed` 🔑 | 384-dim embedding vector |
+| `POST` | `/v1/transcribe` 🔑 | Transcribe a spoken question (Éwé and Kabiyè included) |
+| `GET` | `/v1/procedures?q=` | Search procedure cards |
+| `GET` | `/v1/procedures/{id}` | One procedure card: cost, delay, documents, steps |
+| `POST` | `/v1/feedback` | Rate an answer |
+| `GET` | `/v1/contribute/items` | Éwé / Kabiyè answers waiting for review |
+| `POST` | `/v1/contribute/reviews` | Submit a review (daily cap per IP) |
+| `POST` | `/v1/alerts` | Subscribe to a topic alert (confirmation e-mail) |
+| `GET` | `/v1/alerts/confirm` | Confirm an alert |
+| `GET` | `/v1/alerts/unsubscribe` | Stop an alert |
 
-### Admin (JWT — `POST /v1/admin/login`)
+### Account and billing
 
 | Method | Path | Description |
 |--------|------|-------------|
-| `POST` | `/v1/admin/login` | Exchange admin key for JWT token |
+| `POST` | `/v1/auth/register` | Request a free API key (5 per IP per day) |
+| `GET` | `/v1/auth/me` 🔑 | Current key info and usage |
+| `GET` | `/v1/auth/usage` 🔑 | Daily usage history |
+| `POST` | `/v1/auth/keys/rotate` 🔑 | Revoke this key and issue its replacement |
+| `POST` | `/v1/auth/keys/claim` | Website only (`X-Internal-Token`): new key for a verified e-mail |
+| `GET` | `/v1/billing/plans` | Plans and prices |
+| `POST` | `/v1/billing/checkout` 🔑 | Start a PayGate payment (one pending at a time) |
+| `GET` | `/v1/billing/payments` 🔑 | This key's payments |
+| `GET` | `/v1/billing/payments/{identifier}` 🔑 | One payment's status |
+| `POST` | `/v1/billing/paygate/callback` | PayGate notification (status re-checked with PayGate) |
+
+### Bots
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `POST` | `/v1/bots/telegram/webhook` | Telegram updates (secret token header) |
+| `GET` | `/v1/bots/whatsapp/webhook` | WhatsApp webhook verification |
+| `POST` | `/v1/bots/whatsapp/webhook` | WhatsApp messages (signed by Meta) |
+
+### Admin (JWT from `POST /v1/admin/login`)
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `POST` | `/v1/admin/login` | Exchange the admin key for an 8-hour JWT (10 failures per IP per 15 min) |
+| `GET` | `/v1/admin/overview` | Dashboard summary |
 | `GET` | `/v1/admin/corpus/stats` | Corpus totals by category/language |
 | `GET` | `/v1/admin/corpus/sources` | Per-source doc count and last scrape |
 | `GET` | `/v1/admin/corpus/recent` | Recently ingested documents |
-| `GET` | `/v1/admin/keys` | List all API keys |
+| `GET` | `/v1/admin/keys` | List API keys |
 | `POST` | `/v1/admin/keys` | Create an API key |
 | `PATCH` | `/v1/admin/keys/{id}` | Update plan or active status |
 | `POST` | `/v1/admin/keys/{id}/reset` | Reset an API key (new secret) |
 | `DELETE` | `/v1/admin/keys/{id}` | Delete an API key |
 | `GET` | `/v1/admin/queries` | Paginated query history |
 | `GET` | `/v1/admin/queries/stats` | Query analytics (off-topic rate, latency) |
+| `GET` | `/v1/admin/feedback` | Answer feedback |
+| `PATCH` | `/v1/admin/feedback/{id}` | Set feedback status (approved, rejected, pending) |
+| `GET` | `/v1/admin/language-reviews` | Éwé / Kabiyè reviews |
+| `PATCH` | `/v1/admin/language-reviews/{id}` | Set review status (approved, rejected, pending) |
+| `GET` | `/v1/admin/billing/plans` | Plans (editable) |
+| `PUT` | `/v1/admin/billing/plans/{plan}` | Update a plan's price or quota |
+| `GET` | `/v1/admin/billing/payments` | All payments |
+| `GET` | `/v1/admin/eval/retrieval` | Last retrieval evaluation |
+| `POST` | `/v1/admin/eval/retrieval/run` | Run the retrieval evaluation |
 | `GET` | `/v1/admin/stats` | API request counts from Redis |
 | `GET` | `/v1/admin/health/detailed` | DB, Redis, embedding coverage |
+
+---
+
+## Configuration
+
+All settings come from environment variables (see [`.env.example`](.env.example)).
+
+| Variable | Purpose |
+|----------|---------|
+| `POSTGRES_*` | Database connection |
+| `GEMINI_API_KEY`, `GEMINI_MODEL`, `GEMINI_FALLBACK_MODEL` | Generation, routing, image understanding, embeddings |
+| `ANTHROPIC_API_KEY`, `CLAUDE_MODEL` | Optional Claude fallback when Gemini is unavailable |
+| `API_ENV` | `production` disables the development key fallback |
+| `API_KEYS` | Static keys; empty in development means any key is accepted (never in production) |
+| `API_SECRET_KEY` | Admin key for `POST /v1/admin/login`: long and random |
+| `ADMIN_JWT_SECRET` | Signs admin JWTs; must differ from `API_SECRET_KEY` (`openssl rand -hex 32`) |
+| `INTERNAL_API_TOKEN` | Shared with the website for `/v1/auth/keys/claim` and the register cap exemption |
+| `REGISTER_PER_IP_PER_DAY` | Free keys per IP per day (default 5) |
+| `CORS_ORIGINS` | Allowed browser origins |
+| `CELERY_BROKER_URL`, `CELERY_RESULT_BACKEND`, `REDIS_URL` | Celery and rate limits |
+| `EMAIL_SERVER_HOST`, `EMAIL_SERVER_PORT`, `EMAIL_SERVER_USER`, `EMAIL_SERVER_PASSWORD`, `EMAIL_FROM` | Alert e-mails |
+| `PUBLIC_API_URL` | Base URL used in alert confirmation links |
+| `PAYGATE_API_KEY` | PayGate Global payments |
+| `TELEGRAM_BOT_TOKEN`, `TELEGRAM_WEBHOOK_SECRET` | Telegram bot |
+| `WHATSAPP_TOKEN`, `WHATSAPP_PHONE_NUMBER_ID`, `WHATSAPP_APP_SECRET`, `WHATSAPP_VERIFY_TOKEN` | WhatsApp bot |
+| `BOT_DAILY_LIMIT` | Questions per bot user per day (default 30) |
+| `RAG_HNSW_EF_SEARCH`, `RAG_CONTEXT_NEIGHBORS` | Retrieval tuning |
 
 ---
 
@@ -234,75 +317,71 @@ uv run python -m finetuning.scripts.publish \
 
 ---
 
-## Corpus coverage (62 000+ docs — 35 spiders, 55+ sources)
+## Corpus coverage (99 926 documents, 59 sources)
 
-| Source | Category | Status |
-|--------|----------|--------|
-| icilome.com | Press | ✅ |
-| **gouv_ministry** *(13 sources)* | Government | ✅ |
-| — finances.gouv.tg | Economy / Finance | ✅ |
-| — commerce.gouv.tg | Economy | ✅ |
-| — education.gouv.tg | Education | ✅ |
-| — agriculture.gouv.tg | Agriculture | ✅ |
-| — environnement.gouv.tg | Agriculture / Environment | ✅ |
-| — sante.gouv.tg | Health | ✅ |
-| — justice.gouv.tg | Legal | ✅ |
-| — securite.gouv.tg | Politics | ✅ |
-| — energie.gouv.tg | Economy | ✅ |
-| — tourisme.gouv.tg | Economy | ✅ |
-| — presidenceduconseil.gouv.tg | Politics | ✅ |
-| — urbanisme.gouv.tg | Economy | ✅ |
-| — cnss.tg | Legal / Social | ✅ |
-| **beta_sources** *(5 sources)* | Various | ✅ |
-| — ul.tg | Education | ✅ |
-| — api.tg | Economy / Investment | ✅ |
-| — ceet.tg | Economy / Utilities | ✅ |
-| — cour-constitutionnelle.tg | Legal | ✅ |
-| — inam.tg | Health | ✅ |
-| **international** *(8 sources)* | International | ✅ |
-| — banquemondiale.org | Economy | ✅ |
-| — imf.org | Economy | ✅ |
-| — afdb.org | Economy | ✅ |
-| — undp.org | Economy / Development | ✅ |
-| — who.int | Health | ✅ |
-| — unicef.org | Health | ✅ |
-| — oecd.org | Economy | ✅ |
-| — europa.eu | Economy / Cooperation | ✅ |
-| togoactualite.com | Press | ✅ |
-| togofirst.com | Press / Economy | ✅ |
-| lomeinfos.com | Press | ✅ |
-| letogolais.com | Press | ✅ |
-| savoirnews.net | Press | ✅ |
-| republicoftogo.com | Press | ✅ |
-| republiquetogolaise.com | Press | ✅ |
-| togo24.net | Press | ✅ |
-| togoinfos.com | Press | ⚠️ DNS failure |
-| togopress.info | Press | ⚠️ DNS failure |
-| atp.tg | Press (Agence Togolaise de Presse) | ⚠️ DNS failure |
-| jo.gouv.tg | Legal | ✅ |
-| ohada.com | Legal | ✅ |
-| droit-afrique.com | Legal | ✅ |
-| legal-pdf | Legal (PDF) | ✅ |
-| otr.tg | Legal / Fiscal | ✅ |
-| uemoa.int | Legal / Economy | ✅ |
-| presidence.gouv.tg | Politics | ✅ |
-| primature.gouv.tg | Politics | ✅ |
-| assemblee-nationale.tg | Politics | ⚠️ Cloudflare block |
-| haac.tg | Politics / Media Regulation | ⚠️ DNS failure |
-| service-public.gouv.tg | Administrative | ✅ |
-| mef.gouv.tg | Economy / Finance | ⚠️ DNS failure |
-| inseed.tg | Economy / Statistics | ✅ |
-| bceao.int | Economy / Finance | ✅ |
-| moov-africa.tg | Economy / Telecoms | ✅ |
-| anpe.tg | Employment | ✅ |
-| univ-lome.tg | Education | ✅ |
-| edusup.gouv.tg | Education | ✅ |
-| campus-togo.tg | Education | ✅ |
-| yas.tg | Social | ✅ |
-| fr.wikipedia.org | Encyclopedic | ✅ |
-| international | International | ✅ |
-| gouv_ministry | Government (misc. ministries) | ✅ |
-| beta_sources | Various (beta) | ✅ |
+Snapshot of 2026-10-25; live numbers: `GET /v1/stats`. Categories: administrative, legal, education, economy, health, agriculture, politics, press.
+
+| Source | Documents |
+|--------|-----------|
+| icilome.com | 23 143 |
+| atop.tg | 14 699 |
+| togoactualite.com | 13 678 |
+| togofirst.com | 9 541 |
+| lomeinfos.com | 4 363 |
+| jo.gouv.tg | 4 066 |
+| letogolais.com | 2 297 |
+| fr.wikipedia.org | 2 167 |
+| anpetogo.org | 2 041 |
+| savoirnews.net | 2 015 |
+| kbp.wikipedia.org | 1 962 |
+| edusup.net | 1 801 |
+| republicoftogo.com | 1 424 |
+| campus-togo.com | 1 256 |
+| ee.wikipedia.org | 1 167 |
+| togo24.tg | 1 150 |
+| finances.gouv.tg | 1 109 |
+| environnement.gouv.tg | 1 102 |
+| republiquetogolaise.tg | 971 |
+| sante-assurances.gouv.tg | 707 |
+| arcep.tg | 687 |
+| univ-lome.tg | 658 |
+| commerce.gouv.tg | 605 |
+| cnss.tg | 538 |
+| yas.tg | 502 |
+| diplomatie.gouv.tg | 482 |
+| agriculture.gouv.tg | 464 |
+| presidenceduconseil.gouv.tg | 422 |
+| tourisme.gouv.tg | 402 |
+| planification.gouv.tg | 394 |
+| defense.gouv.tg | 366 |
+| numerique.gouv.tg | 356 |
+| otr.tg | 336 |
+| education.gouv.tg | 334 |
+| togo-port.net | 316 |
+| urbanisme.gouv.tg | 253 |
+| sports.gouv.tg | 239 |
+| justice.gouv.tg | 228 |
+| communication.gouv.tg | 213 |
+| ohada.org | 205 |
+| service-public.gouv.tg | 145 |
+| tde.tg | 143 |
+| edusup.gouv.tg | 138 |
+| eau.gouv.tg | 133 |
+| securite.gouv.tg | 106 |
+| inseed.tg | 103 |
+| legitogo.gouv.tg | 87 |
+| fonctionpublique.gouv.tg | 86 |
+| moov-africa.tg | 84 |
+| energie.gouv.tg | 69 |
+| investirautogo.tg | 54 |
+| economie.gouv.tg | 49 |
+| transports.gouv.tg | 31 |
+| presidence.gouv.tg | 22 |
+| assemblee-nationale.tg | 8 |
+| ftf.tg | 4 |
+| inam.tg | 3 |
+| unicef.org | 1 |
+| europa.eu | 1 |
 
 ---
 
