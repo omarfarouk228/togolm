@@ -133,6 +133,17 @@ def checkout(api_key_id: str, plan: str, months: int, phone: str, network: str) 
     conn = get_conn()
     try:
         with conn.cursor() as cur:
+            # One payment request at a time per key: a loop of checkouts would
+            # otherwise flood any phone number with PayGate prompts.
+            cur.execute(
+                """
+                SELECT 1 FROM payments WHERE api_key_id = %s AND status = 'pending'
+                  AND created_at > NOW() - interval '10 minutes'
+                """,
+                (api_key_id,),
+            )
+            if cur.fetchone():
+                raise BillingError("payment already pending")
             cur.execute(
                 """
                 INSERT INTO payments (identifier, api_key_id, plan, months, amount, network)

@@ -9,20 +9,24 @@ is small. Field lengths are capped instead.
 
 import json
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field
 
 from api.app.core.auth import APIKeyRecord, get_api_key
+from api.app.core.rate_limit import _get_client_ip, within_limit
 from db import get_conn
 
 router = APIRouter(tags=["Feedback"])
 
 _CATEGORIES = ("incorrect", "broken_source", "harmful", "other")
+# Reports per IP per hour: no quota cost, but no unbounded inserts either.
+FEEDBACK_PER_IP_PER_HOUR = 20
 
 
 class FeedbackSource(BaseModel):
-    title: str | None = None
-    url: str | None = None
+    title: str | None = Field(None, max_length=500)
+    # http(s) only: the admin shows these as links.
+    url: str | None = Field(None, max_length=2000, pattern=r"^https?://")
 
 
 class FeedbackRequest(BaseModel):
@@ -30,7 +34,7 @@ class FeedbackRequest(BaseModel):
     question: str = Field(..., min_length=1, max_length=2000)
     answer: str = Field(..., min_length=1, max_length=8000)
     comment: str | None = Field(None, max_length=2000)
-    sources: list[FeedbackSource] | None = None
+    sources: list[FeedbackSource] | None = Field(None, max_length=10)
     language: str = Field("fr", max_length=10)
 
 
@@ -42,8 +46,11 @@ class FeedbackResponse(BaseModel):
 @router.post("/feedback", response_model=FeedbackResponse)
 async def submit_feedback(
     body: FeedbackRequest,
+    request: Request,
     api_key: APIKeyRecord | str | None = Depends(get_api_key),
 ):
+    if not within_limit("feedback", _get_client_ip(request), FEEDBACK_PER_IP_PER_HOUR, 3_600):
+        raise HTTPException(status_code=429, detail="Too many reports, try again later.")
     category = body.category if body.category in _CATEGORIES else "other"
 
     if isinstance(api_key, APIKeyRecord):
