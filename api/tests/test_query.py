@@ -306,7 +306,9 @@ class TestStreamEndpoint:
         events = _parse_sse(resp.text)
         error_events = [e for e in events if e.get("type") == "error"]
         assert len(error_events) == 1
-        assert "DB down" in error_events[0]["message"]
+        # The client gets a generic message; internals stay in the logs.
+        assert error_events[0]["message"] == "Retrieval error"
+        assert "DB down" not in error_events[0]["message"]
 
     def test_stream_short_followup_not_trivially_off_topic_with_history(self, monkeypatch):
         # Regression: /v1/query/stream has its own off-topic check, separate from

@@ -35,8 +35,9 @@ Retrieval quality:
   POST /v1/admin/eval/retrieval/run  — queue a run now
 """
 
-from fastapi import APIRouter, Header, Query
+from fastapi import APIRouter, Header, Query, Request
 
+from api.app.core.rate_limit import _get_client_ip
 from api.app.features.admin import service
 from api.app.features.admin.schemas import (
     AdminLoginRequest,
@@ -66,9 +67,9 @@ def _auth(authorization: str | None, x_admin_key: str | None) -> None:
 
 
 @router.post("/admin/login", response_model=AdminLoginResponse)
-def login(req: AdminLoginRequest):
-    """Exchange the admin key for a 24-hour JWT token."""
-    return service.login(req.key)
+def login(req: AdminLoginRequest, request: Request):
+    """Exchange the admin key for an 8-hour JWT token (10 failures per IP per 15 min)."""
+    return service.login(req.key, _get_client_ip(request))
 
 
 # ── Corpus ────────────────────────────────────────────────────────────────────

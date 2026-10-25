@@ -171,8 +171,10 @@ async def query_corpus(
             result = await asyncio.to_thread(_run_image_query, request)
         else:
             result = await asyncio.to_thread(_run_text_query, request)
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Retrieval error: {e}")
+    except Exception:
+        # Details stay in the logs: exception text can carry internal hosts.
+        logger.exception("Query failed")
+        raise HTTPException(status_code=500, detail="Retrieval error") from None
 
     latency_ms = int((time.monotonic() - t0) * 1000)
 
@@ -232,8 +234,9 @@ def _stream_image_query(
         chunks = retrieval.retrieve(
             question=enriched.search_query, category=request.category, top_k=5
         )
-    except Exception as e:
-        yield f"data: {json.dumps({'type': 'error', 'message': str(e)})}\n\n"
+    except Exception:
+        logger.exception("Retrieval failed (stream)")
+        yield f"data: {json.dumps({'type': 'error', 'message': 'Retrieval error'})}\n\n"
         yield "data: [DONE]\n\n"
         return
 
@@ -340,8 +343,9 @@ def stream_query(
             chunks = retrieval.retrieve(
                 question=enriched.search_query, category=request.category, top_k=5
             )
-        except Exception as e:
-            yield f"data: {json.dumps({'type': 'error', 'message': str(e)})}\n\n"
+        except Exception:
+            logger.exception("Retrieval failed (stream)")
+            yield f"data: {json.dumps({'type': 'error', 'message': 'Retrieval error'})}\n\n"
             yield "data: [DONE]\n\n"
             return
 

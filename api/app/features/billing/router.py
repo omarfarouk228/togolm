@@ -13,10 +13,14 @@ from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request
 from pydantic import BaseModel, Field
 
 from api.app.core.auth import APIKeyRecord, get_api_key
+from api.app.core.rate_limit import within_limit
 from api.app.features.admin.service import require_admin
 from api.app.features.billing import paygate, service
 
 logger = logging.getLogger("togolm.billing")
+# Payment prompts a key may send per day (each one rings a phone).
+CHECKOUTS_PER_KEY_PER_DAY = 10
+
 router = APIRouter(tags=["Billing"])
 
 
@@ -51,10 +55,12 @@ def billing_plans():
 @router.post("/billing/checkout", status_code=202)
 def checkout(body: CheckoutRequest, api_key: APIKeyRecord | str | None = Depends(get_api_key)):
     key = _key(api_key)
+    if not within_limit("checkout", key.id, CHECKOUTS_PER_KEY_PER_DAY, 86_400):
+        raise HTTPException(status_code=429, detail="Too many payment requests today.")
     try:
         payment = service.checkout(key.id, body.plan, body.months, body.phone, body.network.upper())
     except service.BillingError as e:
-        status = 503 if str(e) == "plan not available" else 422
+        status = {"plan not available": 503, "payment already pending": 409}.get(str(e), 422)
         raise HTTPException(status_code=status, detail=str(e)) from None
     return {**payment, "message": "Validez le paiement sur votre téléphone."}
 

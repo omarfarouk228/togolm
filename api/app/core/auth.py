@@ -5,7 +5,8 @@ Flow:
     1. No key provided      → anonymous access (rate-limited by IP)
     2. Key provided         → SHA-256 hash → lookup in api_keys table
     3. Found in DB          → return APIKeyRecord (carries plan info)
-    4. Not in DB            → check API_KEYS env var (dev/CI fallback)
+    4. Not in DB            → check API_KEYS env var (dev/CI fallback; an
+                              empty API_KEYS accepts any key, never in production)
     5. Not anywhere         → 401 Unauthorized
 
 The plain-text key is NEVER stored — only its SHA-256 hash.
@@ -91,11 +92,16 @@ def _lookup_db(key: str) -> APIKeyRecord | None:
 def _check_env_fallback(key: str) -> bool:
     """
     Dev/CI fallback: accept keys listed in API_KEYS env var.
-    If API_KEYS is empty, accept any key (local dev mode).
+    If API_KEYS is empty, accept any key (local dev mode), except in
+    production (API_ENV=production): there an empty API_KEYS used to let any
+    made-up key through as a 1,000-a-day "dev" key, one fresh quota per
+    invented key.
     """
     raw = os.getenv("API_KEYS", "")
     valid_keys = {k.strip() for k in raw.split(",") if k.strip()}
-    return (not valid_keys) or (key in valid_keys)
+    if valid_keys:
+        return key in valid_keys
+    return os.getenv("API_ENV", "development") != "production"
 
 
 # ---------------------------------------------------------------------------
