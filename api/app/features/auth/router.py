@@ -10,11 +10,11 @@ import os
 import secrets
 
 import redis
-from fastapi import APIRouter, Depends, Header, HTTPException, Query
-from pydantic import BaseModel, EmailStr
+from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request
+from pydantic import BaseModel, EmailStr, Field
 
 from api.app.core.auth import APIKeyRecord, get_api_key
-from api.app.core.rate_limit import PLAN_QUOTAS
+from api.app.core.rate_limit import PLAN_QUOTAS, _get_client_ip, within_limit
 from db import get_conn
 
 router = APIRouter(tags=["Auth"])
@@ -49,9 +49,9 @@ def _redis_usage(plan: str, key_id: str) -> int:
 
 
 class RegisterRequest(BaseModel):
-    name: str
+    name: str = Field(..., max_length=200)
     email: EmailStr
-    use_case: str | None = None
+    use_case: str | None = Field(None, max_length=500)
 
 
 class RegisterResponse(BaseModel):
@@ -85,14 +85,33 @@ class RotateResponse(BaseModel):
 # ---------------------------------------------------------------------------
 
 
+def _register_limit() -> int:
+    """Free keys created per IP per day (the website, with its token, is exempt)."""
+    return int(os.getenv("REGISTER_PER_IP_PER_DAY", "5"))
+
+
+def _is_website(token: str | None) -> bool:
+    expected = os.getenv("INTERNAL_API_TOKEN", "")
+    return bool(expected and token) and hmac.compare_digest(token, expected)
+
+
 @router.post("/auth/register", response_model=RegisterResponse)
-def register(req: RegisterRequest):
-    """Create a free API key. The plain-text key is shown once — save it immediately."""
+def register(req: RegisterRequest, request: Request, x_internal_token: str | None = Header(None)):
+    """Create a free API key. The plain-text key is shown once — save it immediately.
+
+    Limited per IP (a free key per made-up address used to multiply quotas),
+    except for the website, which registers every new account from its own IP.
+    """
+    if not _is_website(x_internal_token) and not within_limit(
+        "register", _get_client_ip(request), _register_limit(), 86_400
+    ):
+        raise HTTPException(status_code=429, detail="Too many keys created today.")
     conn = get_conn()
     try:
         with conn.cursor() as cur:
+            # Case-insensitive: Victim@x.com and victim@x.com are one address.
             cur.execute(
-                "SELECT id FROM api_keys WHERE owner_email = %s",
+                "SELECT id FROM api_keys WHERE lower(owner_email) = lower(%s)",
                 (req.email,),
             )
             if cur.fetchone():
@@ -257,10 +276,9 @@ def claim_key(body: ClaimRequest, x_internal_token: str | None = Header(None)):
     (Google or magic-link sign-in), when that address already had a key from the
     registration form that the account can't read back. Only the website calls
     this, with INTERNAL_API_TOKEN; the old key stops working, the plan stays."""
-    expected = os.getenv("INTERNAL_API_TOKEN", "")
-    if not expected:
+    if not os.getenv("INTERNAL_API_TOKEN", ""):
         raise HTTPException(status_code=503, detail="Key claim is not configured")
-    if not x_internal_token or not hmac.compare_digest(x_internal_token, expected):
+    if not _is_website(x_internal_token):
         raise HTTPException(status_code=403, detail="Forbidden")
     key = _generate_key()
     conn = get_conn()

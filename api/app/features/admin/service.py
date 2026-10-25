@@ -1,5 +1,6 @@
 import datetime
 import hashlib
+import hmac
 import json
 import os
 import secrets
@@ -8,6 +9,7 @@ import jwt
 import redis
 from fastapi import HTTPException
 
+from api.app.core import rate_limit
 from api.app.core.rate_limit import PLAN_QUOTAS
 from api.app.features.admin.schemas import (
     AdminLoginResponse,
@@ -29,7 +31,7 @@ _FEEDBACK_STATUSES = ["open", "reviewed", "dismissed"]
 
 _PLANS = ["anon", "free", "dev", "institution"]
 _KEY_PREFIX = "tgolm_"
-_TOKEN_TTL_HOURS = 24
+_TOKEN_TTL_HOURS = 8
 
 
 def get_redis() -> redis.Redis:
@@ -44,15 +46,52 @@ def _secret() -> str:
     return s
 
 
-def login(key: str) -> AdminLoginResponse:
-    if key != _secret():
+def _jwt_secret() -> str:
+    """Signing key for admin tokens, never the admin password itself: a leaked
+    token signed with the password lets anyone brute-force the password offline.
+    ADMIN_JWT_SECRET should be set; until then a key derived from the password
+    at least keeps the token from being signed with the raw password."""
+    explicit = os.getenv("ADMIN_JWT_SECRET", "")
+    if explicit:
+        return explicit
+    return hmac.new(_secret().encode(), b"togolm-admin-jwt", hashlib.sha256).hexdigest()
+
+
+def _matches(candidate: str | None) -> bool:
+    return bool(candidate) and hmac.compare_digest(candidate.encode(), _secret().encode())
+
+
+# Failed admin attempts: per IP on /admin/login, globally for the legacy header.
+_FAIL_WINDOW_S = 15 * 60
+_MAX_FAILS_PER_IP = 10
+_MAX_HEADER_FAILS = 50
+
+
+def _too_many(counter: str, limit: int) -> bool:
+    try:
+        return int(rate_limit._get_redis().get(counter) or 0) >= limit
+    except Exception:
+        return False  # Redis down: don't lock the admin out
+
+
+def _record_failure(counter: str) -> None:
+    try:
+        r = rate_limit._get_redis()
+        if r.incr(counter) == 1:
+            r.expire(counter, _FAIL_WINDOW_S)
+    except Exception:
+        pass
+
+
+def login(key: str, client_ip: str = "unknown") -> AdminLoginResponse:
+    counter = f"admin_login_fail:{client_ip}"
+    if _too_many(counter, _MAX_FAILS_PER_IP):
+        raise HTTPException(status_code=429, detail="Too many attempts, try again later.")
+    if not _matches(key):
+        _record_failure(counter)
         raise HTTPException(status_code=401, detail="Invalid admin key.")
     expires_at = datetime.datetime.now(datetime.UTC) + datetime.timedelta(hours=_TOKEN_TTL_HOURS)
-    token = jwt.encode(
-        {"sub": "admin", "exp": expires_at},
-        _secret(),
-        algorithm="HS256",
-    )
+    token = jwt.encode({"sub": "admin", "exp": expires_at}, _jwt_secret(), algorithm="HS256")
     return AdminLoginResponse(token=token, expires_at=expires_at.isoformat())
 
 
@@ -62,16 +101,21 @@ def require_admin(authorization: str | None, x_admin_key: str | None) -> None:
     if authorization and authorization.startswith("Bearer "):
         token = authorization.removeprefix("Bearer ")
         try:
-            jwt.decode(token, _secret(), algorithms=["HS256"])
+            jwt.decode(token, _jwt_secret(), algorithms=["HS256"])
             return
         except jwt.ExpiredSignatureError:
             raise HTTPException(status_code=401, detail="Token expired.")
         except jwt.InvalidTokenError:
             raise HTTPException(status_code=401, detail="Invalid token.")
 
-    # Legacy X-Admin-Key (backward compat)
-    if x_admin_key and x_admin_key == _secret():
-        return
+    # Legacy X-Admin-Key (backward compat), locked after many failures.
+    if x_admin_key:
+        counter = "admin_header_fail"
+        if _too_many(counter, _MAX_HEADER_FAILS):
+            raise HTTPException(status_code=429, detail="Too many attempts, try again later.")
+        if _matches(x_admin_key):
+            return
+        _record_failure(counter)
 
     raise HTTPException(status_code=401, detail="Authentication required.")
 

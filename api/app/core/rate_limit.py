@@ -152,3 +152,18 @@ async def check_rate_limit(
         raise
     except Exception:
         pass  # Redis down → fail open
+
+
+def within_limit(name: str, identifier: str, limit: int, window_s: int) -> bool:
+    """Fixed-window counter for one action (sign-ups, feedback, checkouts...).
+    True while `identifier` stays within `limit` per `window_s`. Fails open when
+    Redis is down, like the main limiter's callers expect."""
+    key = f"togolm:limit:{name}:{identifier}"
+    try:
+        r = _get_redis()
+        count = r.incr(key)
+        if count == 1:
+            r.expire(key, window_s)
+        return count <= limit
+    except Exception:
+        return True

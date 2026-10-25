@@ -52,6 +52,12 @@ class TestAuthWithKeys:
         resp = client.get("/v1/categories", headers={"X-API-Key": "whatever"})
         assert resp.status_code == 200
 
+    def test_production_never_accepts_made_up_keys(self, no_api_keys, monkeypatch):
+        """Empty API_KEYS in production must not turn any key into a dev key."""
+        monkeypatch.setenv("API_ENV", "production")
+        resp = client.get("/v1/auth/me", headers={"X-API-Key": "tgolm_made_up"})
+        assert resp.status_code == 401
+
     def test_dev_mode_accepts_no_key(self, no_api_keys):
         resp = client.get("/v1/categories")
         assert resp.status_code == 200

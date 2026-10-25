@@ -13,12 +13,15 @@ from fastapi import APIRouter, HTTPException, Query, Request
 from fastapi.responses import HTMLResponse
 from pydantic import BaseModel, EmailStr, Field
 
+from api.app.core.rate_limit import _get_client_ip, within_limit
 from api.app.features.alerts import service
 from api.app.features.alerts.mail import email_configured, send_email
 
 router = APIRouter(tags=["Alerts"])
 
 DAILY_SIGNUPS_PER_IP = 5
+# Confirmation e-mails sent per day in total, whatever the senders' IPs.
+DAILY_CONFIRMATION_EMAILS = 300
 
 
 class AlertRequest(BaseModel):
@@ -56,8 +59,11 @@ def _within_signup_limit(ip: str) -> bool:
 def subscribe(body: AlertRequest, request: Request):
     if not email_configured():
         raise HTTPException(status_code=503, detail="E-mail alerts are not available.")
-    ip = request.headers.get("x-forwarded-for", request.client.host if request.client else "")
-    if not _within_signup_limit(ip.split(",")[0].strip()):
+    # Same client IP as the rate limiter: the left-most X-Forwarded-For entry is
+    # whatever the caller writes, so it let one sender use a fresh quota per request.
+    if not _within_signup_limit(_get_client_ip(request)) or not within_limit(
+        "alert_emails", "all", DAILY_CONFIRMATION_EMAILS, 86_400
+    ):
         raise HTTPException(status_code=429, detail="Too many sign-ups today.")
     try:
         sub = service.create("email", str(body.email).lower(), body.query, body.category)
@@ -66,7 +72,9 @@ def subscribe(body: AlertRequest, request: Request):
     link = f"{service.PUBLIC_API_URL}/v1/alerts/confirm?token={sub['token']}"
     send_email(
         str(body.email),
-        f"Confirmez votre alerte TogoLM « {sub['query']} »",
+        # The topic is the caller's text: kept out of the subject line, where a
+        # phishing sentence would read as if TogoLM wrote it.
+        "Confirmez votre alerte TogoLM",
         "Bonjour,\n\nVous avez demandé à recevoir chaque jour les nouveaux documents publics "
         f"togolais sur « {sub['query']} ».\n\nConfirmez en ouvrant ce lien :\n{link}\n\n"
         "Si vous n'êtes pas à l'origine de cette demande, ignorez ce message.\n\nTogoLM",
