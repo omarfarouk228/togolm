@@ -220,10 +220,17 @@ TRANSLATE_TO_FRENCH_PROMPT = ChatPromptTemplate.from_messages(
     [
         (
             "human",
-            "Traduis cette question en français, fidèlement et sans y répondre. "
-            "Elle peut être en éwé, en kabiyè, en français ou mélanger plusieurs langues ; "
-            "si elle est déjà en français, recopie-la telle quelle. "
-            "Réponds UNIQUEMENT avec la question traduite.\n\n{question}",
+            "{examples}"
+            "Traduis ce message en français, fidèlement et sans y répondre. "
+            "Il peut être en éwé, en kabiyè, en français ou mélanger plusieurs langues ; "
+            "s'il est déjà en français, recopie-le tel quel.\n"
+            "- Une salutation ou une formule de politesse reste une salutation "
+            "(« Bonjour, comment allez-vous ? »), pas une question sur un sujet.\n"
+            "- Ne remplace JAMAIS un mot que tu ne reconnais pas avec certitude par un mot "
+            "français qui lui ressemble à l'écrit ou à l'oreille (un mot éwé proche de "
+            "« fonio » n'est pas forcément la céréale). Recopie ce mot tel quel entre "
+            "crochets, par exemple [fonyo].\n"
+            "Réponds UNIQUEMENT avec le message traduit.\n\n{question}",
         )
     ]
 )

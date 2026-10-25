@@ -7,7 +7,11 @@ from fastapi.testclient import TestClient
 
 from api.app.features.query.schemas import QueryRequest
 from rag.generation import chains
-from rag.generation.prompts import RAG_ANSWER_PROMPT, language_instruction
+from rag.generation.prompts import (
+    RAG_ANSWER_PROMPT,
+    TRANSLATE_TO_FRENCH_PROMPT,
+    language_instruction,
+)
 
 
 @pytest.mark.parametrize(
@@ -74,3 +78,16 @@ def test_stream_endpoint_answers_in_requested_language(client: TestClient):
 
     assert resp.status_code == 200
     assert captured == {"question": "Qui ?", "language": "ee"}
+
+
+def test_local_language_translation_keeps_unknown_words_and_greetings():
+    """An Éwé greeting typed as "Mbenade, le fonyo de ma" was read as a question
+    about fonio, the cereal: the translation must not guess by resemblance."""
+    (message,) = TRANSLATE_TO_FRENCH_PROMPT.format_messages(
+        question="Mbenade, le fonyo de ma", examples="FORMULATIONS VALIDÉES <<<…>>>\n\n"
+    )
+    text = message.content
+    assert text.startswith("FORMULATIONS VALIDÉES")
+    assert "salutation" in text
+    assert "[fonyo]" in text  # unknown words are copied in brackets
+    assert text.endswith("Mbenade, le fonyo de ma")
