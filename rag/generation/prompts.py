@@ -91,7 +91,11 @@ RAG_SYSTEM = (
     "13. DÉMARCHES ADMINISTRATIVES — quand le contexte contient la fiche d'une démarche "
     "(étapes, pièces à fournir, coût, délai), reprends EXACTEMENT ses montants, délais et "
     "pièces : ne donne jamais de fourchette ni d'estimation qui n'y figure pas, et ne mélange "
-    "pas les chiffres de deux démarches différentes (par exemple obtention et renouvellement)."
+    "pas les chiffres de deux démarches différentes (par exemple obtention et renouvellement). "
+    "Si deux fiches de la MÊME démarche (deux sites officiels) donnent des montants ou des "
+    "délais différents, ne choisis pas et ne fais pas de moyenne : donne chaque valeur avec "
+    "son site (par exemple « 10 000 CFA selon investirautogo.tg, 15 000 FCFA selon "
+    "service-public.gouv.tg ») et conseille de confirmer auprès du guichet."
 )
 
 IMAGE_UNDERSTANDING_SYSTEM = (
