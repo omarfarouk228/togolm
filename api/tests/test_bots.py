@@ -161,3 +161,16 @@ def test_whatsapp_webhook_verification_and_signature(monkeypatch):
             client.post("/v1/bots/whatsapp/webhook", content=body, headers=good).status_code == 200
         )
     process.assert_called_once_with(message)
+
+
+def test_voice_searches_with_the_transcribers_french_translation(fake_redis):
+    heard = {"text": "Mbenade, le fonyo de ma", "translation_fr": "Bonjour, comment vas-tu ?"}
+    with (
+        patch("rag.generation.audio.transcribe_audio", return_value=heard),
+        patch.object(core, "_ask", return_value=core.Answer("Woezɔ !", [])) as ask,
+    ):
+        echo, reply = core.handle_voice("telegram", "9", "audio/ogg", "AAAA", "html")
+    assert "Mbenade, le fonyo de ma" in echo
+    assert ask.call_args.args[2] == "Bonjour, comment vas-tu ?"
+    assert ask.call_args.args[3] is True  # no second translation
+    assert reply == "Woezɔ !"
