@@ -1,17 +1,14 @@
 """
 Paid plans for API keys, paid by mobile money through PayGate Global.
 
-Prices are a business decision, configured in BILLING_PLANS, e.g.
-  {"dev": {"label": "Développeur", "monthly_fcfa": 5000}}
-(plan names are those of api.app.core.rate_limit). Unset: no checkout.
+Prices are a business decision, edited from the admin (billing_plans table,
+migration 011): a plan is for sale once it has a price and is switched on.
 
 A payment is only trusted once PayGate's status API says it is paid (status
 0) for our identifier and amount: PayGate's callback is not signed, so it
 only triggers that check.
 """
 
-import json
-import os
 import re
 import uuid
 
@@ -26,20 +23,89 @@ class BillingError(ValueError):
     pass
 
 
-def plans() -> dict[str, dict]:
+def all_plans() -> list[dict]:
+    """Every paid plan as edited in the admin, for sale or not."""
+    conn = get_conn()
     try:
-        configured = json.loads(os.getenv("BILLING_PLANS", "") or "{}")
-    except ValueError:
-        return {}
-    return {
-        name: {
-            "label": str(conf.get("label") or name),
-            "monthly_fcfa": int(conf["monthly_fcfa"]),
-            "quota_per_day": PLAN_QUOTAS[name],
+        with conn.cursor() as cur:
+            cur.execute(
+                "SELECT plan, label, monthly_fcfa, active, updated_at FROM billing_plans ORDER BY plan"
+            )
+            rows = cur.fetchall()
+    finally:
+        conn.close()
+    return [
+        {
+            "plan": plan,
+            "label": label,
+            "monthly_fcfa": price,
+            "active": active,
+            "quota_per_day": PLAN_QUOTAS.get(plan),
+            "updated_at": updated.isoformat(timespec="minutes") if updated else None,
         }
-        for name, conf in configured.items()
-        if name in PLAN_QUOTAS and name not in ("anon", "free") and conf.get("monthly_fcfa")
+        for plan, label, price, active, updated in rows
+        if plan in PLAN_QUOTAS
+    ]
+
+
+def plans() -> dict[str, dict]:
+    """Plans for sale: switched on and priced."""
+    return {
+        p["plan"]: {k: p[k] for k in ("label", "monthly_fcfa", "quota_per_day")}
+        for p in all_plans()
+        if p["active"] and p["monthly_fcfa"]
     }
+
+
+def update_plan(plan: str, label: str, monthly_fcfa: int | None, active: bool) -> dict:
+    if plan not in PLAN_QUOTAS or plan in ("anon", "free"):
+        raise BillingError("unknown plan")
+    if active and not monthly_fcfa:
+        raise BillingError("a plan for sale needs a price")
+    conn = get_conn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                INSERT INTO billing_plans (plan, label, monthly_fcfa, active, updated_at)
+                VALUES (%s, %s, %s, %s, NOW())
+                ON CONFLICT (plan) DO UPDATE SET label = EXCLUDED.label,
+                    monthly_fcfa = EXCLUDED.monthly_fcfa, active = EXCLUDED.active,
+                    updated_at = NOW()
+                """,
+                (plan, label, monthly_fcfa, active),
+            )
+        conn.commit()
+    finally:
+        conn.close()
+    return next(p for p in all_plans() if p["plan"] == plan)
+
+
+def recent_payments(limit: int = 100) -> list[dict]:
+    conn = get_conn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT p.identifier, p.plan, p.months, p.amount, p.network, p.status,
+                       p.payment_method, p.created_at, p.paid_at, k.owner_name, k.owner_email
+                FROM payments p JOIN api_keys k ON k.id = p.api_key_id
+                ORDER BY p.created_at DESC LIMIT %s
+                """,
+                (limit,),
+            )
+            rows = cur.fetchall()
+    finally:
+        conn.close()
+    keys = ("identifier", "plan", "months", "amount", "network", "status", "payment_method",
+            "created_at", "paid_at", "owner_name", "owner_email")  # fmt: skip
+    return [
+        {
+            k: (v.isoformat(timespec="minutes") if hasattr(v, "isoformat") else v)
+            for k, v in zip(keys, r)
+        }
+        for r in rows
+    ]
 
 
 def normalize_phone(phone: str) -> str:
