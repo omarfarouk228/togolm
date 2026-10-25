@@ -63,7 +63,9 @@ def _lookup_db(key: str) -> APIKeyRecord | None:
                     UPDATE api_keys
                     SET last_used = NOW()
                     WHERE key_hash = %s AND is_active = TRUE
-                    RETURNING id::text, owner_name, owner_email, plan
+                    RETURNING id::text, owner_name, owner_email,
+                        -- A paid plan past its end counts as free (payments, 010).
+                        CASE WHEN plan_expires_at < NOW() THEN 'free' ELSE plan END
                     """,
                     (key_hash,),
                 )

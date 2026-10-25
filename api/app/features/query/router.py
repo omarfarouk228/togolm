@@ -31,7 +31,7 @@ from rag import generation, retrieval
 from rag.generation import rewrite_question_with_history
 from rag.generation.audio import TranscriptionError, transcribe_audio
 from rag.generation.language_examples import queue_live_answer
-from rag.generation.llm import gemini_available
+from rag.generation.llm import gemini_available, llm_available
 from rag.indexation.embedder import LocalEmbedder
 from rag.orchestration.classification import is_trivially_off_topic
 from rag.orchestration.graph import QueryGraphResult, run_query_graph
@@ -63,6 +63,23 @@ def _display_sources(sources: list[dict]) -> list[dict]:
         seen.add(key)
         shown.append(s)
     return shown
+
+
+def _procedure_for(sources: list[dict]) -> dict | None:
+    """Card of the best displayed source when it is an administrative procedure."""
+    from urllib.parse import urlparse
+
+    from api.app.features.procedures.router import card_for_url
+    from rag.procedures import PROCEDURE_SOURCES
+
+    for source in sources[:2]:
+        host = urlparse(source.get("url") or "").netloc.removeprefix("www.")
+        if host in PROCEDURE_SOURCES:
+            try:
+                return card_for_url(source["url"])
+            except Exception:
+                return None
+    return None
 
 
 # Module-level embedder cache for the /embed endpoint
@@ -181,6 +198,7 @@ async def query_corpus(
         sources=[Source(**src) for src in display_sources],
         model="togolm-rag-v1",
         latency_ms=latency_ms,
+        procedure=_procedure_for(display_sources),
     )
 
 
@@ -221,7 +239,7 @@ def _stream_image_query(
 
     sources = [{"title": c.title, "url": c.url, "score": round(c.score, 4)} for c in chunks]
 
-    if gemini_available():
+    if llm_available():
         try:
             events = (
                 generation.stream_answer_with_image(
@@ -280,7 +298,7 @@ def stream_query(
     Events (newline-delimited JSON after 'data: '):
       {type: 'thinking', text: str}
       {type: 'chunk',    text: str}
-      {type: 'sources',  sources: [...], latency_ms: int}
+      {type: 'sources',  sources: [...], latency_ms: int, procedure?: {...}}
       {type: 'error',    message: str}
     Terminated by: data: [DONE]
     """
@@ -329,7 +347,7 @@ def stream_query(
 
         sources = [{"title": c.title, "url": c.url, "score": round(c.score, 4)} for c in chunks]
 
-        if gemini_available():
+        if llm_available():
             try:
                 streamed: list[str] = []
                 for event_type, text in generation.stream_answer(
@@ -368,7 +386,11 @@ def stream_query(
             api_key,
         )
         display_sources = _display_sources(sources)
-        yield f"data: {json.dumps({'type': 'sources', 'sources': display_sources, 'latency_ms': latency_ms})}\n\n"
+        event = {"type": "sources", "sources": display_sources, "latency_ms": latency_ms}
+        procedure = _procedure_for(display_sources)
+        if procedure:
+            event["procedure"] = procedure
+        yield f"data: {json.dumps(event)}\n\n"
         yield "data: [DONE]\n\n"
 
     return StreamingResponse(

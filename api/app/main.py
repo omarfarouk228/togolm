@@ -13,6 +13,7 @@ Endpoints:
   POST /v1/feedback         — Report an issue with a generated answer
   GET  /v1/contribute/items — Éwé/Kabiyè answers waiting for native-speaker review
   POST /v1/contribute/reviews — Submit a native-speaker review
+  POST /v1/bots/telegram/webhook, GET|POST /v1/bots/whatsapp/webhook — messaging bots
 """
 
 import os
@@ -26,11 +27,16 @@ from fastapi.middleware.cors import CORSMiddleware  # noqa: E402
 
 from api.app.core.rate_limit import check_rate_limit  # noqa: E402
 from api.app.features.admin.router import router as admin_router  # noqa: E402
+from api.app.features.alerts.router import router as alerts_router  # noqa: E402
 from api.app.features.auth.router import router as auth_router  # noqa: E402
+from api.app.features.billing.router import router as billing_router  # noqa: E402
+from api.app.features.bots.telegram import router as telegram_router  # noqa: E402
+from api.app.features.bots.whatsapp import router as whatsapp_router  # noqa: E402
 from api.app.features.contribute.router import router as contribute_router  # noqa: E402
 from api.app.features.corpus.router import router as corpus_router  # noqa: E402
 from api.app.features.documents.router import router as documents_router  # noqa: E402
 from api.app.features.feedback.router import router as feedback_router  # noqa: E402
+from api.app.features.procedures.router import router as procedures_router  # noqa: E402
 from api.app.features.query.router import router as query_router  # noqa: E402
 
 app = FastAPI(
@@ -56,10 +62,15 @@ _security = [Depends(check_rate_limit)]
 app.include_router(admin_router, prefix="/v1")  # protected by X-Admin-Key, no rate limit
 app.include_router(auth_router, prefix="/v1")  # no rate limit on register/me
 app.include_router(corpus_router, prefix="/v1")  # public read-only stats, no rate limit
+app.include_router(procedures_router, prefix="/v1")  # public read-only procedure cards
 app.include_router(query_router, prefix="/v1", dependencies=_security)
 app.include_router(documents_router, prefix="/v1", dependencies=_security)
 app.include_router(feedback_router, prefix="/v1")  # bounded write, no rate limit
 app.include_router(contribute_router, prefix="/v1")  # per-IP daily cap on reviews
+app.include_router(alerts_router, prefix="/v1")  # double opt-in, per-IP daily cap
+app.include_router(billing_router, prefix="/v1")  # PayGate Global, payments re-checked
+app.include_router(telegram_router, prefix="/v1")  # signed by Telegram, per-user daily quota
+app.include_router(whatsapp_router, prefix="/v1")  # signed by Meta, per-user daily quota
 
 
 @app.get("/", include_in_schema=False)

@@ -1,9 +1,10 @@
 """
 LangChain chat model factory for the query feature.
 
-Centralizes the Gemini key check and the ChatGoogleGenerativeAI configuration so
-every generation path shares one place to tune the model, token budgets, and
-thinking behaviour.
+Centralizes the provider key checks and the model configuration so every
+generation path shares one place to tune the model, token budgets, and
+thinking behaviour. Gemini is the primary provider; Claude
+(rag.generation.claude) is the last fallback, when ANTHROPIC_API_KEY is set.
 """
 
 import logging
@@ -11,6 +12,8 @@ import os
 
 from langchain_core.runnables import Runnable
 from langchain_google_genai import ChatGoogleGenerativeAI
+
+from rag.generation.claude import claude_available, get_claude_model
 
 logger = logging.getLogger(__name__)
 
@@ -30,6 +33,11 @@ def gemini_available() -> bool:
     """Return True when a usable Gemini API key is configured."""
     key = os.getenv("GEMINI_API_KEY", "").strip()
     return len(key) > 10
+
+
+def llm_available() -> bool:
+    """Return True when at least one chat provider (Gemini or Claude) is configured."""
+    return gemini_available() or claude_available()
 
 
 def _resolve(name: str) -> str:
@@ -104,6 +112,11 @@ def get_chat_model(
         "google_api_key": os.environ["GEMINI_API_KEY"],
         "max_output_tokens": max_output_tokens,
         "streaming": streaming,
+        # The client retried 6 times by default: during the credit outages a
+        # failing call took 40-60 s before any fallback ran, past the
+        # frontend's 25 s stall timeout. Fail fast and let the chain move on.
+        "max_retries": 1,
+        "timeout": 30,
         # Thinking left on draws from the same max_output_tokens ceiling as the
         # visible answer and can cut it off mid-sentence on context-heavy
         # requests, so it is kept off (2.x) or minimal (3.x) by default.
@@ -118,25 +131,37 @@ def get_chat_model_with_fallback(
     thinking_budget: int = 0,
     streaming: bool = False,
 ) -> Runnable:
-    """Build the Gemini chat model most call sites should use.
+    """Build the chat model chain most call sites should use.
 
-    Tries GEMINI_MODEL (default gemini-3.8-flash) first; if it raises for any
-    reason (quota exhausted, model unavailable, transient API error, etc.),
-    LangChain's Runnable.with_fallbacks retries once against
-    GEMINI_FALLBACK_MODEL (default gemini-3.5-flash) with the same
-    generation params. Note: for streaming, the fallback only kicks in if the
-    failure happens before any token has been yielded — a mid-stream failure
-    can't be safely retried without duplicating output already sent.
+    Order: GEMINI_MODEL (default gemini-3.8-flash), then GEMINI_FALLBACK_MODEL
+    (default gemini-3.5-flash), then Claude (CLAUDE_MODEL, default
+    claude-opus-5-5) when ANTHROPIC_API_KEY is set. Each link is tried when the
+    previous one raises (quota exhausted, credits depleted, model retired,
+    outage). Without a Gemini key, Claude alone. Note: for streaming, a
+    fallback only kicks in if the failure happens before any token has been
+    yielded: a mid-stream failure can't be retried without duplicating output.
     """
-    primary = get_chat_model(
-        max_output_tokens=max_output_tokens, thinking_budget=thinking_budget, streaming=streaming
-    )
-    if _fallback_model_name() == _primary_model_name():
-        return primary
-    fallback = get_chat_model(
-        max_output_tokens=max_output_tokens,
-        thinking_budget=thinking_budget,
-        streaming=streaming,
-        use_fallback_model=True,
-    )
-    return primary.with_fallbacks([fallback])
+    chain: list = []
+    if gemini_available():
+        chain.append(
+            get_chat_model(
+                max_output_tokens=max_output_tokens,
+                thinking_budget=thinking_budget,
+                streaming=streaming,
+            )
+        )
+        if _fallback_model_name() != _primary_model_name():
+            chain.append(
+                get_chat_model(
+                    max_output_tokens=max_output_tokens,
+                    thinking_budget=thinking_budget,
+                    streaming=streaming,
+                    use_fallback_model=True,
+                )
+            )
+    if claude_available():
+        chain.append(get_claude_model(max_output_tokens=max_output_tokens))
+    if not chain:
+        raise RuntimeError("No LLM provider configured (GEMINI_API_KEY, ANTHROPIC_API_KEY)")
+    first, *rest = chain
+    return first.with_fallbacks(rest) if rest else first
