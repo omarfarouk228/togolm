@@ -5,11 +5,12 @@ GET  /v1/auth/me        — Current key info and daily usage
 
 import datetime
 import hashlib
+import hmac
 import os
 import secrets
 
 import redis
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, Header, HTTPException, Query
 from pydantic import BaseModel, EmailStr
 
 from api.app.core.auth import APIKeyRecord, get_api_key
@@ -244,3 +245,41 @@ def usage(
         "quota_per_day": PLAN_QUOTAS.get(api_key.plan, PLAN_QUOTAS["free"]),
         "days": series,
     }
+
+
+class ClaimRequest(BaseModel):
+    email: EmailStr
+
+
+@router.post("/auth/keys/claim", response_model=RotateResponse, include_in_schema=False)
+def claim_key(body: ClaimRequest, x_internal_token: str | None = Header(None)):
+    """Issue a new key for an e-mail whose ownership the website has verified
+    (Google or magic-link sign-in), when that address already had a key from the
+    registration form that the account can't read back. Only the website calls
+    this, with INTERNAL_API_TOKEN; the old key stops working, the plan stays."""
+    expected = os.getenv("INTERNAL_API_TOKEN", "")
+    if not expected:
+        raise HTTPException(status_code=503, detail="Key claim is not configured")
+    if not x_internal_token or not hmac.compare_digest(x_internal_token, expected):
+        raise HTTPException(status_code=403, detail="Forbidden")
+    key = _generate_key()
+    conn = get_conn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                UPDATE api_keys SET key_hash = %s, key_prefix = %s
+                WHERE lower(owner_email) = lower(%s) AND is_active = TRUE
+                """,
+                (_hash_key(key), key[:14], str(body.email)),
+            )
+            if cur.rowcount != 1:
+                raise HTTPException(status_code=404, detail="No active key for this e-mail")
+        conn.commit()
+    finally:
+        conn.close()
+    return RotateResponse(
+        api_key=key,
+        key_prefix=key[:14] + "...",
+        message="New key issued; the previous one no longer works.",
+    )
