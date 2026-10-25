@@ -272,13 +272,21 @@ def _alert_command(channel: str, user_id: str, words: list[str]) -> str:
     )
 
 
-def _ask(channel: str, user_id: str, question: str) -> Answer:
+def _ask(channel: str, user_id: str, question: str, translated: bool = False) -> Answer:
     from api.app.features.query.router import _display_sources, _procedure_for, _run_text_query
 
     language = get_language(channel, user_id)
     request = QueryRequest(question=question, language=language, history=_history(channel, user_id))
     t0 = time.monotonic()
-    result = _run_text_query(request)
+    if translated:
+        # Already French (voice): skip the pipeline's own translation step.
+        from rag.orchestration.graph import run_query_graph
+
+        result = run_query_graph(
+            question=question, category=None, language=language, history=request.history
+        )
+    else:
+        result = _run_text_query(request)
     log_query(
         question,
         language,
@@ -295,7 +303,9 @@ def _ask(channel: str, user_id: str, question: str) -> Answer:
     return Answer(result.answer, [s for s in sources if s.get("url")], _procedure_for(sources))
 
 
-def handle_text(channel: str, user_id: str, text: str, style: str) -> list[str]:
+def handle_text(
+    channel: str, user_id: str, text: str, style: str, translated: bool = False
+) -> list[str]:
     """Replies (already formatted for the channel) to a text message."""
     reply = _command(channel, user_id, text)
     if reply is not None:
@@ -305,7 +315,7 @@ def handle_text(channel: str, user_id: str, text: str, style: str) -> list[str]:
     if not _within_quota(channel, user_id):
         return [QUOTA_REACHED.format(n=DAILY_LIMIT)]
     try:
-        return render(_ask(channel, user_id, text.strip()[:4000]), style)
+        return render(_ask(channel, user_id, text.strip()[:4000], translated), style)
     except Exception:
         logger.exception("Bot answer failed (%s)", channel)
         return [FAILURE]
@@ -328,4 +338,9 @@ def handle_voice(
         return [VOICE_FAILED]
     quote = html.escape(text) if style == "html" else text
     echo = f"🎙️ <i>« {quote} »</i>" if style == "html" else f"🎙️ _« {quote} »_"
-    return [echo, *handle_text(channel, user_id, text, style)]
+    # Search with the transcriber's own French translation, made from the
+    # audio: translating the Éwé/Kabiyè transcript again turned "fonyo"
+    # ("Mbenade, le fonyo de ma") into "fonio", the cereal, and the answer
+    # came with articles about it. The answer stays in the chosen language.
+    question = (heard.get("translation_fr") or "").strip() or text
+    return [echo, *handle_text(channel, user_id, question, style, translated=question != text)]
