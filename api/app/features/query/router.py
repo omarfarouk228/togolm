@@ -10,6 +10,7 @@ response. Classification, generation, retrieval and logging live elsewhere.
 import asyncio
 import json
 import logging
+import re
 import time
 from collections.abc import Iterator
 
@@ -65,21 +66,40 @@ def _display_sources(sources: list[dict]) -> list[dict]:
     return shown
 
 
-def _procedure_for(sources: list[dict]) -> dict | None:
-    """Card of the best displayed source when it is an administrative procedure."""
+def _title_stems(text: str) -> set[str]:
+    """Word stems used to match a procedure title against a question."""
+    from rag.retrieval.enrichment import normalize_query
+
+    # Six-letter prefixes make "renouveler" meet "renouvellement"; short words
+    # (de, du, la, en, ...) carry no meaning here.
+    return {w[:6] for w in re.findall(r"[a-z0-9]+", normalize_query(text)) if len(w) >= 4}
+
+
+def _procedure_for(sources: list[dict], question: str = "") -> dict | None:
+    """Card of the displayed procedure source that best matches the question.
+
+    Sibling procedures (a document's obtention and its renouvellement) rank
+    side by side, so among the top sources the title sharing the most words
+    with the question wins; ties keep the retrieval order.
+    """
     from urllib.parse import urlparse
 
     from api.app.features.procedures.router import card_for_url
     from rag.procedures import PROCEDURE_SOURCES
 
-    for source in sources[:2]:
-        host = urlparse(source.get("url") or "").netloc.removeprefix("www.")
-        if host in PROCEDURE_SOURCES:
-            try:
-                return card_for_url(source["url"])
-            except Exception:
-                return None
-    return None
+    candidates = [
+        s
+        for s in sources[:3]
+        if urlparse(s.get("url") or "").netloc.removeprefix("www.") in PROCEDURE_SOURCES
+    ]
+    if not candidates:
+        return None
+    words = _title_stems(question)
+    best = max(candidates, key=lambda s: len(words & _title_stems(s.get("title") or "")))
+    try:
+        return card_for_url(best["url"])
+    except Exception:
+        return None
 
 
 # Module-level embedder cache for the /embed endpoint
@@ -200,7 +220,7 @@ async def query_corpus(
         sources=[Source(**src) for src in display_sources],
         model="togolm-rag-v1",
         latency_ms=latency_ms,
-        procedure=_procedure_for(display_sources),
+        procedure=_procedure_for(display_sources, request.question),
     )
 
 
@@ -391,7 +411,7 @@ def stream_query(
         )
         display_sources = _display_sources(sources)
         event = {"type": "sources", "sources": display_sources, "latency_ms": latency_ms}
-        procedure = _procedure_for(display_sources)
+        procedure = _procedure_for(display_sources, search_question)
         if procedure:
             event["procedure"] = procedure
         yield f"data: {json.dumps(event)}\n\n"
