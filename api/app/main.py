@@ -29,6 +29,7 @@ from api.app.core.rate_limit import check_rate_limit  # noqa: E402
 from api.app.features.admin.router import router as admin_router  # noqa: E402
 from api.app.features.alerts.router import router as alerts_router  # noqa: E402
 from api.app.features.auth.router import router as auth_router  # noqa: E402
+from api.app.features.billing.router import router as billing_router  # noqa: E402
 from api.app.features.bots.telegram import router as telegram_router  # noqa: E402
 from api.app.features.bots.whatsapp import router as whatsapp_router  # noqa: E402
 from api.app.features.contribute.router import router as contribute_router  # noqa: E402
@@ -67,6 +68,7 @@ app.include_router(documents_router, prefix="/v1", dependencies=_security)
 app.include_router(feedback_router, prefix="/v1")  # bounded write, no rate limit
 app.include_router(contribute_router, prefix="/v1")  # per-IP daily cap on reviews
 app.include_router(alerts_router, prefix="/v1")  # double opt-in, per-IP daily cap
+app.include_router(billing_router, prefix="/v1")  # PayGate Global, payments re-checked
 app.include_router(telegram_router, prefix="/v1")  # signed by Telegram, per-user daily quota
 app.include_router(whatsapp_router, prefix="/v1")  # signed by Meta, per-user daily quota
 
