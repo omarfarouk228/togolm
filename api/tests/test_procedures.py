@@ -114,6 +114,31 @@ def test_answers_carry_the_card_of_a_procedure_source():
     assert query_router._procedure_for(sources[:1]) is None
 
 
+def test_card_follows_the_procedure_the_question_asks_for():
+    from api.app.features.query import router as query_router
+
+    obtention = "https://investirautogo.tg/procedure/120?l=fr"
+    renouvellement = "https://investirautogo.tg/procedure/121?l=fr"
+    sources = [
+        {"title": "Zone franche – Carnet bleu – Obtention", "url": obtention, "score": 0.9},
+        {
+            "title": "Zone franche – Carnet bleu – Renouvellement",
+            "url": renouvellement,
+            "score": 0.8,
+        },
+    ]
+    with patch("api.app.features.procedures.router.card_for_url", return_value={}) as lookup:
+        query_router._procedure_for(sources, "Combien coûte le renouvellement du carnet bleu ?")
+        lookup.assert_called_once_with(renouvellement)
+        lookup.reset_mock()
+        query_router._procedure_for(sources, "Comment renouveler mon carnet bleu en zone franche")
+        lookup.assert_called_once_with(renouvellement)
+        lookup.reset_mock()
+        # Nothing tells them apart: retrieval order decides.
+        query_router._procedure_for(sources, "Le carnet bleu en zone franche")
+        lookup.assert_called_once_with(obtention)
+
+
 def test_bot_reply_includes_the_exact_checklist():
     card = parse_procedure(SERVICE_PUBLIC) | {"title": "Copie d'acte d'état civil"}
     (message,) = core.render(core.Answer("Voici la démarche.", [], card), "whatsapp")
