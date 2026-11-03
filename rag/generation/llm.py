@@ -59,19 +59,19 @@ def _fallback_model_name() -> str:
 def thinking_settings(model_name: str, thinking_budget: int = 0) -> dict:
     """Thinking parameters for ChatGoogleGenerativeAI, per model generation.
 
-    Gemini 2.x takes a token budget, where 0 means off (left unset it thinks
-    dynamically and can eat the visible answer's token budget). Gemini 3.x
-    takes a level instead and can't fully turn thinking off: "minimal" is the
-    closest, "low" when the caller wants reasoning streamed.
+    A zero budget turns thinking off. Left unset the model thinks dynamically
+    and can eat the visible answer's token budget. Gemini 3.x also accepts a
+    level, but gemini-3.8-flash rejects "minimal" with a 400 (seen in prod on
+    2026-11-03: every router/rewrite call failed on the primary model and ran
+    on the fallback), while both 3.x models tested accept a zero budget. When
+    the caller wants reasoning streamed, 3.x takes the "low" level.
     """
-    if model_name.startswith("gemini-2"):
-        settings: dict = {"thinking_budget": thinking_budget}
+    if model_name.startswith("gemini-2") or thinking_budget <= 0:
+        settings: dict = {"thinking_budget": max(thinking_budget, 0)}
         if thinking_budget > 0:
             settings["include_thoughts"] = True
         return settings
-    if thinking_budget > 0:
-        return {"thinking_config": {"thinking_level": "LOW", "include_thoughts": True}}
-    return {"thinking_config": {"thinking_level": "MINIMAL"}}
+    return {"thinking_config": {"thinking_level": "LOW", "include_thoughts": True}}
 
 
 def has_distinct_fallback_model() -> bool:
@@ -119,7 +119,7 @@ def get_chat_model(
         "timeout": 30,
         # Thinking left on draws from the same max_output_tokens ceiling as the
         # visible answer and can cut it off mid-sentence on context-heavy
-        # requests, so it is kept off (2.x) or minimal (3.x) by default.
+        # requests, so it is kept off by default.
         **thinking_settings(model_name, thinking_budget),
     }
     return ChatGoogleGenerativeAI(**kwargs)

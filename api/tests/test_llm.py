@@ -112,12 +112,14 @@ class TestModelGenerations:
             == "gemini-3.5-flash"
         )
 
-    def test_gemini_3_uses_thinking_levels_not_budgets(self):
+    def test_thinking_off_is_a_zero_budget_on_every_generation(self):
         from rag.generation.llm import thinking_settings
 
-        assert thinking_settings("gemini-3.8-flash") == {
-            "thinking_config": {"thinking_level": "MINIMAL"}
-        }
+        # gemini-3.8-flash rejects thinking_level "minimal" with a 400.
+        assert thinking_settings("gemini-3.8-flash") == {"thinking_budget": 0}
+        assert (
+            thinking_settings("gemini-3.8-flash", 500)["thinking_config"]["thinking_level"] == "LOW"
+        )
         assert (
             thinking_settings("gemini-3.8-flash", 500)["thinking_config"]["include_thoughts"]
             is True
