@@ -80,6 +80,10 @@ class LocalEmbedder:
 
 
 EMBED_TIMEOUT_MS = int(os.getenv("GEMINI_EMBED_TIMEOUT_MS", "10000"))
+# gemini-embedding-001 reads at most 2048 tokens per input; anything longer is
+# wasted quota, and one oversized text can exceed the tokens-per-minute quota
+# by itself and fail its whole batch. ~4 characters per token in French.
+MAX_EMBED_CHARS = 8000
 
 
 class GeminiEmbedder:
@@ -106,7 +110,7 @@ class GeminiEmbedder:
     def encode(self, texts: list[str], task_type: str = "RETRIEVAL_DOCUMENT") -> list[list[float]]:
         result = self._client.models.embed_content(
             model=self.MODEL,
-            contents=texts,
+            contents=[t[:MAX_EMBED_CHARS] for t in texts],
             config=self._types.EmbedContentConfig(
                 output_dimensionality=self.TARGET_DIMS,
                 task_type=task_type,

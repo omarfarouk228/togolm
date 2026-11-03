@@ -7,62 +7,33 @@ mixed silently.
 import subprocess
 from unittest.mock import MagicMock, patch
 
-import numpy as np
-
 from rag.indexation import backfill
-from rag.indexation.embedder import GEMINI_MODEL_ID, LOCAL_MODEL_ID
-
-
-def _unit(v):
-    v = np.asarray(v, dtype=float)
-    return v / np.linalg.norm(v)
-
-
-class TestClassifyLegacy:
-    def test_vector_matching_fresh_local_embedding_is_local(self):
-        local = _unit([1.0, 0.0, 0.0])
-        other = _unit([0.0, 1.0, 0.0])
-        fake_local = MagicMock()
-        fake_local.encode.return_value = [local, local]
-        with patch.object(backfill, "_local_embedder", return_value=fake_local):
-            labels = backfill.classify_legacy([local * 3, other], ["a", "b"])
-        assert labels == [LOCAL_MODEL_ID, GEMINI_MODEL_ID]
-
-    def test_accepts_pgvector_objects(self):
-        local = _unit([1.0, 0.0])
-        stored = MagicMock()
-        stored.to_list.return_value = list(local)
-        fake_local = MagicMock()
-        fake_local.encode.return_value = [local]
-        with patch.object(backfill, "_local_embedder", return_value=fake_local):
-            assert backfill.classify_legacy([stored], ["a"]) == [LOCAL_MODEL_ID]
+from rag.indexation.embedder import GEMINI_MODEL_ID
 
 
 class TestProcessBatch:
-    def test_legacy_rows_from_canonical_model_are_only_tagged(self):
+    def test_legacy_rows_are_re_embedded_without_the_local_model(self):
+        """Legacy vectors are re-embedded with the canonical model, never
+        classified with the local model (that loaded torch into the worker)."""
         canonical = MagicMock(model_id=GEMINI_MODEL_ID)
+        canonical.encode.return_value = [[0.5], [0.6]]
         rows = [("c1", "texte 1", [0.1]), ("c2", "texte 2", [0.2])]
-        with (
-            patch.object(
-                backfill, "classify_legacy", return_value=[GEMINI_MODEL_ID, LOCAL_MODEL_ID]
-            ),
-            patch.object(backfill, "execute_batch") as eb,
-        ):
-            canonical.encode.return_value = [[0.5, 0.5]]
-            result = backfill._process_batch(MagicMock(), rows, "legacy", canonical)
-
-        assert result == {"embedded": 1, "tagged": 1}
-        canonical.encode.assert_called_once_with(["texte 2"])
-        tag_call, embed_call = eb.call_args_list
-        assert tag_call.args[2] == [(GEMINI_MODEL_ID, "c1")]
-        assert embed_call.args[2][0][1:] == (GEMINI_MODEL_ID, "c2")
+        with patch.object(backfill, "execute_batch") as eb:
+            result = backfill._process_batch(MagicMock(), rows, canonical)
+        assert result == {"embedded": 2, "tagged": 0}
+        canonical.encode.assert_called_once_with(["texte 1", "texte 2"])
+        assert [r[1:] for r in eb.call_args.args[2]] == [
+            (GEMINI_MODEL_ID, "c1"),
+            (GEMINI_MODEL_ID, "c2"),
+        ]
+        assert not hasattr(backfill, "_local_embedder")
 
     def test_missing_rows_are_embedded_with_canonical_model(self):
         canonical = MagicMock(model_id=GEMINI_MODEL_ID)
         canonical.encode.return_value = [[0.1], [0.2]]
         rows = [("c1", "a", None), ("c2", "b", None)]
         with patch.object(backfill, "execute_batch") as eb:
-            result = backfill._process_batch(MagicMock(), rows, "missing", canonical)
+            result = backfill._process_batch(MagicMock(), rows, canonical)
         assert result == {"embedded": 2, "tagged": 0}
         assert [r[2] for r in eb.call_args.args[2]] == ["c1", "c2"]
 
@@ -159,3 +130,32 @@ def test_gemini_embedder_sets_a_request_timeout(monkeypatch):
         embedder.GeminiEmbedder()
     options = client.call_args.kwargs["http_options"]
     assert options.timeout == embedder.EMBED_TIMEOUT_MS
+
+
+def test_gemini_embedder_caps_each_input(monkeypatch):
+    """One oversized text must not exceed the tokens-per-minute quota alone."""
+    from rag.indexation import embedder
+
+    monkeypatch.setenv("GEMINI_API_KEY", "fake")
+    gem = embedder.GeminiEmbedder.__new__(embedder.GeminiEmbedder)
+    gem._client = MagicMock()
+    gem._types = MagicMock()
+    gem._client.models.embed_content.return_value = MagicMock(
+        embeddings=[MagicMock(values=[0.1]), MagicMock(values=[0.2])]
+    )
+    gem.encode(["court", "x" * 2_000_000])
+    sent = gem._client.models.embed_content.call_args.kwargs["contents"]
+    assert sent[0] == "court"
+    assert len(sent[1]) == embedder.MAX_EMBED_CHARS
+
+
+def test_clean_document_drops_inline_base64_images():
+    from rag.indexation.cleaner import clean_document
+
+    blob = "iVBORw0KGgoAAAANSUhEUgAA" * 5_000
+    raw = f"Réunion annuelle à Lomé. <img src=data:image/png;base64,{blob}> Fin du texte."
+    cleaned = clean_document(raw + " Autre bloc " + "QUJD" * 100)
+    assert "Réunion annuelle à Lomé." in cleaned
+    assert "Fin du texte." in cleaned
+    assert "base64" not in cleaned
+    assert len(cleaned) < 200
