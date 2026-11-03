@@ -132,6 +132,9 @@ class LomeinfosSpider(BaseTogoSpider):
             response.css("time.entry-date::attr(datetime)").get("")
             or response.css("time.published::attr(datetime)").get("")
             or response.css("meta[property='article:published_time']::attr(content)").get("")
+            # Theme in use since 2026 (Enfold): <time itemprop="datePublished" datetime=...>.
+            # Without it every article from then on was stored with no date.
+            or response.css("[itemprop='datePublished']::attr(datetime)").get("")
             or ""
         )
 
