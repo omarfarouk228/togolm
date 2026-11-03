@@ -34,6 +34,9 @@ from api.app.features.bots.telegram import router as telegram_router  # noqa: E4
 from api.app.features.bots.whatsapp import router as whatsapp_router  # noqa: E402
 from api.app.features.contribute.router import router as contribute_router  # noqa: E402
 from api.app.features.corpus.router import router as corpus_router  # noqa: E402
+from api.app.features.documents.router import (  # noqa: E402
+    preview_router as documents_preview_router,
+)
 from api.app.features.documents.router import router as documents_router  # noqa: E402
 from api.app.features.feedback.router import router as feedback_router  # noqa: E402
 from api.app.features.procedures.router import router as procedures_router  # noqa: E402
@@ -64,6 +67,8 @@ app.include_router(auth_router, prefix="/v1")  # no rate limit on register/me
 app.include_router(corpus_router, prefix="/v1")  # public read-only stats, no rate limit
 app.include_router(procedures_router, prefix="/v1")  # public read-only procedure cards
 app.include_router(query_router, prefix="/v1", dependencies=_security)
+# Registered before documents_router so /documents/preview isn't read as /documents/{id}.
+app.include_router(documents_preview_router, prefix="/v1")  # own per-IP cap, no plan quota
 app.include_router(documents_router, prefix="/v1", dependencies=_security)
 app.include_router(feedback_router, prefix="/v1")  # bounded write, no rate limit
 app.include_router(contribute_router, prefix="/v1")  # per-IP daily cap on reviews

@@ -15,8 +15,8 @@ from rag.generation.llm import _fallback_model_name, _primary_model_name
 
 
 def _thinking_off(model: str) -> dict:
-    # Gemini 2.x turns thinking off with a zero budget; 3.x only goes down to "minimal".
-    return {"thinking_budget": 0} if model.startswith("gemini-2") else {"thinking_level": "MINIMAL"}
+    # A zero budget turns thinking off on 2.x and 3.x; gemini-3.8-flash rejects "minimal".
+    return {"thinking_budget": 0}
 
 
 LANGUAGE_NAMES = {
