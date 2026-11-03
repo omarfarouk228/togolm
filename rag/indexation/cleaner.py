@@ -16,10 +16,24 @@ def remove_control_characters(text: str) -> str:
     )
 
 
+# Inline images (data URIs) and other long base64 blobs copied from a page's
+# HTML. One edusup.gouv.tg article carried a 1.95 M-character base64 image in
+# its text: the chunk exceeded the embedding API's tokens-per-minute quota on
+# its own and blocked the whole embedding backlog for weeks (2026-11-03).
+_DATA_URI_RE = re.compile(r"data:[\w.+-]+/[\w.+-]+(?:;[\w=.+-]+)*;base64,[A-Za-z0-9+/=\s]*")
+_BASE64_BLOB_RE = re.compile(r"[A-Za-z0-9+/]{200,}={0,2}")
+
+
+def remove_binary_blobs(text: str) -> str:
+    text = _DATA_URI_RE.sub(" ", text)
+    return _BASE64_BLOB_RE.sub(" ", text)
+
+
 def clean_document(raw_content: str) -> str:
     """Full cleaning pipeline for a scraped document."""
     text = raw_content
     text = remove_control_characters(text)
+    text = remove_binary_blobs(text)
     # Remove repeated punctuation artifacts
     text = re.sub(r"[|]{2,}", "|", text)
     text = re.sub(r"[-]{3,}", "—", text)

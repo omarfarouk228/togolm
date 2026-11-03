@@ -6,10 +6,10 @@ Three kinds of chunks need work, handled in this order:
                  API was down at ingest time). Newest documents first.
   2. legacy    — embedding set but embedding_model IS NULL: written before the
                  column existed, by either Gemini or the local fallback model.
-                 The local model is cheap, so each legacy vector is compared
-                 with a fresh local embedding of the same text to tell which
-                 model produced it; only vectors from the wrong model are
-                 re-embedded, the rest are just tagged.
+                 They are simply re-embedded with the canonical model. Telling
+                 the two apart with the local model loaded torch into the worker
+                 (~1.5 GB of RAM on a saturated host) to save re-embedding a
+                 few thousand short chunks.
   3. stale     — embedding_model set but not the canonical model (e.g. after
                  switching models).
 
@@ -25,22 +25,11 @@ import numpy as np
 from psycopg2.extras import execute_batch
 
 from db import get_conn
-from rag.indexation.embedder import (
-    GEMINI_MODEL_ID,
-    LOCAL_MODEL_ID,
-    LocalEmbedder,
-    get_embedder,
-)
+from rag.indexation.embedder import get_embedder
 
 BATCH_SIZE = 20
-LEGACY_BATCH_SIZE = 64
-# A stored vector this close to a fresh local embedding of the same text was
-# produced by the local model (same text + same model gives ~1.0; vectors
-# from another model land near 0).
-SAME_MODEL_COSINE = 0.95
 
 _canonical = None
-_local = None
 
 
 def _canonical_embedder():
@@ -48,26 +37,6 @@ def _canonical_embedder():
     if _canonical is None:
         _canonical = get_embedder()
     return _canonical
-
-
-def _local_embedder() -> LocalEmbedder:
-    global _local
-    if _local is None:
-        _local = LocalEmbedder()
-    return _local
-
-
-def classify_legacy(stored: list, texts: list[str]) -> list[str]:
-    """Return the model id that most likely produced each stored vector."""
-    fresh = np.asarray(_local_embedder().encode(texts), dtype=float)
-    labels = []
-    for vec, local_vec in zip(stored, fresh):
-        # pgvector's psycopg2 adapter may return a Vector object, not an array
-        v = np.asarray(vec.to_list() if hasattr(vec, "to_list") else vec, dtype=float)
-        norm = np.linalg.norm(v)
-        cosine = float(v @ local_vec / norm) if norm else 0.0
-        labels.append(LOCAL_MODEL_ID if cosine >= SAME_MODEL_COSINE else GEMINI_MODEL_ID)
-    return labels
 
 
 _MISSING_SQL = """
@@ -99,23 +68,10 @@ _STALE_SQL = """
 """
 
 
-def _process_batch(cur, rows, kind: str, canonical) -> dict:
-    """Embed or tag one batch of (id, content, stored_vector) rows."""
+def _process_batch(cur, rows, canonical) -> dict:
+    """Embed one batch of (id, content, _) rows with the canonical model."""
     ids = [r[0] for r in rows]
     texts = [r[1] for r in rows]
-
-    if kind == "legacy":
-        labels = classify_legacy([r[2] for r in rows], texts)
-        tag = [(label, cid) for cid, label in zip(ids, labels) if label == canonical.model_id]
-        redo = [i for i, label in enumerate(labels) if label != canonical.model_id]
-        if tag:
-            execute_batch(cur, "UPDATE chunks SET embedding_model = %s WHERE id = %s", tag)
-        ids = [ids[i] for i in redo]
-        texts = [texts[i] for i in redo]
-        tagged = len(tag)
-    else:
-        tagged = 0
-
     embedded = 0
     for i in range(0, len(texts), BATCH_SIZE):
         batch_ids = ids[i : i + BATCH_SIZE]
@@ -126,7 +82,7 @@ def _process_batch(cur, rows, kind: str, canonical) -> dict:
             [(np.asarray(v), canonical.model_id, cid) for v, cid in zip(vectors, batch_ids)],
         )
         embedded += len(batch_ids)
-    return {"embedded": embedded, "tagged": tagged}
+    return {"embedded": embedded, "tagged": 0}
 
 
 def embed_pending(max_chunks: int = 4000, deadline_s: float | None = None) -> dict:
@@ -140,7 +96,6 @@ def embed_pending(max_chunks: int = 4000, deadline_s: float | None = None) -> di
     conn = get_conn(vector=True)
     try:
         for kind in ("missing", "legacy", "stale"):
-            batch_size = LEGACY_BATCH_SIZE if kind == "legacy" else BATCH_SIZE
             while True:
                 handled = stats["embedded"] + stats["tagged"]
                 if handled >= max_chunks:
@@ -150,7 +105,7 @@ def embed_pending(max_chunks: int = 4000, deadline_s: float | None = None) -> di
                     stats["stopped"] = "deadline"
                     return {**stats, "by_kind": by_kind}
 
-                limit = min(batch_size, max_chunks - handled)
+                limit = min(BATCH_SIZE, max_chunks - handled)
                 with conn.cursor() as cur:
                     if kind == "missing":
                         cur.execute(_MISSING_SQL, (limit,))
@@ -163,7 +118,7 @@ def embed_pending(max_chunks: int = 4000, deadline_s: float | None = None) -> di
                         conn.commit()
                         break
                     try:
-                        result = _process_batch(cur, rows, kind, canonical)
+                        result = _process_batch(cur, rows, canonical)
                     except Exception as e:  # embedding API down / rate limited
                         conn.rollback()
                         stats["stopped"] = f"embedding error: {str(e)[:200]}"
