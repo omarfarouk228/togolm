@@ -300,7 +300,9 @@ def _ask(channel: str, user_id: str, question: str, translated: bool = False) ->
     sources = _display_sources(
         [{"title": c.title, "url": c.url, "score": round(c.score, 4)} for c in result.chunks]
     )
-    return Answer(result.answer, [s for s in sources if s.get("url")], _procedure_for(sources))
+    return Answer(
+        result.answer, [s for s in sources if s.get("url")], _procedure_for(sources, question)
+    )
 
 
 def handle_text(
