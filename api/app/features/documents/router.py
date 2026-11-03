@@ -2,16 +2,27 @@
 GET /v1/documents         — Paginated document list with filtering
 GET /v1/documents/{id}    — Single document with its chunks
 GET /v1/search            — Full-text keyword search
+GET /v1/documents/preview — Link card metadata for a cited source (own per-IP cap)
 """
 
 import uuid
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Query, Request
 from pydantic import BaseModel
 
+from api.app.core.rate_limit import _get_client_ip, within_limit
 from db import get_conn
 
 router = APIRouter(tags=["Documents"])
+
+# The website calls /documents/preview from the browser, without an API key,
+# once per cited source (3 to 6 per answer). Under the plan quota that meant
+# the anonymous 20/day per IP: in the week of 2026-10-27, 82 of 242 previews
+# were refused and the cards fell back to bare links. A preview is a single
+# indexed lookup in our own corpus, so it gets its own generous per-IP cap
+# (carrier-grade NAT puts many users behind one IP) instead of the plan quota.
+preview_router = APIRouter(tags=["Documents"])
+PREVIEW_PER_IP_PER_HOUR = 600
 
 SEARCH_TOTAL_CAP = 1000
 
@@ -163,8 +174,9 @@ def list_documents(
     )
 
 
-@router.get("/documents/preview", response_model=LinkPreview)
+@preview_router.get("/documents/preview", response_model=LinkPreview)
 def preview_document(
+    request: Request,
     url: str = Query(..., min_length=1, max_length=2048, description="Exact corpus document URL"),
 ):
     """Return preview metadata (title, description, favicon) for a URL cited as a
@@ -176,6 +188,8 @@ def preview_document(
     to attacker-influenced input (no SSRF surface) and no dependency on the
     target site's availability or markup.
     """
+    if not within_limit("preview", _get_client_ip(request), PREVIEW_PER_IP_PER_HOUR, 3_600):
+        raise HTTPException(status_code=429, detail="Too many preview requests, try again later.")
     conn = get_conn()
     try:
         with conn.cursor() as cur:
