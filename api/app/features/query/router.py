@@ -75,12 +75,60 @@ def _title_stems(text: str) -> set[str]:
     return {w[:6] for w in re.findall(r"[a-z0-9]+", normalize_query(text)) if len(w) >= 4}
 
 
+# Stems of words every procedure question or title can carry ("quels documents
+# faut-il pour...", "Demande de..."): sharing only these says nothing about
+# which procedure is meant.
+_GENERIC_STEMS = {
+    "quel",
+    "quels",
+    "quell",
+    "pour",
+    "faut",
+    "comme",
+    "combie",
+    "docume",
+    "pieces",
+    "piece",
+    "demand",
+    "dossie",
+    "obteni",
+    "obtien",
+    "obtent",
+    "avoir",
+    "faire",
+    "quoi",
+    "sont",
+    "dois",
+    "doit",
+    "besoi",
+    "fourni",
+    "etape",
+    "etapes",
+    "procad",
+    "proced",
+    "delai",
+    "cout",
+    "coute",
+    "prix",
+    "togo",
+    "togola",
+    "mon",
+    "notre",
+    "votre",
+}
+
+
 def _procedure_for(sources: list[dict], question: str = "") -> dict | None:
     """Card of the displayed procedure source that best matches the question.
 
     Sibling procedures (a document's obtention and its renouvellement) rank
     side by side, so among the top sources the title sharing the most words
     with the question wins; ties keep the retrieval order.
+
+    With a question, the winning title must share at least one meaningful
+    word with it. The corpus has no sheet for some procedures (civil marriage
+    on 2026-11-03): the nearest sheet then still ranked in the top 3 and a
+    "Demande de passeport" card was shown under a marriage answer.
     """
     from urllib.parse import urlparse
 
@@ -96,6 +144,8 @@ def _procedure_for(sources: list[dict], question: str = "") -> dict | None:
         return None
     words = _title_stems(question)
     best = max(candidates, key=lambda s: len(words & _title_stems(s.get("title") or "")))
+    if question and not (words & _title_stems(best.get("title") or "")) - _GENERIC_STEMS:
+        return None
     try:
         return card_for_url(best["url"])
     except Exception:
