@@ -139,6 +139,32 @@ def test_card_follows_the_procedure_the_question_asks_for():
         lookup.assert_called_once_with(obtention)
 
 
+def test_no_card_when_no_procedure_title_matches_the_question():
+    """No marriage sheet in the corpus: the passport sheet must not be shown."""
+    from api.app.features.query import router as query_router
+
+    sources = [
+        {
+            "title": "Demande de passeport",
+            "url": "https://service-public.gouv.tg/demarche/passeport",
+            "score": 0.78,
+        },
+        {
+            "title": "Demande du certificat de nationalité togolaise",
+            "url": "https://service-public.gouv.tg/demarche/nationalite",
+            "score": 0.74,
+        },
+    ]
+    with patch("api.app.features.procedures.router.card_for_url", return_value={}) as lookup:
+        assert (
+            query_router._procedure_for(sources, "quels documents faut il pour le mariage civil?")
+            is None
+        )
+        lookup.assert_not_called()
+        query_router._procedure_for(sources, "Comment obtenir mon passeport ?")
+        lookup.assert_called_once_with("https://service-public.gouv.tg/demarche/passeport")
+
+
 def test_bot_reply_includes_the_exact_checklist():
     card = parse_procedure(SERVICE_PUBLIC) | {"title": "Copie d'acte d'état civil"}
     (message,) = core.render(core.Answer("Voici la démarche.", [], card), "whatsapp")
