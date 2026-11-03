@@ -142,17 +142,17 @@ def test_preview_document_not_found():
 
 def test_preview_document_has_its_own_cap_not_the_plan_quota(monkeypatch):
     """Previews skip the anonymous plan quota (20/day per IP) and use their own cap."""
+    import api.app.core.rate_limit as rl
     import api.app.features.documents.router as documents
-    from api.app.main import app as main_app
 
-    route = next(r for r in main_app.routes if getattr(r, "path", "") == "/v1/documents/preview")
-    dependency_calls = {d.call.__name__ for d in route.dependant.dependencies}
-    assert "check_rate_limit" not in dependency_calls
+    # An exhausted plan quota must not block previews...
+    monkeypatch.setitem(rl._LIMITS, "anon", (0, 86_400))
+    url = "https://example.com/does-not-exist"
+    assert client.get("/v1/documents/preview", params={"url": url}).status_code == 404
 
+    # ...only the preview's own per-IP cap does.
     monkeypatch.setattr(documents, "within_limit", lambda *a, **k: False)
-    response = client.get(
-        "/v1/documents/preview", params={"url": "https://example.com/does-not-exist"}
-    )
+    response = client.get("/v1/documents/preview", params={"url": url})
     assert response.status_code == 429
     assert "preview" in response.json()["detail"]
 
