@@ -67,6 +67,13 @@ class QueryRoute(BaseModel):
     reason: str = Field(default="", description="Short justification, for observability")
 
 
+# Measured in prod on 2026-11-03 with thinking off (budget 0): at 100 tokens
+# gemini-3.8-flash cut the JSON short ("Here is the JSON...") on 3 of 10 calls,
+# so routing fell through to the fallback model (6 s instead of 2-3 s). At 400
+# tokens 10 of 10 parsed. Only the short JSON is emitted, so the cost is the same.
+ROUTER_MAX_OUTPUT_TOKENS = 400
+
+
 def route_query(question: str, history: History | None = None) -> Intent:
     """Classify a non-trivial message as on/off topic via a structured LLM call.
 
@@ -82,10 +89,12 @@ def route_query(question: str, history: History | None = None) -> Intent:
     """
     if not gemini_available():
         return "on_topic"
-    model = get_chat_model(max_output_tokens=100).with_structured_output(QueryRoute)
+    model = get_chat_model(max_output_tokens=ROUTER_MAX_OUTPUT_TOKENS).with_structured_output(
+        QueryRoute
+    )
     if has_distinct_fallback_model():
         fallback_model = get_chat_model(
-            max_output_tokens=100, use_fallback_model=True
+            max_output_tokens=ROUTER_MAX_OUTPUT_TOKENS, use_fallback_model=True
         ).with_structured_output(QueryRoute)
         model = model.with_fallbacks([fallback_model])
     try:
